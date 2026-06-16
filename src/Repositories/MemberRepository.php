@@ -4,166 +4,84 @@ namespace App\Repositories;
 
 class MemberRepository
 {
-    public function __construct(private \PDO $db) {}
+    private \PDO $db;
+
+    public function __construct(\PDO $db)
+    {
+        $this->db = $db;
+    }
 
     public function getById(int $id, ?int $regionId = null): ?array
     {
-        $query = "
-            SELECT m.*, c.name as commission_name, c.color as commission_color
-            FROM os_members m
-            LEFT JOIN commissions c ON m.commission_id = c.id
-            WHERE m.id = ?
-        ";
-        $params = [$id];
-
-        if ($regionId) {
-            $query .= " AND m.region_id = ?";
-            $params[] = $regionId;
+        $sql = "SELECT * FROM os_members WHERE id = :id";
+        $params = [':id' => $id];
+        if ($regionId !== null) {
+            $sql .= " AND region_id = :region_id";
+            $params[':region_id'] = $regionId;
         }
-
-        $stmt = $this->db->prepare($query);
+        $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
-        $member = $stmt->fetch();
-
-        if ($member && $member['photo_path']) {
-            $member['photo_url'] = '/' . $member['photo_path'];
-        }
-
-        return $member ?: null;
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        return $row ?: null;
     }
 
-    public function getAll(int $page = 1, int $limit = 20, ?int $regionId = null, ?int $commissionId = null): array
+    public function getAll(?int $regionId = null, int $limit = 30, int $offset = 0): array
     {
-        $offset = ($page - 1) * $limit;
-
-        $query = "
-            SELECT m.*, c.name as commission_name, c.color as commission_color, c.sort_order as commission_sort_order
-            FROM os_members m
-            LEFT JOIN commissions c ON m.commission_id = c.id
-            WHERE m.status = 'active'
-        ";
+        $sql = "SELECT * FROM os_members";
         $params = [];
-
-        if ($regionId) {
-            $query .= " AND m.region_id = ?";
-            $params[] = $regionId;
+        if ($regionId !== null) {
+            $sql .= " WHERE region_id = :region_id";
+            $params[':region_id'] = $regionId;
         }
-
-        if ($commissionId) {
-            $query .= " AND m.commission_id = ?";
-            $params[] = $commissionId;
+        $sql .= " ORDER BY last_name, first_name LIMIT :limit OFFSET :offset";
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $k => $v) {
+            $stmt->bindValue($k, $v);
         }
-
-        $countQuery = str_replace(
-            ['SELECT m.*, c.name as commission_name, c.color as commission_color, c.sort_order as commission_sort_order', 'ORDER BY'],
-            ['SELECT COUNT(*) as cnt', 'LIMIT 1 ORDER BY'],
-            $query
-        );
-
-        $stmtCount = $this->db->prepare($countQuery);
-        $stmtCount->execute($params);
-        $total = (int)$stmtCount->fetch()['cnt'];
-
-        $query .= " ORDER BY (m.commission_id IS NULL) DESC, COALESCE(c.sort_order, 999), m.full_name LIMIT ? OFFSET ?";
-        $params[] = $limit;
-        $params[] = $offset;
-
-        $stmt = $this->db->prepare($query);
-        $stmt->execute($params);
-        $members = $stmt->fetchAll();
-
-        foreach ($members as &$member) {
-            if ($member['photo_path']) {
-                $member['photo_url'] = '/' . $member['photo_path'];
-            }
-        }
-
-        return [
-            'items' => $members,
-            'total' => $total,
-            'page' => $page,
-            'limit' => $limit
-        ];
+        $stmt->bindValue(':limit', (int)$limit, \PDO::PARAM_INT);
+        $stmt->bindValue(':offset', (int)$offset, \PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
     public function create(array $data): int
     {
-        $stmt = $this->db->prepare("
-            INSERT INTO os_members (region_id, full_name, position, organization, commission_id, email, phone, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-
+        $sql = "INSERT INTO os_members (first_name, last_name, region_id, commission_id, email, phone, created_at)
+                VALUES (:first_name, :last_name, :region_id, :commission_id, :email, :phone, NOW())";
+        $stmt = $this->db->prepare($sql);
         $stmt->execute([
-            $data['region_id'] ?? 1,
-            $data['full_name'],
-            $data['position'] ?? null,
-            $data['organization'] ?? null,
-            $data['commission_id'] ?? null,
-            $data['email'] ?? null,
-            $data['phone'] ?? null,
-            $data['status'] ?? 'active'
+            ':first_name' => $data['first_name'] ?? null,
+            ':last_name' => $data['last_name'] ?? null,
+            ':region_id' => $data['region_id'] ?? null,
+            ':commission_id' => $data['commission_id'] ?? null,
+            ':email' => $data['email'] ?? null,
+            ':phone' => $data['phone'] ?? null,
         ]);
-
         return (int)$this->db->lastInsertId();
     }
 
     public function update(int $id, array $data): bool
     {
-        $stmt = $this->db->prepare("
-            UPDATE os_members 
-            SET full_name = ?, position = ?, organization = ?, commission_id = ?, 
-                email = ?, phone = ?, status = ?
-            WHERE id = ?
-        ");
-
-        return $stmt->execute([
-            $data['full_name'],
-            $data['position'] ?? null,
-            $data['organization'] ?? null,
-            $data['commission_id'] ?? null,
-            $data['email'] ?? null,
-            $data['phone'] ?? null,
-            $data['status'] ?? 'active',
-            $id
-        ]);
+        $fields = [];
+        $params = [':id' => $id];
+        $allowed = ['first_name','last_name','region_id','commission_id','email','phone'];
+        foreach ($allowed as $f) {
+            if (array_key_exists($f, $data)) {
+                $fields[] = "{$f} = :{$f}";
+                $params[":{$f}"] = $data[$f];
+            }
+        }
+        if (empty($fields)) {
+            return false;
+        }
+        $sql = "UPDATE os_members SET " . implode(', ', $fields) . " WHERE id = :id";
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute($params);
     }
 
     public function delete(int $id): bool
     {
-        $stmt = $this->db->prepare("UPDATE os_members SET status = 'inactive' WHERE id = ?");
-        return $stmt->execute([$id]);
-    }
-
-    public function getByCommission(int $commissionId, ?int $regionId = null): array
-    {
-        $query = "
-            SELECT * FROM os_members 
-            WHERE commission_id = ? AND status = 'active'
-        ";
-        $params = [$commissionId];
-
-        if ($regionId) {
-            $query .= " AND region_id = ?";
-            $params[] = $regionId;
-        }
-
-        $query .= " ORDER BY full_name";
-
-        $stmt = $this->db->prepare($query);
-        $stmt->execute($params);
-        return $stmt->fetchAll();
-    }
-
-    public function updatePhotoPath(int $id, string $photoPath): bool
-    {
-        $stmt = $this->db->prepare("UPDATE os_members SET photo_path = ? WHERE id = ?");
-        return $stmt->execute([$photoPath, $id]);
-    }
-
-    public function getPhotoPath(int $id): ?string
-    {
-        $stmt = $this->db->prepare("SELECT photo_path FROM os_members WHERE id = ?");
-        $stmt->execute([$id]);
-        return $stmt->fetchColumn() ?: null;
+        $stmt = $this->db->prepare("DELETE FROM os_members WHERE id = :id");
+        return $stmt->execute([':id' => $id]);
     }
 }
