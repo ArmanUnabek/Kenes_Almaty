@@ -1,0 +1,32 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "OS Journal API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/auth.php": {
+      "get": { "summary": "Session check / CSRF token" },
+      "post": { "summary": "Login / logout" }
+    },
+    "/api/letters.php": {
+      "get": { "summary": "List letters (paginated)" },
+      "post": { "summary": "Create letter (RBAC + CSRF)" },
+      "put": { "summary": "Update letter (RBAC + CSRF)" },
+      "delete": { "summary": "Delete letter (admin + CSRF)" }
+    },
+    "/api/members.php": {
+      "get": { "summary": "List members (paginated)" },
+      "post": { "summary": "Create member (RBAC + CSRF)" },
+      "put": { "summary": "Update member (RBAC + CSRF)" },
+      "delete": { "summary": "Delete member (admin + CSRF)" }
+    },
+    "/api/events.php": {
+      "get": { "summary": "List events (paginated)" },
+      "post": { "summary": "Create event (RBAC + CSRF)" },
+      "put": { "summary": "Update event (RBAC + CSRF)" },
+      "delete": { "summary": "Delete event (admin + CSRF)" }
+    }
+  }
+}
+

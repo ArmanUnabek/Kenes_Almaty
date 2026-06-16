@@ -1,0 +1,24 @@
+{
+  "info": {
+    "name": "OS Journal API",
+    "_postman_id": "f8d81230-7fe9-4c3e-a7a7-03e4aa2ecf5d",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth Check",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/auth.php"
+      }
+    },
+    {
+      "name": "Letters List",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/letters.php?type=incoming&page=1&limit=50"
+      }
+    }
+  ]
+}
+

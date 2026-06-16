@@ -1,0 +1,231 @@
+<?php
+/**
+ * Настройки и подключение к базе данных.
+ * При переносе на другой хостинг обычно достаточно изменить переменные окружения
+ * или значения по умолчанию ниже.
+ */
+
+/**
+ * Простейший парсер .env-файла (KEY=VALUE), игнорирующий пустые строки и комментарии.
+ * Значения, уже присутствующие в окружении, не перезаписываются.
+ */
+function loadEnvFile(string $path): void
+{
+    static $loaded = [];
+    if (isset($loaded[$path]) || !is_readable($path)) {
+        return;
+    }
+    $loaded[$path] = true;
+
+    $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines === false) {
+        return;
+    }
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#') {
+            continue;
+        }
+        $pos = strpos($line, '=');
+        if ($pos === false) {
+            continue;
+        }
+        $key = trim(substr($line, 0, $pos));
+        $value = trim(substr($line, $pos + 1));
+        if ($key === '') {
+            continue;
+        }
+        // Снять окружающие кавычки, если есть.
+        $len = strlen($value);
+        if ($len >= 2) {
+            $first = $value[0];
+            $last = $value[$len - 1];
+            if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
+                $value = substr($value, 1, -1);
+            }
+        }
+        if (getenv($key) === false) {
+            putenv($key . '=' . $value);
+            $_ENV[$key] = $value;
+            $_SERVER[$key] = $value;
+        }
+    }
+}
+
+/**
+ * Возвращает значение переменной окружения либо значение по умолчанию.
+ */
+function envValue(string $key, ?string $default = null): ?string
+{
+    $value = getenv($key);
+    if ($value === false || $value === '') {
+        return $default;
+    }
+    return $value;
+}
+
+/**
+ * Централизованная настройка cookie-параметров сессии до её старта.
+ * secure берётся из SESSION_SECURE либо определяется по факту HTTPS.
+ */
+function configureSessionCookie(): void
+{
+    if (session_status() !== PHP_SESSION_NONE) {
+        return;
+    }
+    $secureEnv = getenv('SESSION_SECURE');
+    $isHttps = (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off')
+        || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443)
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    $secure = ($secureEnv !== false && $secureEnv !== '')
+        ? filter_var($secureEnv, FILTER_VALIDATE_BOOLEAN)
+        : $isHttps;
+
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'httponly' => true,
+        'samesite' => 'Lax',
+        'secure' => $secure,
+    ]);
+}
+
+// Загрузка переменных окружения из .env.local (фолбэк для значений ниже).
+loadEnvFile(__DIR__ . '/.env.local');
+
+// Параметры подключения берутся из окружения; .env.local исключён из git.
+define('DB_DRIVER', envValue('DB_DRIVER', 'mysql'));
+define('DB_HOST', envValue('DB_HOST', 'localhost'));
+define('DB_PORT', envValue('DB_PORT', '3306'));
+define('DB_USER', envValue('DB_USER', ''));
+define('DB_PASS', envValue('DB_PASS', ''));
+define('DB_NAME', envValue('DB_NAME', ''));
+define('DB_CHARSET', envValue('DB_CHARSET', 'utf8mb4'));
+
+// Глобальная переменная для БД
+$db = null;
+
+/**
+ * Определяет, выполняется ли текущий скрипт в API-контексте.
+ */
+function isApiContext(): bool
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+    if (defined('FORCE_API_CONTEXT') && FORCE_API_CONTEXT) {
+        return $cache = true;
+    }
+    // Нормализуем разделители: на Windows путь может содержать и '/', и '\'.
+    $script = str_replace('\\', '/', $_SERVER['SCRIPT_FILENAME'] ?? '');
+    $cache = (strpos($script, '/api/') !== false);
+    return $cache;
+}
+
+/**
+ * Добавляет недостающие таблицы в существующую SQLite-БД (миграция без пересоздания файла).
+ */
+function ensureSqliteSchema(PDO $db): void
+{
+    static $checked = false;
+    if ($checked || DB_DRIVER !== 'sqlite') {
+        return;
+    }
+    $checked = true;
+
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            region_id INT,
+            title VARCHAR(255) NOT NULL,
+            event_date DATE NOT NULL,
+            location VARCHAR(255),
+            participants_total INT DEFAULT 0,
+            attendance_percent DECIMAL(5,2) DEFAULT 0,
+            notes TEXT,
+            created_by INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (region_id) REFERENCES regions(id),
+            FOREIGN KEY (created_by) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS event_kpi (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INT NOT NULL,
+            metric VARCHAR(255) NOT NULL,
+            value_numeric DECIMAL(15,2),
+            value_text VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS event_attendees (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INT NOT NULL,
+            full_name VARCHAR(255) NOT NULL,
+            attended BOOLEAN DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+        );
+    ");
+}
+
+/**
+ * Создание соединения с БД (PDO singleton).
+ */
+function getDBConnection(): PDO
+{
+    global $db;
+    if ($db instanceof PDO) {
+        return $db;
+    }
+    try {
+        $needsInit = false;
+        if (DB_DRIVER === 'sqlite') {
+            $dbPath = __DIR__ . "/" . DB_NAME;
+            $needsInit = !file_exists($dbPath);
+            $dsn = "sqlite:" . $dbPath;
+        } elseif (DB_DRIVER === 'pgsql') {
+            $dsn = "pgsql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME;
+        } else {
+            $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
+        }
+        $options = [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ];
+        $db = new PDO($dsn, DB_USER, DB_PASS, $options);
+        
+        if ($needsInit && DB_DRIVER === 'sqlite') {
+            $schema = @file_get_contents(__DIR__ . '/database_sqlite.sql');
+            if ($schema) {
+                $db->exec($schema);
+            }
+        } elseif (DB_DRIVER === 'sqlite') {
+            ensureSqliteSchema($db);
+        }
+        
+        // Force UTF-8 encoding for all connections
+        if (DB_DRIVER === 'mysql') {
+            $db->exec("SET NAMES utf8mb4");
+            $db->exec("SET CHARACTER SET utf8mb4");
+            $db->exec("SET character_set_connection=utf8mb4");
+        }
+        
+        return $db;
+    } catch (PDOException $e) {
+        if (isApiContext()) {
+            if (!headers_sent()) {
+                header('Content-Type: application/json; charset=utf-8');
+            }
+            http_response_code(500);
+            error_log('DB connection failed: ' . $e->getMessage());
+            echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        throw $e;
+    }
+}

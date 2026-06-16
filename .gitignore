@@ -1,0 +1,49 @@
+# Логи
+logs/
+*.log
+debug-*.log
+
+# Rate limiting кэш
+.rate_limit/
+
+# Кэш приложения
+cache/
+
+# Загруженные файлы
+uploads/
+api/uploads/
+!uploads/.gitkeep
+
+# Временные каталоги хостинга
+tmp/
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local test / caches / scratch DBs
+cookies.txt
+database.sqlite
+database_sqlite.sql
+
+# PHP / конфигурация
+.env
+.env.local
+.env*.local
+composer.lock
+
+# Node (если используется)
+node_modules/
+package-lock.json
+
+# Временные файлы
+*.tmp
+*.temp

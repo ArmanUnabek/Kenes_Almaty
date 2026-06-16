@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Вход — Журнал ОС</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="/styles.css?v=9" rel="stylesheet" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.css">
+    <style>
+        body.login-page {
+            background: var(--brand-navy);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body.login-page::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at 50% 25%, rgba(217, 165, 33, 0.22) 0%, transparent 55%),
+                        radial-gradient(ellipse at 50% 70%, rgba(29, 78, 216, 0.18) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .login-brand {
+            text-align: center;
+            margin-bottom: 28px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .login-mark {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            background: var(--brand-gold);
+            color: var(--brand-navy);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            margin-bottom: 16px;
+        }
+
+        .login-brand h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-inverse);
+            margin: 0;
+        }
+
+        .login-brand p {
+            font-size: 0.875rem;
+            color: var(--text-inverse-muted);
+            margin: 8px 0 0;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .login-card {
+            background: var(--bg-surface);
+            border-radius: 16px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+            overflow: hidden;
+            border-top: 3px solid var(--brand-gold);
+        }
+
+        .login-body {
+            padding: 32px;
+        }
+
+        .login-body h2 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            font-weight: 500;
+            font-size: 0.8125rem;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .login-body .form-control {
+            padding: 10px 12px;
+            font-size: 0.9375rem;
+        }
+
+        .login-body .form-check-label {
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 12px;
+            font-weight: 600;
+            border-radius: var(--radius-md);
+            border: none;
+            background: var(--brand-primary);
+            color: white;
+            margin-top: 8px;
+        }
+
+        .btn-login:hover:not(:disabled) {
+            background: var(--brand-primary-hover);
+        }
+
+        .btn-login:disabled {
+            opacity: 0.65;
+        }
+
+        .loading-spinner {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .btn-login.loading .loading-spinner {
+            display: inline-block;
+        }
+
+        .login-footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.75rem;
+            color: var(--text-inverse-muted);
+            position: relative;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body class="login-page">
+    <div class="login-brand">
+        <div class="login-mark"><i class="bi bi-journal-text"></i></div>
+        <h1>Журнал Общественного Совета</h1>
+        <p>Система учёта входящих и исходящих писем</p>
+    </div>
+
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-body">
+                <h2>Вход в систему</h2>
+                <form id="loginForm">
+                    <div id="errorAlert" class="alert alert-danger d-none" role="alert"></div>
+                    <div id="infoAlert" class="alert alert-info d-none" role="alert"></div>
+
+                    <div class="form-group">
+                        <label for="username" class="form-label">Логин</label>
+                        <input type="text" class="form-control" id="username" name="username" placeholder="Введите логин" autocomplete="username" required />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password" class="form-label">Пароль</label>
+                        <input type="password" class="form-control" id="password" name="password" placeholder="Введите пароль" autocomplete="current-password" required />
+                    </div>
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="rememberMe" name="rememberMe" />
+                        <label class="form-check-label" for="rememberMe">Запомнить меня</label>
+                    </div>
+
+                    <button type="submit" class="btn btn-login mt-3">
+                        <span class="loading-spinner"></span>
+                        <span class="btn-text">Войти</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="login-footer">
+        © 2026 Журнал Общественного Совета · Все права защищены
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="csrf-handler.js?v=3"></script>
+    <script>
+        const form = document.getElementById('loginForm');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const rememberMeCheckbox = document.getElementById('rememberMe');
+        const errorAlert = document.getElementById('errorAlert');
+        const infoAlert = document.getElementById('infoAlert');
+        const loginBtn = form.querySelector('button[type="submit"]');
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedUsername = localStorage.getItem('login_username');
+            if (savedUsername) {
+                usernameInput.value = savedUsername;
+                rememberMeCheckbox.checked = true;
+                passwordInput.focus();
+            }
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value;
+            if (!username || !password) {
+                showError('Пожалуйста, заполните все поля');
+                return;
+            }
+            loginBtn.classList.add('loading');
+            loginBtn.disabled = true;
+            errorAlert.classList.add('d-none');
+            infoAlert.classList.add('d-none');
+            try {
+                const response = await fetch('api/auth.php?action=login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ username, password })
+                });
+                const data = await response.json();
+                if (response.ok && data.authenticated) {
+                    if (rememberMeCheckbox.checked) {
+                        localStorage.setItem('login_username', username);
+                    } else {
+                        localStorage.removeItem('login_username');
+                    }
+                    if (data.user) {
+                        localStorage.setItem('user', JSON.stringify(data.user));
+                    }
+                    showInfo('Вход выполнен успешно! Перенаправление...');
+                    setTimeout(() => { window.location.href = 'api/'; }, 500);
+                } else {
+                    showError(data.error || 'Неверный логин или пароль');
+                }
+            } catch (error) {
+                showError('Ошибка подключения к серверу. Попробуйте позже.');
+            } finally {
+                loginBtn.classList.remove('loading');
+                loginBtn.disabled = false;
+            }
+        });
+
+        function showError(message) {
+            errorAlert.textContent = message;
+            errorAlert.classList.remove('d-none');
+            infoAlert.classList.add('d-none');
+        }
+
+        function showInfo(message) {
+            infoAlert.textContent = message;
+            infoAlert.classList.remove('d-none');
+            errorAlert.classList.add('d-none');
+        }
+
+        [usernameInput, passwordInput].forEach(el => {
+            el.addEventListener('input', () => errorAlert.classList.add('d-none'));
+        });
+    </script>
+</body>
+</html>
