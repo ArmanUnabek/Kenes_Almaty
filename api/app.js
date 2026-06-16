@@ -3175,15 +3175,6 @@ function updateKpiValue(element, key, value, nonNumeric = false) {
   lastKpiValues[key] = numericValue;
 }
 
-function groupByMonth(items, dateSelector) {
-  const map = new Map();
-  items.forEach((it) => {
-    const key = monthKey(dateSelector(it));
-    map.set(key, (map.get(key) || 0) + 1);
-  });
-  return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-}
-
 function topOrganizations() {
   const map = new Map();
   store.incoming.forEach((i) => {
@@ -3191,17 +3182,6 @@ function topOrganizations() {
     map.set(key, (map.get(key) || 0) + 1);
   });
   return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10);
-}
-
-function mergeMonthSeries(inc, out) {
-  const map = new Map();
-  inc.forEach(([k, v]) => map.set(k, { in: v, out: 0 }));
-  out.forEach(([k, v]) => {
-    const row = map.get(k) || { in: 0, out: 0 };
-    row.out = v;
-    map.set(k, row);
-  });
-  return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
 }
 
 function renderCharts() {
