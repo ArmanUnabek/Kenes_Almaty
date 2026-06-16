@@ -1,4 +1,8 @@
 <?php
+/**
+ * Базовый класс для всех API контроллеров.
+ * Содержит общую логику для обработки ошибок, JSON-ответов и CSRF-защиты.
+ */
 
 namespace App;
 
@@ -6,148 +10,205 @@ use App\Middleware\CsrfMiddleware;
 
 abstract class ApiController
 {
+    /**
+     * Соединение с БД
+     */
     protected \PDO $db;
-    protected array $JSON_FLAGS = [\JSON_UNESCAPED_UNICODE, \JSON_UNESCAPED_SLASHES];
-    protected ?array $currentUser = null;
 
+    /**
+     * Флаги для JSON-кодирования
+     */
+    protected int $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+
+    /**
+     * HTTP код ответа по умолчанию
+     */
+    protected int $httpCode = 200;
+
+    /**
+     * Инициализация контроллера
+     */
     public function __construct()
     {
-        header('Content-Type: application/json; charset=utf-8');
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+        }
+
         $this->db = getDBConnection();
         CsrfMiddleware::init();
-        
-        if (session_status() === \PHP_SESSION_NONE) {
-            session_start();
-        }
-        
-        $this->currentUser = getCurrentUser();
     }
 
-    protected function json($data, int $code = 200): void
+    /**
+     * Отправить JSON-ответ
+     *
+     * @param mixed $data Данные для отправки
+     * @param int $httpCode HTTP код ответа (по умолчанию 200)
+     * @return void
+     */
+    protected function json($data, int $httpCode = 200): void
     {
-        http_response_code($code);
-        echo json_encode($data, ...$this->JSON_FLAGS);
+        http_response_code($httpCode);
+        $encoded = json_encode($data, $this->jsonFlags);
+        if ($encoded === false) {
+            $encoded = json_encode(['error' => 'Ошибка кодирования JSON'], $this->jsonFlags);
+        }
+        echo $encoded;
         exit;
     }
 
-    protected function error(string $message, int $code = 400): void
+    /**
+     * Отправить ошибку
+     *
+     * @param string $message Сообщение об ошибке
+     * @param int $httpCode HTTP код ошибки (по умолчанию 400)
+     * @return void
+     */
+    protected function error(string $message, int $httpCode = 400): void
     {
-        $this->json(['error' => $message], $code);
+        $this->json(['error' => $message], $httpCode);
     }
 
-    protected function success($data = null, string $message = 'Success', int $code = 200): void
+    /**
+     * Отправить ошибки валидации
+     *
+     * @param array $errors Ошибки валидации
+     * @return void
+     */
+    protected function validationError(array $errors): void
     {
-        $response = ['success' => true];
-        if ($message) {
+        $this->json([
+            'error' => 'Ошибка валидации',
+            'errors' => $errors
+        ], 422);
+    }
+
+    /**
+     * Отправить успешный ответ
+     *
+     * @param mixed $data Данные для отправки
+     * @param string|null $message Сообщение успеха
+     * @return void
+     */
+    protected function success($data = null, ?string $message = null): void
+    {
+        $response = [
+            'success' => true,
+        ];
+
+        if ($message !== null) {
             $response['message'] = $message;
         }
+
         if ($data !== null) {
             $response['data'] = $data;
         }
-        $this->json($response, $code);
+
+        $this->json($response, 200);
     }
 
-    protected function paginated(array $items, int $total, int $page, int $limit): void
+    /**
+     * Отправить данные с пагинацией
+     *
+     * @param array $data Данные
+     * @param int $total Всего записей
+     * @param int $page Текущая страница
+     * @param int $perPage Записей на странице
+     * @return void
+     */
+    protected function paginated(array $data, int $total, int $page = 1, int $perPage = 30): void
     {
         $this->json([
-            'items' => $items,
+            'data' => $data,
             'pagination' => [
                 'total' => $total,
                 'page' => $page,
-                'limit' => $limit,
-                'pages' => (int)ceil($total / max(1, $limit))
+                'per_page' => $perPage,
+                'total_pages' => (int)ceil($total / $perPage),
             ]
-        ]);
+        ], 200);
     }
 
-    protected function requireAuth(): void
+    /**
+     * Получить параметры пагинации из запроса
+     *
+     * @param int $defaultPerPage Записей на странице по умолчанию
+     * @param int $maxPerPage Максимум записей на странице
+     * @return array ['page' => int, 'per_page' => int, 'offset' => int]
+     */
+    protected function getPagination(int $defaultPerPage = 30, int $maxPerPage = 100): array
     {
-        if (!$this->currentUser) {
-            $this->error('Требуется авторизация', 401);
-        }
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = min($maxPerPage, max(1, (int)($_GET['per_page'] ?? $defaultPerPage)));
+        $offset = ($page - 1) * $perPage;
+
+        return [
+            'page' => $page,
+            'per_page' => $perPage,
+            'offset' => $offset,
+        ];
     }
 
-    protected function requireRole(array $roles): void
-    {
-        $this->requireAuth();
-        $userRole = normalizeRole($this->currentUser['role'] ?? 'viewer');
-        if (!in_array($userRole, $roles, true)) {
-            $this->error('Недостаточно прав', 403);
-        }
-    }
-
-    protected function requireWriteAccess(): void
-    {
-        $this->requireRole(['admin', 'moderator']);
-    }
-
-    protected function requireDeleteAccess(): void
-    {
-        $this->requireRole(['admin']);
-    }
-
-    protected function requireCsrf(): void
-    {
-        CsrfMiddleware::requireVerification();
-    }
-
-    protected function getJsonInput(): ?array
+    /**
+     * Получить JSON-данные из тела запроса
+     *
+     * @return array
+     */
+    protected function getJsonBody(): array
     {
         $input = file_get_contents('php://input');
-        return json_decode($input, true);
+        $data = json_decode($input, true) ?? [];
+        return is_array($data) ? $data : [];
     }
 
-    protected function getQueryParam(string $key, $default = null)
+    /**
+     * Проверить метод запроса
+     *
+     * @param string ...$methods Допустимые методы
+     * @return bool
+     */
+    protected function checkMethod(...$methods): bool
     {
-        return $_GET[$key] ?? $default;
+        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+        return in_array($method, $methods, true);
     }
 
-    protected function getPostParam(string $key, $default = null)
+    /**
+     * Требовать определённый метод запроса
+     *
+     * @param string ...$methods Требуемые методы
+     * @return void
+     */
+    protected function requireMethod(...$methods): void
     {
-        return $_POST[$key] ?? $default;
-    }
-
-    protected function getCurrentRegionId(): ?int
-    {
-        if (!$this->currentUser) {
-            return null;
-        }
-        $regionId = $this->currentUser['region_id'] ?? null;
-        return $regionId ? (int)$regionId : null;
-    }
-
-    protected function canAccessRegion(int $regionId): bool
-    {
-        if (!$this->currentUser) {
-            return false;
-        }
-        $userRole = normalizeRole($this->currentUser['role'] ?? 'viewer');
-        if ($userRole === 'admin') {
-            return true;
-        }
-        return (int)$regionId === (int)($this->currentUser['region_id'] ?? 0);
-    }
-
-    protected function logAction(string $table, int $entityId, string $action, ?array $oldData = null, ?array $newData = null): void
-    {
-        try {
-            AuditLogger::log(
-                $this->db,
-                $table,
-                $entityId,
-                $action,
-                $oldData,
-                $newData,
-                (int)($this->currentUser['id'] ?? 0)
-            );
-        } catch (\Exception $e) {
-            error_log('Audit log failed: ' . $e->getMessage());
+        if (!$this->checkMethod(...$methods)) {
+            $this->error('Метод запроса не поддерживается', 405);
         }
     }
 
-    protected function handleException(\Throwable $e, string $context = ''): void
+    /**
+     * Получить ID из параметров запроса
+     *
+     * @param string $paramName Имя параметра (по умолчанию 'id')
+     * @return int
+     */
+    protected function getId(string $paramName = 'id'): int
     {
-        error_log("Exception in $context: " . $e->getMessage() . "\n" . $e->getTraceAsString());
-        $this->error('Внутренняя ошибка сервера', 500);
+        $id = (int)($_GET[$paramName] ?? 0);
+        if ($id <= 0) {
+            $this->error('Неправильный ID', 400);
+        }
+        return $id;
+    }
+
+    /**
+     * Логировать действие
+     *
+     * @param string $action Действие
+     * @param array $context Контекст логирования
+     * @return void
+     */
+    protected function log(string $action, array $context = []): void
+    {
+        Logger::info($action, $context);
     }
 }
