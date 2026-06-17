@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Справка — Журнал ОС</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="/styles.css?v=12" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" />
+</head>
+<body>
+    <header class="doc-header">
+        <a href="/api/"><i class="bi bi-arrow-left"></i> В приложение</a>
+        <div class="doc-header-brand"><i class="bi bi-journal-text"></i> Журнал ОС</div>
+        <div class="lang-switch" role="group" aria-label="Тіл / Язык">
+            <button type="button" data-lang="ru" class="active">Рус</button>
+            <button type="button" data-lang="kk">Қаз</button>
+        </div>
+    </header>
+
+    <main class="doc-page">
+        <div data-lang-block="ru">
+            <h1>Справка пользователя</h1>
+            <p class="doc-meta">Система учёта писем общественного совета · SaaS</p>
+
+            <div class="help-card-grid">
+                <a class="help-card" href="#start">
+                    <h3><i class="bi bi-play-circle"></i> Начало работы</h3>
+                    <p>Вход, роли, навигация</p>
+                </a>
+                <a class="help-card" href="#incoming">
+                    <h3><i class="bi bi-inbox"></i> Входящие письма</h3>
+                    <p>Регистрация, сроки, сканы</p>
+                </a>
+                <a class="help-card" href="#outgoing">
+                    <h3><i class="bi bi-send"></i> Исходящие письма</h3>
+                    <p>Ответы ОС, связь с входящими</p>
+                </a>
+                <a class="help-card" href="/help/faq.html">
+                    <h3><i class="bi bi-question-circle"></i> FAQ</h3>
+                    <p>Частые вопросы</p>
+                </a>
+            </div>
+
+            <div class="help-toc">
+                <strong>Содержание</strong>
+                <ol>
+                    <li><a href="#start">Начало работы</a></li>
+                    <li><a href="#incoming">Входящий журнал</a></li>
+                    <li><a href="#outgoing">Исходящий журнал</a></li>
+                    <li><a href="#dashboard">Статистика и KPI</a></li>
+                    <li><a href="#export">Экспорт и импорт</a></li>
+                    <li><a href="#mobile">Мобильная версия</a></li>
+                    <li><a href="#support">Поддержка</a></li>
+                </ol>
+            </div>
+
+            <h2 id="start">1. Начало работы</h2>
+            <p>Откройте страницу входа, введите логин и пароль, выданные администратором вашего совета. При первом входе примите условия обработки персональных данных.</p>
+            <p><strong>Роли:</strong></p>
+            <ul>
+                <li><strong>Администратор</strong> — полный доступ, удаление записей;</li>
+                <li><strong>Модератор</strong> — создание и редактирование;</li>
+                <li><strong>Просмотр</strong> — только чтение.</li>
+            </ul>
+            <p>Данные вашего совета изолированы от других организаций в облачной системе (модель SaaS).</p>
+
+            <h2 id="incoming">2. Входящий журнал</h2>
+            <ol>
+                <li>Перейдите во вкладку «Входящий журнал».</li>
+                <li>Нажмите «Добавить письмо» и заполните поля: дата, номер, отправитель, краткое содержание.</li>
+                <li>Укажите срок ответа — система подсветит просроченные письма.</li>
+                <li>При необходимости прикрепите скан (PDF, изображение).</li>
+                <li>Используйте фильтры и поиск для быстрого доступа к записям.</li>
+            </ol>
+
+            <h2 id="outgoing">3. Исходящий журнал</h2>
+            <p>Исходящие письма регистрируются как ответы общественного совета. При создании можно связать запись с входящим письмом — это отображается в обоих журналах и в статистике.</p>
+
+            <h2 id="dashboard">4. Статистика и KPI</h2>
+            <p>На вкладке «Статистика» отображаются KPI, графики динамики обращений и сводка по комиссиям. Данные обновляются при каждой загрузке страницы.</p>
+
+            <h2 id="export">5. Экспорт и импорт</h2>
+            <p>В верхней панели доступны экспорт в CSV и JSON. Импорт JSON — только для администраторов при миграции данных. Перед импортом сделайте резервную копию.</p>
+
+            <h2 id="mobile">6. Мобильная версия</h2>
+            <p>На экранах шириной до 768 px таблицы отображаются в виде карточек, внизу — навигация по разделам. Кнопка «Показать фильтры» открывает панель поиска.</p>
+
+            <h2 id="support">7. Техническая поддержка</h2>
+            <p>Email: <a data-site-href="email" data-site="email" href="mailto:support@example.kz">support@example.kz</a><br />
+            Телефон: <span data-site="phone">—</span><br />
+            Время ответа: в рабочие дни до 24 часов.</p>
+        </div>
+
+        <div data-lang-block="kk" hidden>
+            <h1>Пайдаланушы анықтамасы</h1>
+            <p class="doc-meta">Қоғамдық кеңес хаттарын есепке алу жүйесі · SaaS</p>
+
+            <div class="help-card-grid">
+                <a class="help-card" href="#start-kk">
+                    <h3><i class="bi bi-play-circle"></i> Жұмысты бастау</h3>
+                    <p>Кіру, рөлдер, навигация</p>
+                </a>
+                <a class="help-card" href="#incoming-kk">
+                    <h3><i class="bi bi-inbox"></i> Кіріс хаттар</h3>
+                    <p>Тіркеу, мерзімдер, сканерлер</p>
+                </a>
+                <a class="help-card" href="/help/faq.html">
+                    <h3><i class="bi bi-question-circle"></i> FAQ</h3>
+                    <p>Жиі қойылатын сұрақтар</p>
+                </a>
+            </div>
+
+            <h2 id="start-kk">1. Жұмысты бастау</h2>
+            <p>Кіру бетінде әкімші берген логин мен құпиясөзді енгізіңіз. Бірінші кіргенде дербес деректерді өңдеу шарттарын қабылдаңыз.</p>
+
+            <h2 id="incoming-kk">2. Кіріс журналы</h2>
+            <p>«Кіріс журналы» бөлімінде жаңа хатты тіркеңіз, жауап мерзімін көрсетіңіз, қажет болса сканерді тіркеңіз.</p>
+
+            <h2 id="support-kk">3. Техникалық қолдау</h2>
+            <p>Email: <a data-site-href="email" data-site="email" href="mailto:support@example.kz">support@example.kz</a></p>
+        </div>
+
+        <nav class="doc-nav">
+            <a href="/help/faq.html">Частые вопросы (FAQ)</a>
+            <a href="/legal/privacy.html">Политика ПДн</a>
+            <a href="/legal/terms.html">Соглашение</a>
+            <a href="/api/">В приложение</a>
+        </nav>
+    </main>
+
+    <footer class="doc-footer">
+        © <span data-site="year">2026</span> <span data-site="operatorName">ТОО «Журнал ОС»</span>
+        · <a href="/help/">Справка</a>
+        · <a href="/legal/privacy.html">Политика ПДн</a>
+    </footer>
+
+    <script src="/js/site-config.js"></script>
+    <script src="/js/site-docs.js"></script>
+</body>
+</html>
