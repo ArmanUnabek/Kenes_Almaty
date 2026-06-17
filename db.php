@@ -223,7 +223,7 @@ function getDBConnection(): PDO
             }
             http_response_code(500);
             error_log('DB connection failed: ' . $e->getMessage());
-            echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_ENCODE_FLAGS);
             exit;
         }
         throw $e;

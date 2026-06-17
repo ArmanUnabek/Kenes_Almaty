@@ -98,7 +98,7 @@ class ErrorHandler
 
         echo json_encode(
             ['error' => $message, 'code' => $code],
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            JSON_ENCODE_FLAGS
         );
     }
 }

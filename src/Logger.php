@@ -43,7 +43,7 @@ class Logger
     {
         self::init();
         $timestamp = date('Y-m-d H:i:s');
-        $contextStr = !empty($context) ? ' | ' . json_encode($context, JSON_UNESCAPED_UNICODE) : '';
+        $contextStr = !empty($context) ? ' | ' . json_encode($context, JSON_ENCODE_FLAGS) : '';
         $logMessage = "[$timestamp] [$level] $message$contextStr\n";
         
         $logFile = self::$logDir . '/' . date('Y-m-d') . '.log';

@@ -8,7 +8,7 @@ $q = trim((string)($_GET['q'] ?? ''));
 $limit = max(1, min(50, (int)($_GET['limit'] ?? 20)));
 
 if ($q === '') {
-    echo json_encode(['items' => []], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(['items' => []], JSON_ENCODE_FLAGS);
     exit;
 }
 
@@ -33,5 +33,5 @@ $stmt->bindValue(6, $like, PDO::PARAM_STR);
 $stmt->bindValue(7, $limit, PDO::PARAM_INT);
 $stmt->execute();
 
-echo json_encode(['items' => $stmt->fetchAll()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+echo json_encode(['items' => $stmt->fetchAll()], JSON_ENCODE_FLAGS);
 

@@ -59,7 +59,7 @@ class CsrfMiddleware
     {
         if (!self::verify()) {
             http_response_code(403);
-            echo json_encode(['error' => 'CSRF токен невалиден'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['error' => 'CSRF токен невалиден'], JSON_ENCODE_FLAGS);
             exit;
         }
     }

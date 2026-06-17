@@ -15,14 +15,14 @@ if ($method === 'POST') {
     $body = (string)($data['body_html'] ?? '');
     if ($to === '' || $body === '') {
         http_response_code(400);
-        echo json_encode(['error' => 'to и body_html обязательны'], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['error' => 'to и body_html обязательны'], JSON_ENCODE_FLAGS);
         exit;
     }
     EmailService::enqueue($db, $to, $subject, $body, strip_tags($body));
-    echo json_encode(['message' => 'Письмо поставлено в очередь'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(['message' => 'Письмо поставлено в очередь'], JSON_ENCODE_FLAGS);
     exit;
 }
 
 $rows = $db->query("SELECT * FROM email_queue ORDER BY id DESC LIMIT 100")->fetchAll();
-echo json_encode(['items' => $rows], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+echo json_encode(['items' => $rows], JSON_ENCODE_FLAGS);
 

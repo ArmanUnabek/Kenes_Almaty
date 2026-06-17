@@ -5,10 +5,15 @@ require_once '../auth_middleware.php';
 use App\Middleware\CsrfMiddleware;
 use App\Services\AuditLogger;
 use App\Services\FileCache;
+use App\Services\LetterService;
 
 if (session_status() === PHP_SESSION_NONE) {
 	session_start();
 }
+
+header('Content-Type: application/json; charset=utf-8');
+
+$JSON_FLAGS = JSON_ENCODE_FLAGS;
 
 $db = getDBConnection();
 $method = $_SERVER['REQUEST_METHOD'];
@@ -33,7 +38,7 @@ switch ($method) {
 			$event = $stmt->fetch();
 			if (!$event) {
 				http_response_code(404);
-				echo json_encode(['error' => 'Мероприятие не найдено']);
+				echo json_encode(['error' => 'Мероприятие не найдено'], $JSON_FLAGS);
 				exit;
 			}
 			$kpi = $db->prepare("SELECT * FROM event_kpi WHERE event_id = ? ORDER BY id");
@@ -42,7 +47,7 @@ switch ($method) {
 			$att = $db->prepare("SELECT id, full_name, attended FROM event_attendees WHERE event_id = ? ORDER BY id");
 			$att->execute([$id]);
 			$event['attendees'] = $att->fetchAll();
-			echo json_encode($event);
+			echo json_encode($event, $JSON_FLAGS);
 		} else {
 			$currentRegionId = getCurrentRegionId();
 			if ($currentRegionId) {
@@ -84,7 +89,7 @@ switch ($method) {
                     'limit' => $limit,
                     'pages' => (int)ceil(($total ?? 0) / max(1, $limit))
                 ]
-            ]);
+            ], $JSON_FLAGS);
 		}
 		break;
 
@@ -92,6 +97,14 @@ switch ($method) {
 		requireWriteAccess();
         CsrfMiddleware::requireVerification();
 		$data = json_decode(file_get_contents('php://input'), true);
+        try {
+            LetterService::validateEvent($data ?? []);
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(422);
+            echo json_encode(['error' => $e->getMessage()], $JSON_FLAGS);
+            break;
+        }
+
 		$user = getCurrentUser();
 		$regionId = $data['region_id'] ?? ($user['region_id'] ?? null);
 
@@ -139,7 +152,7 @@ switch ($method) {
 			}
 			http_response_code(500);
 			error_log('events create failed: ' . $e->getMessage());
-			echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_UNESCAPED_UNICODE);
+			echo json_encode(['error' => 'Внутренняя ошибка сервера'], $JSON_FLAGS);
 			break;
 		}
 
@@ -148,8 +161,8 @@ switch ($method) {
 			'id' => $eventId,
 		]);
         AuditLogger::log($db, 'events', $eventId, 'CREATE', null, $data, (int)($user['id'] ?? 0));
-        (new FileCache())->flushAll();
-		echo json_encode(['id' => $eventId, 'message' => 'Мероприятие добавлено']);
+        (new FileCache())->forgetPrefix('kpi:');
+		echo json_encode(['id' => $eventId, 'message' => 'Мероприятие добавлено'], $JSON_FLAGS);
 		break;
 
 	case 'PUT':
@@ -159,9 +172,16 @@ switch ($method) {
 		$id = $data['id'] ?? null;
 		if (!$id) {
 			http_response_code(400);
-			echo json_encode(['error' => 'ID не указан']);
+			echo json_encode(['error' => 'ID не указан'], $JSON_FLAGS);
 			exit;
 		}
+        try {
+            LetterService::validateEvent($data ?? []);
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(422);
+            echo json_encode(['error' => $e->getMessage()], $JSON_FLAGS);
+            break;
+        }
 		try {
 			$db->beginTransaction();
 
@@ -207,7 +227,7 @@ switch ($method) {
 			}
 			http_response_code(500);
 			error_log('events update failed: ' . $e->getMessage());
-			echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_UNESCAPED_UNICODE);
+			echo json_encode(['error' => 'Внутренняя ошибка сервера'], $JSON_FLAGS);
 			break;
 		}
 
@@ -216,8 +236,8 @@ switch ($method) {
 			'id' => (int)$id,
 		]);
         AuditLogger::log($db, 'events', (int)$id, 'UPDATE', null, $data, currentUserIdOrNull());
-        (new FileCache())->flushAll();
-		echo json_encode(['message' => 'Мероприятие обновлено']);
+        (new FileCache())->forgetPrefix('kpi:');
+		echo json_encode(['message' => 'Мероприятие обновлено'], $JSON_FLAGS);
 		break;
 
 	case 'DELETE':
@@ -226,7 +246,7 @@ switch ($method) {
 		$id = $_GET['id'] ?? null;
 		if (!$id) {
 			http_response_code(400);
-			echo json_encode(['error' => 'ID не указан']);
+			echo json_encode(['error' => 'ID не указан'], $JSON_FLAGS);
 			exit;
 		}
 		$db->prepare("DELETE FROM event_kpi WHERE event_id = ?")->execute([$id]);
@@ -237,13 +257,13 @@ switch ($method) {
 			'id' => (int)$id,
 		]);
         AuditLogger::log($db, 'events', (int)$id, 'DELETE', ['id' => (int)$id], null, currentUserIdOrNull());
-        (new FileCache())->flushAll();
-		echo json_encode(['message' => 'Мероприятие удалено']);
+        (new FileCache())->forgetPrefix('kpi:');
+		echo json_encode(['message' => 'Мероприятие удалено'], $JSON_FLAGS);
 		break;
 
 	default:
 		http_response_code(405);
-		echo json_encode(['error' => 'Метод не поддерживается']);
+		echo json_encode(['error' => 'Метод не поддерживается'], $JSON_FLAGS);
 }
 
 

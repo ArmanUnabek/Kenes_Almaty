@@ -4,12 +4,15 @@ require_once __DIR__ . '/../auth_middleware.php';
 
 use App\Middleware\CsrfMiddleware;
 use App\Services\AuditLogger;
+use App\Services\LetterService;
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
 header('Content-Type: application/json; charset=utf-8');
+
+$JSON_FLAGS = JSON_ENCODE_FLAGS;
 
 function ensureRecipientsSupport(PDO $db) {
     static $checked = false;
@@ -232,24 +235,32 @@ switch ($method) {
             $letter = $stmt->fetch();
 
             if ($letter) {
+                LetterService::assertRegionAccess($letter);
                 // Получить сканы
                 $stmt2 = $db->prepare("
-                    SELECT * FROM letter_scans 
+                    SELECT id, letter_type, letter_id, file_path, scan_type, file_name, file_size, created_at,
+                           CASE WHEN file_path IS NOT NULL THEN NULL ELSE scan_data END AS scan_data
+                    FROM letter_scans 
                     WHERE letter_type = ? AND letter_id = ?
                     ORDER BY created_at
                 ");
                 $stmt2->execute([$type, $id]);
-                $letter['scans'] = $stmt2->fetchAll();
+                $letter['scans'] = array_map(static function (array $scan): array {
+                    if (!empty($scan['file_path'])) {
+                        $scan['scan_url'] = '/api/scan_download.php?id=' . (int)$scan['id'] . '&inline=1';
+                    }
+                    return $scan;
+                }, $stmt2->fetchAll());
 
                 $members = fetchLetterMembers($db, $type, [$letter['id']]);
                 $letter['members'] = $members[$letter['id']] ?? [];
                 $recipients = fetchLetterRecipients($db, $type, [$letter['id']]);
                 $letter['recipients'] = $recipients[$letter['id']] ?? [];
 
-                echo json_encode($letter);
+                echo json_encode($letter, $JSON_FLAGS);
             } else {
                 http_response_code(404);
-                echo json_encode(['error' => 'Письмо не найдено']);
+                echo json_encode(['error' => 'Письмо не найдено'], $JSON_FLAGS);
             }
         } else {
             // Получить все письма (с учетом региона пользователя, если он задан)
@@ -315,7 +326,7 @@ switch ($method) {
             }
             unset($letter);
 
-            echo json_encode($letters);
+            echo json_encode($letters, $JSON_FLAGS);
         }
         break;
 
@@ -323,6 +334,18 @@ switch ($method) {
         requireWriteAccess();
         CsrfMiddleware::requireVerification();
         $data = json_decode(file_get_contents('php://input'), true);
+
+        try {
+            if ($type === 'incoming') {
+                LetterService::validateIncoming($data ?? []);
+            } else {
+                LetterService::validateOutgoing($data ?? []);
+            }
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(422);
+            echo json_encode(['error' => $e->getMessage()], $JSON_FLAGS);
+            break;
+        }
 
         $currentUser = getCurrentUser();
         $regionId = $data['region_id'] ?? ($currentUser['region_id'] ?? 1); // по умолчанию регион 1 (Алматы)
@@ -410,21 +433,7 @@ switch ($method) {
 
             // Сохранить сканы, если есть
             if (!empty($data['scans'])) {
-                $stmt2 = $db->prepare("
-                    INSERT INTO letter_scans (letter_type, letter_id, scan_data, scan_type, file_name, file_size)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ");
-
-                foreach ($data['scans'] as $scan) {
-                    $stmt2->execute([
-                        $type,
-                        $letter_id,
-                        $scan['data'],
-                        $scan['type'],
-                        $scan['name'] ?? null,
-                        $scan['size'] ?? null
-                    ]);
-                }
+                LetterService::insertScans($db, $type, (int)$letter_id, $data['scans']);
             }
 
             AuditLogger::log($db, $table, (int)$letter_id, 'CREATE', null, $data, (int)($_SESSION['user_id'] ?? 0) ?: null);
@@ -435,7 +444,7 @@ switch ($method) {
             }
             http_response_code(500);
             error_log('letters create failed: ' . $e->getMessage());
-            echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['error' => 'Внутренняя ошибка сервера'], $JSON_FLAGS);
             break;
         }
 
@@ -445,7 +454,7 @@ switch ($method) {
             'id' => (int)$letter_id,
             'region_id' => (int)$regionId
         ]);
-        echo json_encode(['id' => $letter_id, 'message' => 'Письмо успешно добавлено']);
+        echo json_encode(['id' => $letter_id, 'message' => 'Письмо успешно добавлено'], $JSON_FLAGS);
         break;
 
     case 'PUT':
@@ -456,7 +465,19 @@ switch ($method) {
 
         if (!$id) {
             http_response_code(400);
-            echo json_encode(['error' => 'ID не указан']);
+            echo json_encode(['error' => 'ID не указан'], $JSON_FLAGS);
+            break;
+        }
+
+        try {
+            if ($type === 'incoming') {
+                LetterService::validateIncoming($data ?? []);
+            } else {
+                LetterService::validateOutgoing($data ?? []);
+            }
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(422);
+            echo json_encode(['error' => $e->getMessage()], $JSON_FLAGS);
             break;
         }
 
@@ -468,9 +489,10 @@ switch ($method) {
         $existingRow = $stmtLetter->fetch();
         if (!$existingRow) {
             http_response_code(404);
-            echo json_encode(['error' => 'Письмо не найдено']);
+            echo json_encode(['error' => 'Письмо не найдено'], $JSON_FLAGS);
             break;
         }
+        LetterService::assertRegionAccess($existingRow);
         $existingRegionId = (int)$existingRow['region_id'];
         $previousIncomingRef = $existingRow['incoming_ref_id'] ?? null;
 
@@ -569,20 +591,7 @@ switch ($method) {
 
             // Добавление новых сканов (если есть)
             if (!empty($data['scans']) && is_array($data['scans'])) {
-                $stmt2 = $db->prepare("
-                    INSERT INTO letter_scans (letter_type, letter_id, scan_data, scan_type, file_name, file_size)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ");
-                foreach ($data['scans'] as $scan) {
-                    $stmt2->execute([
-                        $type,
-                        $id,
-                        $scan['data'] ?? '',
-                        $scan['type'] ?? 'application/octet-stream',
-                        $scan['name'] ?? null,
-                        $scan['size'] ?? null
-                    ]);
-                }
+                LetterService::insertScans($db, $type, (int)$id, $data['scans']);
             }
 
             AuditLogger::log($db, $table, (int)$id, 'UPDATE', null, $data, (int)($_SESSION['user_id'] ?? 0) ?: null);
@@ -593,7 +602,7 @@ switch ($method) {
             }
             http_response_code(500);
             error_log('letters update failed: ' . $e->getMessage());
-            echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['error' => 'Внутренняя ошибка сервера'], $JSON_FLAGS);
             break;
         }
 
@@ -603,7 +612,7 @@ switch ($method) {
             'id' => (int)$id,
             'region_id' => (int)$existingRegionId
         ]);
-        echo json_encode(['message' => 'Письмо успешно обновлено']);
+        echo json_encode(['message' => 'Письмо успешно обновлено'], $JSON_FLAGS);
         break;
 
     case 'DELETE':
@@ -613,9 +622,19 @@ switch ($method) {
 
         if (!$id) {
             http_response_code(400);
-            echo json_encode(['error' => 'ID не указан']);
+            echo json_encode(['error' => 'ID не указан'], $JSON_FLAGS);
             break;
         }
+
+        $stmtRegion = $db->prepare("SELECT region_id FROM {$table} WHERE id = ?");
+        $stmtRegion->execute([$id]);
+        $letterRow = $stmtRegion->fetch();
+        if (!$letterRow) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Письмо не найдено'], $JSON_FLAGS);
+            break;
+        }
+        LetterService::assertRegionAccess($letterRow);
 
         try {
             $db->beginTransaction();
@@ -643,7 +662,7 @@ switch ($method) {
             }
             http_response_code(500);
             error_log('letters delete failed: ' . $e->getMessage());
-            echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['error' => 'Внутренняя ошибка сервера'], $JSON_FLAGS);
             break;
         }
 
@@ -652,10 +671,10 @@ switch ($method) {
             'type' => $type,
             'id' => (int)$id
         ]);
-        echo json_encode(['message' => 'Письмо успешно удалено']);
+        echo json_encode(['message' => 'Письмо успешно удалено'], $JSON_FLAGS);
         break;
 
     default:
         http_response_code(405);
-        echo json_encode(['error' => 'Метод не поддерживается']);
+        echo json_encode(['error' => 'Метод не поддерживается'], $JSON_FLAGS);
 }
