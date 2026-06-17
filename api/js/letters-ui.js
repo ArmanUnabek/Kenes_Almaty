@@ -1145,18 +1145,18 @@ function renderIncoming() {
 
       return `
         <tr>
-          <td class="text-nowrap">Вх.${i.seq}</td>
-          <td>${formatDateISOtoRus(i.date)}</td>
-          <td>${escapeHtml(i.organization)}</td>
-          <td class="text-nowrap"><span class="badge ${catClass}">${categoryDisplay(cat)}</span></td>
-          <td class="text-nowrap"><span class="badge badge-incoming">${escapeHtml(i.kkNumber)}</span></td>
-          <td>${escapeHtml(i.subject || "")}</td>
-          <td id="${recipientsCellId}"></td>
-          <td>${dueHtml}</td>
-          <td id="${membersCellId}"></td>
-          <td id="${scansCellId}"></td>
-          <td>${linkHtml}</td>
-          <td class="text-end table-actions">
+          <td class="text-nowrap" data-label="Рег. №">Вх.${i.seq}</td>
+          <td data-label="Дата">${formatDateISOtoRus(i.date)}</td>
+          <td data-label="Организация">${escapeHtml(i.organization)}</td>
+          <td class="text-nowrap" data-label="Категория"><span class="badge ${catClass}">${categoryDisplay(cat)}</span></td>
+          <td class="text-nowrap" data-label="Номер"><span class="badge badge-incoming">${escapeHtml(i.kkNumber)}</span></td>
+          <td data-label="Тема">${escapeHtml(i.subject || "")}</td>
+          <td data-label="Адресаты" id="${recipientsCellId}"></td>
+          <td data-label="Срок">${dueHtml}</td>
+          <td data-label="Ответственные" id="${membersCellId}"></td>
+          <td data-label="Сканы" id="${scansCellId}"></td>
+          <td data-label="Ответ">${linkHtml}</td>
+          <td class="text-end table-actions" data-label="">
             <button class="btn btn-sm btn-outline-primary" data-action="edit-incoming" data-id="${i.id}" title="Изменить"><i class="bi bi-pencil"></i></button>
             ${canDelete() ? `<button class="btn btn-sm btn-outline-danger" data-action="del-incoming" data-id="${i.id}" title="Удалить"><i class="bi bi-trash"></i></button>` : ''}
           </td>
@@ -1444,17 +1444,17 @@ function renderOutgoing() {
       const recipientsCellId = `recipients-outgoing-${i.id}`;
       return `
         <tr>
-          <td class="text-nowrap">Исх.${i.seq}</td>
-          <td>${formatDateISOtoRus(i.date)}</td>
-          <td class="text-nowrap"><span class="badge badge-outgoing">${numberLabel}</span></td>
-          <td>${escapeHtml(incoming?.organization || i.organization || "")}</td>
-          <td class="text-nowrap"><span class="badge ${catClass}">${categoryDisplay(cat)}</span></td>
-          <td class="text-nowrap">${linkInfo}</td>
-          <td>${escapeHtml(i.subject || "")}</td>
-          <td id="${recipientsCellId}"></td>
-          <td id="${membersCellId}"></td>
-          <td id="${scansCellId}"></td>
-          <td class="text-end table-actions">
+          <td class="text-nowrap" data-label="Порядк. №">Исх.${i.seq}</td>
+          <td data-label="Дата">${formatDateISOtoRus(i.date)}</td>
+          <td class="text-nowrap" data-label="Исходящий №"><span class="badge badge-outgoing">${numberLabel}</span></td>
+          <td data-label="Организация">${escapeHtml(incoming?.organization || i.organization || "")}</td>
+          <td class="text-nowrap" data-label="Категория"><span class="badge ${catClass}">${categoryDisplay(cat)}</span></td>
+          <td class="text-nowrap" data-label="Связь">${linkInfo}</td>
+          <td data-label="Тема">${escapeHtml(i.subject || "")}</td>
+          <td data-label="Адресаты" id="${recipientsCellId}"></td>
+          <td data-label="Ответственные" id="${membersCellId}"></td>
+          <td data-label="Сканы" id="${scansCellId}"></td>
+          <td class="text-end table-actions" data-label="">
             <button class="btn btn-sm btn-outline-primary" title="Изменить" data-action="edit-outgoing" data-id="${i.id}">
               <i class="bi bi-pencil"></i>
             </button>

@@ -149,12 +149,12 @@
         const present = Number(ev.attendees_present ?? 0);
         const total = Number(ev.attendees_total ?? 0);
         return `<tr>
-          <td>${formatDateISOtoRus(ev.event_date)}</td>
-          <td>${escapeHtml(ev.title)}</td>
-          <td>${escapeHtml(ev.location || '')}</td>
-          <td class="text-end">${present}/${total}</td>
-          <td class="text-end">${Number(ev.attendance_percent || 0).toFixed(2)}%</td>
-          <td class="text-end table-actions">
+          <td data-label="Дата">${formatDateISOtoRus(ev.event_date)}</td>
+          <td data-label="Название">${escapeHtml(ev.title)}</td>
+          <td data-label="Локация">${escapeHtml(ev.location || '')}</td>
+          <td class="text-end" data-label="Присутствовало">${present}/${total}</td>
+          <td class="text-end" data-label="% явки">${Number(ev.attendance_percent || 0).toFixed(2)}%</td>
+          <td class="text-end table-actions" data-label="">
             <button class="btn btn-sm btn-outline-secondary" data-action="view-att" data-id="${ev.id}" title="${t('events.view_att', 'Участники')}"><i class="bi bi-people"></i></button>
             <button class="btn btn-sm btn-outline-primary" data-action="edit-event" data-id="${ev.id}" title="${t('action.edit', 'Изменить')}"><i class="bi bi-pencil"></i></button>
             ${canDelete() ? `<button class="btn btn-sm btn-outline-danger" data-action="del-event" data-id="${ev.id}" title="${t('action.delete', 'Удалить')}"><i class="bi bi-trash"></i></button>` : ''}
