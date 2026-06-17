@@ -6,8 +6,6 @@ use App\Middleware\CsrfMiddleware;
 use App\Services\EmailService;
 use App\Middleware\RateLimiter;
 
-use App\Middleware\RateLimiter;
-
 header('Content-Type: application/json; charset=utf-8');
 
 checkAuth();

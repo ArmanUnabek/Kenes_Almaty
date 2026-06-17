@@ -11,7 +11,7 @@ class SearchAndHealthTest extends TestCase
         $checks = [
             'database' => true,
             'uploads_writable' => true,
-            'php_version' => PHP_VERSION,
+            'rate_limit_dir' => true,
         ];
         $healthy = $checks['database'] && $checks['uploads_writable'];
         $payload = [
@@ -21,7 +21,8 @@ class SearchAndHealthTest extends TestCase
         ];
 
         $this->assertSame('ok', $payload['status']);
-        $this->assertArrayHasKey('php_version', $payload['checks']);
+        $this->assertArrayHasKey('database', $payload['checks']);
+        $this->assertArrayNotHasKey('php_version', $payload['checks']);
     }
 
     public function testSearchItemSortingByDate(): void
