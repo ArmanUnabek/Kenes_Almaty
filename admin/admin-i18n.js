@@ -2,7 +2,7 @@
  * Admin panel i18n (RU / KK)
  */
 const AdminI18n = (() => {
-  const STORAGE_KEY = 'admin_lang';
+  const STORAGE_KEY = 'os_journal_lang';
   let lang = localStorage.getItem(STORAGE_KEY) || 'ru';
 
   const dict = {
@@ -208,7 +208,7 @@ const AdminI18n = (() => {
       'audit.pageInfo': '{page} / {pages} бет · барлығы {total}',
       'dashboard.regions': 'Аймақтар',
       'dashboard.users': 'Пайдаланушылар',
-      'dashboard.members': 'ОС мүшелері',
+      'dashboard.members': 'Кеңес мүшелері',
       'dashboard.letters': 'Хаттар',
       'dashboard.audit24h': '24 сағ. аудит',
       'dashboard.securityEvents': 'Қауіпсіздік оқиғалары',

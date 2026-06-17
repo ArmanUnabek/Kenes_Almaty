@@ -10,6 +10,11 @@
       'nav.incoming': 'Входящий журнал',
       'nav.outgoing': 'Исходящий журнал',
       'nav.members': 'Члены ОС',
+      'common.search': 'Поиск…',
+      'common.add': 'Добавить',
+      'common.clear': 'Очистить',
+      'common.yes': 'Да',
+      'common.no': 'Нет',
       'nav.commissions': 'Комиссии',
       'nav.kpi': 'KPI',
       'nav.events': 'Мероприятия',
@@ -119,6 +124,16 @@
       'letters.outgoing_add': 'Новый ответ ОС',
       'letters.save': 'Сохранить',
       'letters.reset': 'Сбросить',
+      'letters.incoming_saved': 'Входящее письмо успешно сохранено',
+      'letters.outgoing_saved': 'Исходящее письмо успешно сохранено',
+      'letters.save_incoming_error': 'Не удалось сохранить входящее письмо',
+      'letters.save_outgoing_error': 'Не удалось сохранить исходящее письмо',
+      'letters.linked_reply': 'Ответ',
+      'letters.type_incoming': 'Входящее',
+      'letters.type_outgoing': 'Исходящее',
+      'letters.add_recipient_warn': 'Добавьте хотя бы одного адресата или укажите организацию',
+      'letters.org_required': 'Укажите организацию получателя',
+      'letters.linked_ok': 'Исходящее письмо успешно привязано',
       'mobile.incoming': 'Входящие',
       'mobile.outgoing': 'Исходящие',
       'mobile.members': 'Члены',
@@ -128,7 +143,12 @@
       'nav.dashboard': 'Статистика',
       'nav.incoming': 'Кіріс журналы',
       'nav.outgoing': 'Шығыс журналы',
-      'nav.members': 'ОС мүшелері',
+      'nav.members': 'Кеңес мүшелері',
+      'common.search': 'Іздеу…',
+      'common.add': 'Қосу',
+      'common.clear': 'Тазалау',
+      'common.yes': 'Иә',
+      'common.no': 'Жоқ',
       'nav.commissions': 'Комиссиялар',
       'nav.kpi': 'KPI',
       'nav.events': 'Іс-шаралар',
@@ -141,21 +161,21 @@
       'topbar.import': 'Импорт',
       'topbar.logout': 'Шығу',
       'lang.switch': 'Русский',
-      'members.add': 'ОС мүшесін қосу',
-      'members.edit': 'ОС мүшесін өңдеу',
+      'members.add': 'Кеңес мүшесін қосу',
+      'members.edit': 'Кеңес мүшесін өңдеу',
       'members.empty': 'Көрсету үшін мүшелер жоқ',
       'members.all_commissions': 'Барлық комиссиялар',
       'members.default_role': 'Кеңес мүшесі',
       'members.photo': 'Фото',
       'members.photo_ok': 'Фото сәтті жүктелді',
       'members.delete_confirm': 'Жою',
-      'members.deleted': 'ОС мүшесі жойылды',
-      'members.updated': 'ОС мүшесі жаңартылды',
-      'members.created': 'ОС мүшесі қосылды',
+      'members.deleted': 'Кеңес мүшесі жойылды',
+      'members.updated': 'Кеңес мүшесі жаңартылды',
+      'members.created': 'Кеңес мүшесі қосылды',
       'commissions.add': 'Комиссия қосу',
       'commissions.edit': 'Комиссияны өңдеу',
       'commissions.empty': 'Комиссиялар табылмады',
-      'commissions.default_desc': 'Қоғамдық Кеңес комиссиясы',
+      'commissions.default_desc': 'Қоғамдық кеңес комиссиясы',
       'commissions.delete_confirm': 'Жою',
       'commissions.deleted': 'Комиссия жойылды',
       'commissions.updated': 'Комиссия жаңартылды',
@@ -175,21 +195,21 @@
       'page.dashboard_sub': 'Негізгі көрсеткіштер мен динамика',
       'page.incoming': 'Кіріс журналы',
       'page.outgoing': 'Шығыс журналы',
-      'page.outgoing_sub': 'Қоғамдық Кеңес жауаптары',
-      'page.members': 'ОС мүшелері',
+      'page.outgoing_sub': 'Қоғамдық кеңес жауаптары',
+      'page.members': 'Қоғамдық кеңес мүшелері',
       'page.commissions': 'Комиссиялар',
-      'page.commissions_sub': 'Қоғамдық Кеңес құрылымы',
+      'page.commissions_sub': 'Қоғамдық кеңес құрылымы',
       'page.kpi': 'KPI',
       'page.kpi_sub': 'Мүшелер мен комиссиялар көрсеткіштері',
       'page.events': 'Іс-шаралар',
-      'page.events_sub': 'ОС мүшелерінің қатысуы',
+      'page.events_sub': 'Кеңес мүшелерінің қатысуы',
       'letters.count': 'хат',
       'letters.deadline': 'жауап мерзімі 15 жұмыс күні',
       'members.count': 'мүше',
       'commissions.count': 'комиссия',
       'ctx.add_incoming': '+ Хат қосу',
       'ctx.pending': 'Жауапсыз',
-      'ctx.add_outgoing': '+ ОС жауабы',
+      'ctx.add_outgoing': '+ Кеңес жауабы',
       'ctx.add_event': '+ Іс-шара',
       'events.empty': 'Іс-шаралар жоқ',
       'events.saved': 'Іс-шара сәтті сақталды',
@@ -216,7 +236,7 @@
       'dash.period': 'Кезең',
       'dash.working_days': 'жұмыс күні',
       'dash.all_time': 'барлық уақыт',
-      'dash.os_replies': 'ОС жауаптары',
+      'dash.os_replies': 'кеңес жауаптары',
       'common.loading': 'Жүктелуде...',
       'common.cancel': 'Бас тарту',
       'common.close': 'Жабу',
@@ -235,9 +255,19 @@
       'status.overdue': 'Мерзімі өткен',
       'status.due_soon': 'Мерзімі жақында',
       'letters.incoming_add': 'Жаңа кіріс',
-      'letters.outgoing_add': 'Жаңа ОС жауабы',
+      'letters.outgoing_add': 'Жаңа кеңес жауабы',
       'letters.save': 'Сақтау',
       'letters.reset': 'Тазалау',
+      'letters.incoming_saved': 'Кіріс хат сәтті сақталды',
+      'letters.outgoing_saved': 'Шығыс хат сәтті сақталды',
+      'letters.save_incoming_error': 'Кіріс хат сақталмады',
+      'letters.save_outgoing_error': 'Шығыс хат сақталмады',
+      'letters.linked_reply': 'Жауап',
+      'letters.type_incoming': 'Кіріс',
+      'letters.type_outgoing': 'Шығыс',
+      'letters.add_recipient_warn': 'Кем дегенде бір алушы қосыңыз немесе ұйымды көрсетіңіз',
+      'letters.org_required': 'Алушы ұйымын көрсетіңіз',
+      'letters.linked_ok': 'Шығыс хат сәтті байланыстырылды',
       'mobile.incoming': 'Кіріс',
       'mobile.outgoing': 'Шығыс',
       'mobile.members': 'Мүшелер',
@@ -248,8 +278,63 @@
   let lang = localStorage.getItem(STORAGE_KEY) || 'ru';
   if (!dict[lang]) lang = 'ru';
 
+  const MONTHS = {
+    ru: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
+    kz: ['Қаңтар', 'Ақпан', 'Наурыз', 'Сәуір', 'Мамыр', 'Маусым', 'Шілде', 'Тамыз', 'Қыркүйек', 'Қазан', 'Қараша', 'Желтоқсан'],
+  };
+
+  function register(extra) {
+    if (!extra) return;
+    if (extra.ru) Object.assign(dict.ru, extra.ru);
+    if (extra.kz) Object.assign(dict.kz, extra.kz);
+  }
+
   function t(key, fallback) {
     return dict[lang]?.[key] ?? dict.ru[key] ?? fallback ?? key;
+  }
+
+  function regionName(region) {
+    if (!region) return '—';
+    if (lang === 'kz' && region.name_kz) return region.name_kz;
+    return region.name_ru || region.name_kz || '—';
+  }
+
+  function formatMonthLabel(key) {
+    if (!key) return '';
+    const [y, mm] = String(key).split('-');
+    const m = Number(mm);
+    const months = MONTHS[lang] || MONTHS.ru;
+    if (!y || !Number.isFinite(m) || m < 1 || m > 12) return String(key);
+    return `${months[m - 1]} ${y}`;
+  }
+
+  function updateUserLabels(user) {
+    if (!user) return;
+    window.__sessionUser = user;
+    const nameEl = document.getElementById('userName');
+    const regionEl = document.getElementById('userRegion');
+    if (nameEl) nameEl.textContent = user.full_name || user.username || t('role.user');
+    if (regionEl) {
+      const activeId = user.active_region_id;
+      const activeRegion = (window.allRegions || []).find((r) => Number(r.id) === Number(activeId));
+      const region = activeRegion || user.region;
+      if (region) {
+        regionEl.textContent = `${t('role.region')}: ${regionName(region)}`;
+      } else if (user.is_admin) {
+        regionEl.textContent = t('role.superadmin');
+      } else {
+        regionEl.textContent = t('role.user');
+      }
+    }
+    const regionSelect = document.getElementById('adminRegionSelect');
+    if (regionSelect && window.allRegions?.length) {
+      const prev = regionSelect.value;
+      regionSelect.innerHTML = window.allRegions
+        .filter((r) => r.is_active == 1 || r.is_active === true)
+        .map((r) => `<option value="${r.id}">${regionName(r)}</option>`)
+        .join('');
+      if (prev) regionSelect.value = prev;
+    }
   }
 
   function setLang(next) {
@@ -286,8 +371,17 @@
       const key = el.getAttribute('data-i18n-title');
       el.title = t(key, el.title);
     });
+    document.querySelectorAll('[data-i18n-attr]').forEach((el) => {
+      const key = el.getAttribute('data-i18n');
+      const attr = el.getAttribute('data-i18n-attr');
+      if (key && attr) el.setAttribute(attr, t(key, el.getAttribute(attr) || ''));
+    });
     const switchBtn = document.getElementById('langToggleBtn');
-    if (switchBtn) switchBtn.textContent = t('lang.switch', 'Қазақша');
+    if (switchBtn) {
+      const label = switchBtn.querySelector('.sidebar-label');
+      if (label) label.textContent = t('lang.switch', 'Қазақша');
+      else switchBtn.textContent = t('lang.switch', 'Қазақша');
+    }
     const confirmMsg = document.getElementById('confirmDeleteMessage');
     if (confirmMsg && !confirmMsg.dataset.i18nCustom) {
       confirmMsg.textContent = t('common.confirm_delete', confirmMsg.textContent);
@@ -299,5 +393,8 @@
     apply();
   });
 
-  window.AppI18n = { t, setLang, toggleLang, apply, get lang() { return lang; } };
+  window.AppI18n = {
+    t, setLang, toggleLang, apply, register, regionName, formatMonthLabel, updateUserLabels, MONTHS,
+    get lang() { return lang; },
+  };
 })(window);

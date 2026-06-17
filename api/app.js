@@ -22,7 +22,7 @@ async function scheduleRealtimeRefresh() {
 
 async function initializeApp() {
   try {
-    window.showLoading?.('Загрузка данных...');
+    window.showLoading?.(window.AppI18n?.t('common.loading', 'Загрузка данных...') || 'Загрузка данных...');
     await loadMembersCatalog();
     await loadCommissionsCatalog();
     if (typeof populateMemberSelects === 'function') populateMemberSelects();
@@ -51,22 +51,24 @@ async function initializeApp() {
       (store.events || []).flatMap((e) => [e.title, e.location]));
 
     window.hideLoading?.();
-    window.showSuccess?.('Данные успешно загружены');
+    window.showSuccess?.(window.AppI18n?.t('app.loaded', 'Данные успешно загружены'));
   } catch (error) {
     console.error('Ошибка инициализации приложения', error);
     window.hideLoading?.();
-    window.showError?.('Не удалось загрузить данные. Проверьте подключение к серверу.');
+    window.showError?.(window.AppI18n?.t('app.load_error', 'Не удалось загрузить данные. Проверьте подключение к серверу.'));
   }
 }
 
-function renderTableFooter(elementId, shown, total, label = 'записей', extraHtml = '') {
+function renderTableFooter(elementId, shown, total, label, extraHtml = '') {
+  const t = window.AppI18n?.t || ((_, fb) => fb);
+  const labelText = label || t('table.records', 'записей');
   const el = document.getElementById(elementId);
   if (!el) return;
   if (total === 0) {
-    el.innerHTML = '<span class="text-muted">Нет записей для отображения</span>';
+    el.innerHTML = `<span class="text-muted">${t('table.no_records', 'Нет записей для отображения')}</span>`;
     return;
   }
-  el.innerHTML = `<span>Показано <strong>${shown}</strong> из <strong>${total}</strong> ${label}</span>${extraHtml}`;
+  el.innerHTML = `<span>${t('table.shown', 'Показано')} <strong>${shown}</strong> ${t('table.of', 'из')} <strong>${total}</strong> ${labelText}</span>${extraHtml}`;
 }
 
 function scrollToCollapse(targetSelector) {
@@ -117,7 +119,8 @@ function updatePageContextActions(tabId) {
 }
 
 function updatePageHeader(tabId) {
-  const meta = pageMeta()[tabId] || { title: 'Журнал ОС', subtitle: '' };
+  const t = window.AppI18n?.t || ((_, fb) => fb);
+  const meta = pageMeta()[tabId] || { title: t('brand.title', 'Журнал ОС'), subtitle: '' };
   const titleEl = document.getElementById('pageTitle');
   const subtitleEl = document.getElementById('pageSubtitle');
   if (titleEl) titleEl.textContent = meta.title;

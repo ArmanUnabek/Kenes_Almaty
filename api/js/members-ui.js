@@ -32,7 +32,7 @@
     if (!select) return;
     const current = select.value;
     const catalog = window.commissionsCatalog || [];
-    select.innerHTML = '<option value="">— не назначена —</option>' +
+    select.innerHTML = `<option value="">${t('members.not_assigned', '— не назначена —')}</option>` +
       catalog.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
     if (current) select.value = current;
   }
