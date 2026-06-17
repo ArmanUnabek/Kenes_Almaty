@@ -138,6 +138,8 @@
       'mobile.outgoing': 'Исходящие',
       'mobile.members': 'Члены',
       'mobile.menu': 'Ещё',
+      'translate.empty': 'Сначала заполните поле на русском',
+      'translate.done': 'Перевод готов',
     },
     kz: {
       'nav.dashboard': 'Статистика',
@@ -272,6 +274,8 @@
       'mobile.outgoing': 'Шығыс',
       'mobile.members': 'Мүшелер',
       'mobile.menu': 'Тағы',
+      'translate.empty': 'Алдымен орысша өрісті толтырыңыз',
+      'translate.done': 'Аударма дайын',
     },
   };
 

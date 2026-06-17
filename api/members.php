@@ -85,7 +85,9 @@ class MembersController extends ApiController
         $rules = [
             'full_name' => 'required|string|min:2|max:255',
             'position' => 'string|max:255',
+            'position_kz' => 'string|max:255',
             'organization' => 'string|max:255',
+            'organization_kz' => 'string|max:255',
             'status' => 'in:active,inactive',
         ];
         if (!empty($data['email'])) {

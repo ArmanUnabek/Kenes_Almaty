@@ -8,6 +8,53 @@
     return window.AppI18n?.t(key) || fallback;
   }
 
+  function memberLocalizedField(member, ruKey, kzKey) {
+    const isKz = window.AppI18n?.lang === 'kz';
+    if (isKz && member[kzKey]) return member[kzKey];
+    return member[ruKey] || '';
+  }
+
+  async function initKazLlmTranslate() {
+    if (!window.canWrite()) return;
+    try {
+      const resp = await fetch(`${api()}/translate.php?action=status`);
+      const data = await resp.json().catch(() => ({}));
+      if (!data.enabled) return;
+      document.getElementById('btnTranslatePosition')?.classList.remove('d-none');
+      document.getElementById('btnTranslateOrganization')?.classList.remove('d-none');
+    } catch {
+      /* KazLLM не настроен */
+    }
+  }
+
+  async function translateField(sourceId, targetId) {
+    const source = document.getElementById(sourceId);
+    const target = document.getElementById(targetId);
+    if (!source || !target) return;
+    const text = source.value.trim();
+    if (!text) {
+      window.showWarning?.(t('translate.empty', 'Сначала заполните поле на русском')) || alert('Сначала заполните поле');
+      return;
+    }
+    const btn = sourceId === 'memberPosition' ? document.getElementById('btnTranslatePosition') : document.getElementById('btnTranslateOrganization');
+    if (btn) btn.disabled = true;
+    try {
+      const resp = await fetch(`${api()}/translate.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, source: 'ru', target: 'kk' }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+      target.value = data.text || '';
+      window.showSuccess?.(t('translate.done', 'Перевод готов'));
+    } catch (err) {
+      window.showError?.(err.message) || alert(err.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
   function resetMemberForm() {
     const form = document.getElementById('formMember');
     if (!form) return;
@@ -43,7 +90,9 @@
     document.getElementById('memberFullName').value = member.full_name || '';
     document.getElementById('memberCommissionId').value = member.commission_id || '';
     document.getElementById('memberPosition').value = member.position || '';
+    document.getElementById('memberPositionKz').value = member.position_kz || '';
     document.getElementById('memberOrganization').value = member.organization || '';
+    document.getElementById('memberOrganizationKz').value = member.organization_kz || '';
     document.getElementById('memberPhone').value = member.phone || '';
     document.getElementById('memberEmail').value = member.email || '';
     document.getElementById('memberStatus').value = member.status || 'active';
@@ -148,9 +197,9 @@
             <div class="card-body text-center">
               <div class="member-avatar">${avatarContent}</div>
               <h6 class="member-name mt-3 mb-1">${escapeHtml(member.full_name || '')}</h6>
-              <p class="member-role text-muted small mb-2">${escapeHtml(member.position || t('members.default_role', 'Член совета'))}</p>
+              <p class="member-role text-muted small mb-2">${escapeHtml(memberLocalizedField(member, 'position', 'position_kz') || t('members.default_role', 'Член совета'))}</p>
               ${commissionBadge}
-              ${member.organization ? `<p class="small text-muted mt-2 mb-0">${escapeHtml(member.organization)}</p>` : ''}
+              ${memberLocalizedField(member, 'organization', 'organization_kz') ? `<p class="small text-muted mt-2 mb-0">${escapeHtml(memberLocalizedField(member, 'organization', 'organization_kz'))}</p>` : ''}
               ${member.phone ? `<p class="small text-muted mb-0">${escapeHtml(member.phone)}</p>` : ''}
               ${window.canWrite() ? `
                 <div class="mt-3 d-flex justify-content-center gap-2 flex-wrap">
@@ -285,7 +334,9 @@
           full_name: document.getElementById('memberFullName').value.trim(),
           commission_id: document.getElementById('memberCommissionId').value || null,
           position: document.getElementById('memberPosition').value.trim(),
+          position_kz: document.getElementById('memberPositionKz').value.trim(),
           organization: document.getElementById('memberOrganization').value.trim(),
+          organization_kz: document.getElementById('memberOrganizationKz').value.trim(),
           phone: document.getElementById('memberPhone').value.trim(),
           email: document.getElementById('memberEmail').value.trim(),
           status: document.getElementById('memberStatus').value,
@@ -337,6 +388,14 @@
       });
     }
     document.getElementById('commissionFormReset')?.addEventListener('click', resetCommissionForm);
+
+    document.getElementById('btnTranslatePosition')?.addEventListener('click', () => {
+      translateField('memberPosition', 'memberPositionKz');
+    });
+    document.getElementById('btnTranslateOrganization')?.addEventListener('click', () => {
+      translateField('memberOrganization', 'memberOrganizationKz');
+    });
+    initKazLlmTranslate();
   }
 
   window.AppMembers = {
@@ -358,4 +417,8 @@
   window.populateMembersCommissionFilter = populateMembersCommissionFilter;
   window.populateMemberCommissionSelect = populateMemberCommissionSelect;
   window.bindMembersCommissionsForms = bindMembersCommissionsForms;
+
+  window.addEventListener('app:langchange', () => {
+    if (document.getElementById('membersGrid')) renderMembersGrid();
+  });
 })(window);
