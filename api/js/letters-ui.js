@@ -1037,6 +1037,35 @@ function renderOutgoingRecipients() {
     });
   });
 }
+async function viewLetterDetail(type, id) {
+  const modalEl = document.getElementById('letterRecipientsModal');
+  const body = document.getElementById('letterRecipientsBody');
+  const titleEl = modalEl?.querySelector('.modal-title');
+  if (!modalEl || !body) return;
+  try {
+    const letter = await fetchLetterDetail(type, Number(id));
+    const label = type === 'incoming' ? 'Входящее' : 'Исходящее';
+    if (titleEl) titleEl.textContent = `${label} №${letter.seq || id}`;
+    const members = (letter.members || []).map((m) => m.full_name).join(', ') || '—';
+    const recipients = (letter.recipients || []).length
+      ? (letter.recipients || []).map((name) => `<span class="badge rounded-pill bg-light text-dark border me-1 mb-1">${escapeHtml(name)}</span>`).join('')
+      : '<span class="text-muted">—</span>';
+    body.innerHTML = `
+      <dl class="row small mb-0">
+        <dt class="col-sm-4">Дата</dt><dd class="col-sm-8">${escapeHtml((letter.date || '').slice(0, 10))}</dd>
+        <dt class="col-sm-4">Организация</dt><dd class="col-sm-8">${escapeHtml(letter.organization || '—')}</dd>
+        <dt class="col-sm-4">Тема</dt><dd class="col-sm-8">${escapeHtml(letter.subject || '—')}</dd>
+        <dt class="col-sm-4">Ответственные</dt><dd class="col-sm-8">${escapeHtml(members)}</dd>
+        <dt class="col-sm-4">Адресаты</dt><dd class="col-sm-8">${recipients}</dd>
+        ${letter.note ? `<dt class="col-sm-4">Примечание</dt><dd class="col-sm-8">${escapeHtml(letter.note)}</dd>` : ''}
+      </dl>`;
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  } catch (e) {
+    console.error(e);
+    window.showError?.('Не удалось загрузить письмо') || alert('Не удалось загрузить письмо');
+  }
+}
+
 async function viewLetterRecipients(type, id) {
   if (!letterRecipientsModal || !letterRecipientsBody) return;
   try {
@@ -1837,6 +1866,7 @@ async function deleteOutgoing(id) {
 
   window.editIncoming = editIncoming;
   window.editOutgoing = editOutgoing;
+  window.viewLetterDetail = viewLetterDetail;
   window.renderIncoming = renderIncoming;
   window.renderOutgoing = renderOutgoing;
   window.refreshLetters = refreshLetters;

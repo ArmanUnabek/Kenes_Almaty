@@ -13,7 +13,7 @@ $JSON_FLAGS = JSON_ENCODE_FLAGS;
 checkAuth();
 
 $db = getDBConnection();
-$regionId = getCurrentRegionId();
+$regionId = resolveRegionIdForRead();
 
 try {
     $stats = [];
@@ -42,7 +42,7 @@ try {
     $stmt->execute($regionParams);
     $stats['avg_response_days'] = round($stmt->fetchColumn() ?? 0, 1);
 
-    // Просроченные письма без ответа более 21 дня
+    // Просроченные письма без ответа (≈15 рабочих дней ≈ 21 календарный)
     $sql = "
         SELECT COUNT(*) as overdue_count
         FROM incoming_letters il

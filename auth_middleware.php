@@ -178,6 +178,26 @@ function getCurrentRegionId(): ?int
     return $regionId ? (int)$regionId : null;
 }
 
+/**
+ * Регион для чтения списков: admin может видеть все регионы (null),
+ * moderator/viewer — только свой назначенный region_id.
+ */
+function resolveRegionIdForRead(): ?int
+{
+    $user = getCurrentUser();
+    if (!$user) {
+        denyWithStatus(401, 'Требуется авторизация');
+    }
+    if (isAdmin()) {
+        return getCurrentRegionId();
+    }
+    $regionId = (int)($user['region_id'] ?? 0);
+    if ($regionId <= 0) {
+        denyWithStatus(403, 'У пользователя не назначен регион');
+    }
+    return $regionId;
+}
+
 function setActiveRegionId(?int $regionId): void
 {
     if ($regionId === null || $regionId <= 0) {

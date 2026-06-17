@@ -138,6 +138,11 @@ abstract class ApiController
         return getCurrentRegionId();
     }
 
+    protected function resolveRegionIdForRead(): ?int
+    {
+        return resolveRegionIdForRead();
+    }
+
     protected function canAccessRegion(int $regionId): bool
     {
         return canAccessRegion($regionId);

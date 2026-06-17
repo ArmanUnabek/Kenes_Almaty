@@ -14,7 +14,7 @@ if ($q === '') {
     exit;
 }
 
-$regionId = getCurrentRegionId();
+$regionId = resolveRegionIdForRead();
 $like = '%' . $q . '%';
 $items = [];
 

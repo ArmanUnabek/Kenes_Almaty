@@ -67,7 +67,7 @@ class EventsController extends ApiController
 
         $page = max(1, (int)$this->getQueryParam('page', 1));
         $limit = max(1, min(500, (int)$this->getQueryParam('limit', 30)));
-        $result = $this->repo->getAll($this->getCurrentRegionId(), $page, $limit);
+        $result = $this->repo->getAll($this->resolveRegionIdForRead(), $page, $limit);
         $this->paginated($result['items'], $result['total'], $page, $limit);
     }
 

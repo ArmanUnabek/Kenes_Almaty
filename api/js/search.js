@@ -17,19 +17,29 @@
     return 'bi-search';
   }
 
-  function navigateToResult(item) {
-    if (item.source === 'incoming') {
+  function openLetterFromSearch(source, id) {
+    if (source === 'incoming') {
       document.getElementById('tab-incoming')?.click();
       if (window.canWrite?.() && typeof window.editIncoming === 'function') {
-        setTimeout(() => window.editIncoming(item.id), 150);
+        setTimeout(() => window.editIncoming(id), 150);
+      } else if (typeof window.viewLetterDetail === 'function') {
+        setTimeout(() => window.viewLetterDetail('incoming', id), 150);
       }
       return;
     }
-    if (item.source === 'outgoing') {
+    if (source === 'outgoing') {
       document.getElementById('tab-outgoing')?.click();
       if (window.canWrite?.() && typeof window.editOutgoing === 'function') {
-        setTimeout(() => window.editOutgoing(item.id), 150);
+        setTimeout(() => window.editOutgoing(id), 150);
+      } else if (typeof window.viewLetterDetail === 'function') {
+        setTimeout(() => window.viewLetterDetail('outgoing', id), 150);
       }
+    }
+  }
+
+  function navigateToResult(item) {
+    if (item.source === 'incoming' || item.source === 'outgoing') {
+      openLetterFromSearch(item.source, item.id);
       return;
     }
     if (item.source === 'member') {

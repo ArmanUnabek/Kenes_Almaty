@@ -68,7 +68,7 @@ class LettersController extends ApiController
             $this->json($letter);
         }
 
-        $regionId = $this->getCurrentRegionId();
+        $regionId = $this->resolveRegionIdForRead();
         $hasPagination = isset($_GET['limit']);
         $limit = max(1, min(500, (int)$this->getQueryParam('limit', 50)));
         $page = max(1, (int)$this->getQueryParam('page', 1));

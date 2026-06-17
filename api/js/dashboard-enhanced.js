@@ -23,15 +23,20 @@
       return;
     }
 
-    const maxLoad = Math.max(...stats.commission_performance.map((c) => Number(c.total_letters) || 0), 1);
+    const maxLoad = Math.max(...stats.commission_performance.map((c) => {
+      const total = (Number(c.incoming_count) || 0) + (Number(c.outgoing_count) || 0);
+      return total || Number(c.total_letters) || 0;
+    }), 1);
     container.innerHTML = stats.commission_performance.map((c) => {
-      const pct = Math.round(((Number(c.total_letters) || 0) / maxLoad) * 100);
+      const totalLetters = (Number(c.incoming_count) || 0) + (Number(c.outgoing_count) || 0)
+        || Number(c.total_letters) || 0;
+      const pct = Math.round((totalLetters / maxLoad) * 100);
       const color = c.color || '#1D4ED8';
       return `
         <div class="commission-kpi-row mb-3">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <span class="small fw-semibold">${escapeHtml(c.name || 'Комиссия')}</span>
-            <span class="small text-muted">${c.total_letters || 0} писем · ${c.members_count || 0} чел.</span>
+            <span class="small text-muted">${totalLetters} писем · ${c.members_count || 0} чел.</span>
           </div>
           <div class="progress" style="height:8px;">
             <div class="progress-bar" style="width:${pct}%;background:${color};"></div>

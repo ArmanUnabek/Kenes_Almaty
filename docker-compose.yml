@@ -10,7 +10,7 @@ services:
       - "3306:3306"
     volumes:
       - db_data:/var/lib/mysql
-      - ./database.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./deploy_database.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./database_indexes_performance.sql:/docker-entrypoint-initdb.d/02-indexes.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uos_user", "-pchange_me"]
@@ -34,7 +34,7 @@ services:
       DB_USER: os_user
       DB_PASS: change_me
     command: >
-      bash -c "docker-php-ext-install pdo pdo_mysql &&
+      bash -c "docker-php-ext-install pdo pdo_mysql mbstring fileinfo &&
       a2enmod rewrite &&
       apache2-foreground"
 

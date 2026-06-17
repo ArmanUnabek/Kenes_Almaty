@@ -24,7 +24,7 @@ class CommissionsController extends ApiController
             $this->requireAuth();
             $method = $_SERVER['REQUEST_METHOD'];
             $id = $this->getQueryParam('id');
-            $regionId = $this->getCurrentRegionId();
+            $regionId = $this->resolveRegionIdForRead();
 
             switch ($method) {
                 case 'GET':

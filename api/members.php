@@ -24,7 +24,7 @@ class MembersController extends ApiController
             $this->requireAuth();
             $method = $_SERVER['REQUEST_METHOD'];
             $id = $this->getQueryParam('id');
-            $regionId = $this->getCurrentRegionId();
+            $regionId = $this->resolveRegionIdForRead();
 
             switch ($method) {
                 case 'GET':
@@ -102,7 +102,7 @@ class MembersController extends ApiController
         $data = $this->getJsonInput() ?? [];
         $this->validateInput($data, $this->buildMemberRules($data));
 
-        $targetRegion = (int)($data['region_id'] ?? $regionId ?? 1);
+        $targetRegion = resolveRegionIdForWrite(isset($data['region_id']) ? (int)$data['region_id'] : null);
         $this->requireRegionAccess($targetRegion);
         $data['region_id'] = $targetRegion;
 
