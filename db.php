@@ -90,7 +90,8 @@ function configureSessionCookie(): void
     ]);
 }
 
-// Загрузка переменных окружения из .env.local (фолбэк для значений ниже).
+// Загрузка переменных окружения: .env, затем .env.local (перезаписывает).
+loadEnvFile(__DIR__ . '/.env');
 loadEnvFile(__DIR__ . '/.env.local');
 
 // Параметры подключения берутся из окружения; .env.local исключён из git.

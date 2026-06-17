@@ -3,14 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="refresh" content="0;url=/api/">
-    <title>Перенаправление…</title>
+    <title>Журнал ОС — перенаправление</title>
     <style>
         body { font-family: sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f8f9fa; }
         p { color: #6c757d; font-size: 1.1rem; }
     </style>
 </head>
 <body>
-    <p>Перенаправление…</p>
-    <script>window.location.replace('/api/');</script>
+    <p id="redirectMsg">Перенаправление…</p>
+    <script>
+      (function () {
+        const lang = localStorage.getItem('os_journal_lang') === 'kz' ? 'kk' : 'ru';
+        document.documentElement.lang = lang;
+        if (lang === 'kk') {
+          document.title = 'ОС журналы — бағыттау';
+          const el = document.getElementById('redirectMsg');
+          if (el) el.textContent = 'Бағыттау…';
+        }
+        window.location.replace('/api/');
+      })();
+    </script>
 </body>
 </html>

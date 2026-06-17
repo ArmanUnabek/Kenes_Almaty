@@ -878,7 +878,7 @@ async function editIncoming(id) {
     }
   } catch (e) {
     console.error('Ошибка редактирования входящего', e);
-    alert('Не удалось загрузить письмо для редактирования');
+    alert(t('letters.load_edit_error', 'Не удалось загрузить письмо для редактирования'));
   }
 }
 
@@ -934,7 +934,7 @@ async function editOutgoing(id) {
     }
   } catch (e) {
     console.error('Ошибка редактирования исходящего', e);
-    alert('Не удалось загрузить письмо для редактирования');
+    alert(t('letters.load_edit_error', 'Не удалось загрузить письмо для редактирования'));
   }
 }
 
@@ -1064,7 +1064,7 @@ async function viewLetterDetail(type, id) {
     bootstrap.Modal.getOrCreateInstance(modalEl).show();
   } catch (e) {
     console.error(e);
-    window.showError?.('Не удалось загрузить письмо') || alert('Не удалось загрузить письмо');
+    window.showError?.(t('letters.load_error', 'Не удалось загрузить письмо')) || alert(t('letters.load_error', 'Не удалось загрузить письмо'));
   }
 }
 
@@ -1084,7 +1084,7 @@ async function viewLetterRecipients(type, id) {
     modal.show();
   } catch (e) {
     console.error(e);
-    alert('Не удалось загрузить адресатов');
+    alert(t('letters.recipients_load_error', 'Не удалось загрузить адресатов'));
   }
 }
 function renderIncoming() {
@@ -1405,7 +1405,7 @@ async function linkExistingOutgoing(outgoingId) {
     if (window.showError) {
       showError('Не удалось привязать исходящее письмо');
     } else {
-      alert('Не удалось привязать исходящее письмо');
+      alert(t('letters.link_error', 'Не удалось привязать исходящее письмо'));
     }
   }
 }
@@ -1554,7 +1554,7 @@ async function deleteIncoming(id) {
         if (window.showError) {
           showError('Не удалось удалить входящее письмо');
         } else {
-          alert('Не удалось удалить входящее письмо');
+          alert(t('letters.delete_incoming_error', 'Не удалось удалить входящее письмо'));
         }
       }
     });
@@ -1564,7 +1564,7 @@ async function deleteIncoming(id) {
       await deleteLetter('incoming', id);
     } catch (error) {
       console.error('Ошибка удаления входящего письма', error);
-      alert('Не удалось удалить входящее письмо');
+      alert(t('letters.delete_incoming_error', 'Не удалось удалить входящее письмо'));
     }
   }
 }
@@ -1582,7 +1582,7 @@ async function deleteOutgoing(id) {
         if (window.showError) {
           showError('Не удалось удалить исходящее письмо');
         } else {
-          alert('Не удалось удалить исходящее письмо');
+          alert(t('letters.delete_outgoing_error', 'Не удалось удалить исходящее письмо'));
         }
       }
     });
@@ -1592,7 +1592,7 @@ async function deleteOutgoing(id) {
       await deleteLetter('outgoing', id);
     } catch (error) {
       console.error('Ошибка удаления исходящего письма', error);
-      alert('Не удалось удалить исходящее письмо');
+      alert(t('letters.delete_outgoing_error', 'Не удалось удалить исходящее письмо'));
     }
   }
 }
@@ -1791,7 +1791,7 @@ async function deleteOutgoing(id) {
           renderScanPreview(prepared, incScansPreview, true);
         } catch (error) {
           console.error('Ошибка обработки файла:', error);
-          alert(`Ошибка при обработке файла ${file.name}`);
+          alert(t('letters.file_error', 'Ошибка при обработке файла {name}').replace('{name}', file.name));
         }
       }
       statusEl.remove();
@@ -1818,7 +1818,7 @@ async function deleteOutgoing(id) {
           renderScanPreview(prepared, outScansPreview, true);
         } catch (error) {
           console.error('Ошибка обработки файла:', error);
-          alert(`Ошибка при обработке файла ${file.name}`);
+          alert(t('letters.file_error', 'Ошибка при обработке файла {name}').replace('{name}', file.name));
         }
       }
       statusEl.remove();

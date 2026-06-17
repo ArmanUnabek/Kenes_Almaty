@@ -140,6 +140,70 @@
       'mobile.menu': 'Ещё',
       'translate.empty': 'Сначала заполните поле на русском',
       'translate.done': 'Перевод готов',
+      'search.enter_query': 'Введите запрос для поиска',
+      'search.nothing_found': 'Ничего не найдено',
+      'search.searching': 'Поиск...',
+      'search.error': 'Ошибка поиска',
+      'search.source.incoming': 'Входящее',
+      'search.source.outgoing': 'Исходящее',
+      'search.source.member': 'Член ОС',
+      'period.quarter_fmt': 'Квартал {q} {y}',
+      'period.year_fmt': 'Год {y}',
+      'dash.open_journal': 'Открыть журнал',
+      'dash.letters_no_reply': 'писем без ответа',
+      'dash.overdue_badge': 'просрочено',
+      'dash.due_soon_badge': 'скоро срок',
+      'dash.no_commission': 'Без комиссии',
+      'dash.no_data': 'Нет данных',
+      'dash.chairman': 'Председатель ОС',
+      'dash.members_count': 'членов',
+      'dash.no_commission_data': 'Нет данных по комиссиям',
+      'dash.incoming_count': 'Входящих',
+      'dash.outgoing_count': 'Исходящих',
+      'dash.letters_count': 'писем',
+      'dash.for_month': 'За {label}',
+      'dash.outgoing_pct': '{pct}% от входящих',
+      'dash.scans_pct': '{pct}% от всех писем',
+      'dash.org_unknown': '(не указано)',
+      'dash.chart_letters': 'Письма',
+      'dash.chart_incoming_gov': 'Входящие письма от гос. органов (ҚК)',
+      'dash.chart_os_replies': 'Ответы от ОС',
+      'dash.chart_outgoing_os': 'Исходящие письма от ОС',
+      'dash.chart_gov_replies': 'Ответы от гос органов (ҚК)',
+      'dash.enh.no_commissions': 'Нет данных по комиссиям',
+      'dash.enh.commission': 'Комиссия',
+      'dash.enh.letters_people': '{letters} писем · {people} чел.',
+      'dash.enh.scans_pct_letters': '{pct}% писем со сканами',
+      'dash.enh.scans_pct': '{pct}% со сканами',
+      'dash.enh.photo_pct': '{pct}% с фото',
+      'dash.enh.trend_days': '{sign}{pct}% за 30 дней',
+      'notify.dead.incoming_prefix': 'Вх.',
+      'notify.dead.pending': 'Без ответа',
+      'notify.dead.overdue': 'Просрочено',
+      'notify.dead.due_soon': 'Скоро срок',
+      'notify.dead.th_reg': 'Рег. №',
+      'notify.dead.th_date': 'Дата',
+      'notify.dead.th_from': 'От кого',
+      'notify.dead.th_deadline': 'Срок',
+      'notify.dead.th_days': 'Дн.',
+      'notify.dead.th_responsible': 'Ответственные',
+      'notify.dead.empty': 'Нет элементов',
+      'notify.dead.hint': '15 рабочих дней от даты входящего.',
+      'notify.email.default_subject': 'Уведомление ОС',
+      'notify.email.no_access': 'Отправка email доступна модераторам и админам.',
+      'notify.email.th_date': 'Дата',
+      'notify.email.th_to': 'Кому',
+      'notify.email.th_subject': 'Тема',
+      'notify.email.th_status': 'Статус',
+      'notify.send_error': 'Ошибка отправки',
+      'letters.load_edit_error': 'Не удалось загрузить письмо для редактирования',
+      'letters.load_error': 'Не удалось загрузить письмо',
+      'letters.recipients_load_error': 'Не удалось загрузить адресатов',
+      'letters.link_error': 'Не удалось привязать исходящее письмо',
+      'letters.delete_incoming_error': 'Не удалось удалить входящее письмо',
+      'letters.delete_outgoing_error': 'Не удалось удалить исходящее письмо',
+      'letters.file_error': 'Ошибка при обработке файла {name}',
+      'footer.copyright_bin': 'БСН',
     },
     kz: {
       'nav.dashboard': 'Статистика',
@@ -160,7 +224,7 @@
       'topbar.export_csv': 'CSV',
       'topbar.export_pdf': 'PDF',
       'topbar.export_json': 'JSON',
-      'topbar.import': 'Импорт',
+      'topbar.import': 'Импорттау',
       'topbar.logout': 'Шығу',
       'lang.switch': 'Русский',
       'members.add': 'Кеңес мүшесін қосу',
@@ -276,6 +340,70 @@
       'mobile.menu': 'Тағы',
       'translate.empty': 'Алдымен орысша өрісті толтырыңыз',
       'translate.done': 'Аударма дайын',
+      'search.enter_query': 'Іздеу сұрауын енгізіңіз',
+      'search.nothing_found': 'Ештеңе табылмады',
+      'search.searching': 'Іздеу...',
+      'search.error': 'Іздеу қатесі',
+      'search.source.incoming': 'Кіріс',
+      'search.source.outgoing': 'Шығыс',
+      'search.source.member': 'Кеңес мүшесі',
+      'period.quarter_fmt': '{y} жылдың {q}-тоқсаны',
+      'period.year_fmt': '{y} жыл',
+      'dash.open_journal': 'Журналды ашу',
+      'dash.letters_no_reply': 'хат жауапсыз',
+      'dash.overdue_badge': 'мерзімі өткен',
+      'dash.due_soon_badge': 'мерзімі жақында',
+      'dash.no_commission': 'Комиссиясыз',
+      'dash.no_data': 'Деректер жоқ',
+      'dash.chairman': 'Кеңес төрағасы',
+      'dash.members_count': 'мүше',
+      'dash.no_commission_data': 'Комиссиялар бойынша деректер жоқ',
+      'dash.incoming_count': 'Кіріс',
+      'dash.outgoing_count': 'Шығыс',
+      'dash.letters_count': 'хат',
+      'dash.for_month': '{label} бойынша',
+      'dash.outgoing_pct': 'кірістің {pct}%',
+      'dash.scans_pct': 'барлық хаттың {pct}%',
+      'dash.org_unknown': '(көрсетілмеген)',
+      'dash.chart_letters': 'Хаттар',
+      'dash.chart_incoming_gov': 'Мемл. органдардан кіріс хаттар (ҚК)',
+      'dash.chart_os_replies': 'Кеңес жауаптары',
+      'dash.chart_outgoing_os': 'Кеңестен шығыс хаттар',
+      'dash.chart_gov_replies': 'Мемл. органдар жауаптары (ҚК)',
+      'dash.enh.no_commissions': 'Комиссиялар бойынша деректер жоқ',
+      'dash.enh.commission': 'Комиссия',
+      'dash.enh.letters_people': '{letters} хат · {people} адам',
+      'dash.enh.scans_pct_letters': 'сканмен {pct}% хат',
+      'dash.enh.scans_pct': 'сканмен {pct}%',
+      'dash.enh.photo_pct': 'фотомен {pct}%',
+      'dash.enh.trend_days': '30 күнде {sign}{pct}%',
+      'notify.dead.incoming_prefix': 'Кір.',
+      'notify.dead.pending': 'Жауапсыз',
+      'notify.dead.overdue': 'Мерзімі өткен',
+      'notify.dead.due_soon': 'Мерзімі жақында',
+      'notify.dead.th_reg': 'Тіркеу №',
+      'notify.dead.th_date': 'Күні',
+      'notify.dead.th_from': 'Кімнен',
+      'notify.dead.th_deadline': 'Мерзім',
+      'notify.dead.th_days': 'Күн',
+      'notify.dead.th_responsible': 'Жауаптылар',
+      'notify.dead.empty': 'Элементтер жоқ',
+      'notify.dead.hint': 'Кіріс күнінен 15 жұмыс күні.',
+      'notify.email.default_subject': 'Кеңес хабарламасы',
+      'notify.email.no_access': 'Email жіберу модераторлар мен әкімшілерге қолжетімді.',
+      'notify.email.th_date': 'Күні',
+      'notify.email.th_to': 'Кімге',
+      'notify.email.th_subject': 'Тақырып',
+      'notify.email.th_status': 'Күйі',
+      'notify.send_error': 'Жіберу қатесі',
+      'letters.load_edit_error': 'Хатты өңдеуге жүктеу сәтсіз',
+      'letters.load_error': 'Хат жүктелмеді',
+      'letters.recipients_load_error': 'Алушылар жүктелмеді',
+      'letters.link_error': 'Шығыс хат байланыстырылмады',
+      'letters.delete_incoming_error': 'Кіріс хат жойылмады',
+      'letters.delete_outgoing_error': 'Шығыс хат жойылмады',
+      'letters.file_error': '{name} файлы өңделмеді',
+      'footer.copyright_bin': 'БСН',
     },
   };
 
@@ -310,6 +438,28 @@
     const months = MONTHS[lang] || MONTHS.ru;
     if (!y || !Number.isFinite(m) || m < 1 || m > 12) return String(key);
     return `${months[m - 1]} ${y}`;
+  }
+
+  function fmt(key, vars) {
+    let s = t(key);
+    if (vars) {
+      Object.entries(vars).forEach(([k, v]) => {
+        s = s.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+      });
+    }
+    return s;
+  }
+
+  function formatPeriodLabel(key, period) {
+    if (!key) return '';
+    if (period === 'month') return formatMonthLabel(key);
+    if (period === 'quarter') {
+      const [y, qPart] = String(key).split('-Q');
+      const q = Number(qPart);
+      return fmt('period.quarter_fmt', { q, y });
+    }
+    if (period === 'year') return fmt('period.year_fmt', { y: key });
+    return String(key);
   }
 
   function updateUserLabels(user) {
@@ -398,7 +548,7 @@
   });
 
   window.AppI18n = {
-    t, setLang, toggleLang, apply, register, regionName, formatMonthLabel, updateUserLabels, MONTHS,
+    t, setLang, toggleLang, apply, register, regionName, formatMonthLabel, formatPeriodLabel, fmt, updateUserLabels, MONTHS,
     get lang() { return lang; },
   };
 })(window);

@@ -5,6 +5,14 @@
   const API_BASE = window.API_BASE;
   const store = window.store;
 
+  function t(key, fb) {
+    return window.AppI18n?.t(key, fb) ?? fb;
+  }
+
+  function fmt(key, vars) {
+    return window.AppI18n?.fmt?.(key, vars) ?? t(key);
+  }
+
 function monthKey(iso) {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -17,12 +25,25 @@ function unique(values) {
 const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
 function formatMonthLabel(key) {
-  // key: YYYY-MM
+  if (window.AppI18n?.formatMonthLabel) return window.AppI18n.formatMonthLabel(key);
   if (!key) return '';
   const [y, mm] = String(key).split('-');
   const m = Number(mm);
   if (!y || !Number.isFinite(m) || m < 1 || m > 12) return String(key);
   return `${MONTHS_RU[m - 1]} ${y}`;
+}
+
+function formatPeriodLabel(key, period) {
+  if (window.AppI18n?.formatPeriodLabel) return window.AppI18n.formatPeriodLabel(key, period);
+  if (!key) return '';
+  if (period === 'month') return formatMonthLabel(key);
+  if (period === 'quarter') {
+    const [y, qPart] = String(key).split('-Q');
+    const q = Number(qPart);
+    return fmt('period.quarter_fmt', { q, y });
+  }
+  if (period === 'year') return fmt('period.year_fmt', { y: key });
+  return String(key);
 }
 
 function getMonthKeys(items) {
@@ -59,18 +80,6 @@ function periodSortValue(key, period) {
     return Number(y) * 10 + q;
   }
   return Number(key);
-}
-
-function formatPeriodLabel(key, period) {
-  if (!key) return '';
-  if (period === 'month') return formatMonthLabel(key);
-  if (period === 'quarter') {
-    const [y, qPart] = String(key).split('-Q');
-    const q = Number(qPart);
-    return `Квартал ${q} ${y}`;
-  }
-  if (period === 'year') return `Год ${key}`;
-  return String(key);
 }
 
 function groupByPeriod(items, period, dateSelector) {
@@ -182,7 +191,7 @@ async function renderKpiExtra() {
   if (summary) {
     const lines = [];
     if (kpi.summary?.chair) {
-      lines.push(`<div><strong>Председатель ОС:</strong> ${escapeHtml(kpi.summary.chair.full_name)}${kpi.summary.chair.commission_name ? ' — ' + escapeHtml(kpi.summary.chair.commission_name) : ''}</div>`);
+      lines.push(`<div><strong>${t('dash.chairman', 'Председатель ОС')}:</strong> ${escapeHtml(kpi.summary.chair.full_name)}${kpi.summary.chair.commission_name ? ' — ' + escapeHtml(kpi.summary.chair.commission_name) : ''}</div>`);
     }
     (kpi.summary?.chairs_commissions || []).slice(0, 6).forEach((p, idx) => {
       lines.push(`<div>${idx + 1}. ${escapeHtml(p.full_name)} — ${escapeHtml(p.commission_name || '')}</div>`);
@@ -200,7 +209,7 @@ async function renderKpiExtra() {
             <span>${escapeHtml(item.recipient || '')}</span>
             <span class="badge bg-primary rounded-pill">${Number(item.total || 0)}</span>
         </li>`).join('')
-      : '<li class="list-group-item text-muted">Нет данных</li>';
+      : `<li class="list-group-item text-muted">${t('dash.no_data', 'Нет данных')}</li>`;
   }
 
   if (listKpiRecipientsOutgoing) {
@@ -210,7 +219,7 @@ async function renderKpiExtra() {
             <span>${escapeHtml(item.recipient || '')}</span>
             <span class="badge bg-success rounded-pill">${Number(item.total || 0)}</span>
         </li>`).join('')
-      : '<li class="list-group-item text-muted">Нет данных</li>';
+      : `<li class="list-group-item text-muted">${t('dash.no_data', 'Нет данных')}</li>`;
   }
 
   if (typeof window.refreshDashboardEnhanced !== 'function') {
@@ -246,10 +255,10 @@ function updateNotifyBadge() {
   }
   alerts.classList.remove('d-none');
   alerts.innerHTML = `
-    <span><strong>${pending}</strong> писем без ответа</span>
-    ${overdue ? `<span class="badge badge-due-danger">${overdue} просрочено</span>` : ''}
-    ${warning ? `<span class="badge badge-due">${warning} скоро срок</span>` : ''}
-    <button type="button" class="btn btn-sm btn-outline-primary ms-auto" id="dashViewPending">Открыть журнал</button>
+    <span><strong>${pending}</strong> ${t('dash.letters_no_reply', 'писем без ответа')}</span>
+    ${overdue ? `<span class="badge badge-due-danger">${overdue} ${t('dash.overdue_badge', 'просрочено')}</span>` : ''}
+    ${warning ? `<span class="badge badge-due">${warning} ${t('dash.due_soon_badge', 'скоро срок')}</span>` : ''}
+    <button type="button" class="btn btn-sm btn-outline-primary ms-auto" id="dashViewPending">${t('dash.open_journal', 'Открыть журнал')}</button>
   `;
   document.getElementById('dashViewPending')?.addEventListener('click', () => {
     window.goToIncomingStatus('pending');
@@ -264,7 +273,7 @@ async function renderCommissionsHighlights(kpi) {
   if (!collection.length && Array.isArray(kpi?.members)) {
     const map = new Map();
     kpi.members.forEach(member => {
-      const key = member.commission_name || 'Без комиссии';
+      const key = member.commission_name || t('dash.no_commission', 'Без комиссии');
       if (!map.has(key)) {
         map.set(key, {
           name: key,
@@ -309,7 +318,7 @@ async function renderCommissionsHighlights(kpi) {
   }
 
   if (!collection.length) {
-    grid.innerHTML = '<div class="text-center text-muted py-4">Нет данных по комиссиям</div>';
+    grid.innerHTML = `<div class="text-center text-muted py-4">${t('dash.no_commission_data', 'Нет данных по комиссиям')}</div>`;
     if (cardWrapper) cardWrapper.classList.remove('d-none');
     return;
   }
@@ -334,17 +343,17 @@ async function renderCommissionsHighlights(kpi) {
       <div class="dash-commission">
         <div class="dash-commission__head">
           <div>
-            <div class="dash-commission__name">${escapeHtml(comm.name || 'Комиссия')}</div>
-            <div class="dash-commission__meta">${members ? `${members} членов` : 'Без данных'} · ${leader}</div>
+            <div class="dash-commission__name">${escapeHtml(comm.name || t('dash.enh.commission', 'Комиссия'))}</div>
+            <div class="dash-commission__meta">${members ? `${members} ${t('dash.members_count', 'членов')}` : t('dash.no_data', 'Без данных')} · ${leader}</div>
           </div>
-          <span class="badge commission-count">${total} писем</span>
+          <span class="badge commission-count">${total} ${t('dash.letters_count', 'писем')}</span>
         </div>
         <div class="dash-commission__bar">
           ${total ? `<span class="dash-commission__seg dash-commission__seg--in" style="width:${inPct}%"></span><span class="dash-commission__seg dash-commission__seg--out" style="width:${outPct}%"></span>` : ''}
         </div>
         <div class="dash-commission__counts">
-          <span>Входящих: ${incoming}</span>
-          <span>Исходящих: ${outgoing}</span>
+          <span>${t('dash.incoming_count', 'Входящих')}: ${incoming}</span>
+          <span>${t('dash.outgoing_count', 'Исходящих')}: ${outgoing}</span>
         </div>
       </div>
     `;
@@ -438,7 +447,7 @@ async function renderKPIs() {
 
     const latestKey = latestDate ? periodKeyFromDate(latestDate, period) : null;
     const latestLabel = latestKey ? formatPeriodLabel(latestKey, period) : '';
-    if (kpiIncomingPeriodLabel) kpiIncomingPeriodLabel.textContent = latestKey ? `За ${latestLabel}` : 'За период';
+    if (kpiIncomingPeriodLabel) kpiIncomingPeriodLabel.textContent = latestKey ? fmt('dash.for_month', { label: latestLabel }) : t('dash.for_period', 'За период');
 
     const latestCount = latestKey
       ? store.incoming.filter(i => periodKeyFromDate(i.date, period) === latestKey).length
@@ -451,9 +460,9 @@ async function renderKPIs() {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
   };
-  setNote('kpiOutgoingNote', kpiOutgoingVal ? `${Math.round((kpiOutgoingVal / Math.max(kpiIncomingVal, 1)) * 100)}% от входящих` : 'ответы ОС');
-  setNote('kpiClosedNote', kpiIncomingVal ? `${closedPct}% от входящих` : '—');
-  setNote('kpiWithScansNote', totalLetters ? `${Math.round((kpiWithScansVal / totalLetters) * 100)}% от всех писем` : '—');
+  setNote('kpiOutgoingNote', kpiOutgoingVal ? fmt('dash.outgoing_pct', { pct: Math.round((kpiOutgoingVal / Math.max(kpiIncomingVal, 1)) * 100) }) : t('dash.os_replies', 'ответы ОС'));
+  setNote('kpiClosedNote', kpiIncomingVal ? fmt('dash.outgoing_pct', { pct: closedPct }) : '—');
+  setNote('kpiWithScansNote', totalLetters ? fmt('dash.scans_pct', { pct: Math.round((kpiWithScansVal / totalLetters) * 100) }) : '—');
 
   // Click on "Без ответа"/"Просрочено" -> open Incoming with filter.
   const pendingItem = pendingEl?.closest('li');
@@ -501,7 +510,7 @@ function updateKpiValue(element, key, value, nonNumeric = false) {
 function topOrganizations() {
   const map = new Map();
   store.incoming.forEach((i) => {
-    const key = i.organization.trim() || "(не указано)";
+    const key = i.organization.trim() || t('dash.org_unknown', '(не указано)');
     map.set(key, (map.get(key) || 0) + 1);
   });
   return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10);
@@ -555,7 +564,7 @@ function renderCharts() {
         labels: trendLabels,
         datasets: [
           {
-            label: 'Входящие',
+            label: t('chart.incoming', 'Входящие'),
             data: trendIn,
             borderColor: '#1D4ED8',
             backgroundColor: 'rgba(29, 78, 216, 0.06)',
@@ -566,7 +575,7 @@ function renderCharts() {
             tension: 0.35
           },
           {
-            label: 'Исходящие',
+            label: t('chart.outgoing', 'Исходящие'),
             data: trendOut,
             borderColor: '#D9A521',
             backgroundColor: 'transparent',
@@ -591,7 +600,7 @@ function renderCharts() {
       data: {
         labels: orgLabels,
         datasets: [{ 
-            label: "Письма", 
+            label: t('dash.chart_letters', 'Письма'), 
             data: orgData, 
             backgroundColor: "#1B2A4A",
             borderRadius: 4,
@@ -644,7 +653,7 @@ function renderCharts() {
     chartPieGov = new Chart(ctxPieGov, {
       type: 'doughnut',
       data: {
-        labels: ["Входящие письма от гос. органов (ҚК)", "Ответы от ОС"],
+        labels: [t('dash.chart_incoming_gov', 'Входящие письма от гос. органов (ҚК)'), t('dash.chart_os_replies', 'Ответы от ОС')],
         datasets: [{
           data: pieGovData,
           backgroundColor: ["#ffd966", "#10b981"],
@@ -673,7 +682,7 @@ function renderCharts() {
     chartPieOS = new Chart(ctxPieOS, {
       type: 'doughnut',
       data: {
-        labels: ["Исходящие письма от ОС", "Ответы от гос органов (ҚК)"],
+        labels: [t('dash.chart_outgoing_os', 'Исходящие письма от ОС'), t('dash.chart_gov_replies', 'Ответы от гос органов (ҚК)')],
         datasets: [{
           data: pieOSData,
           backgroundColor: ["#5eead4", "#003c97"],
@@ -698,6 +707,12 @@ function renderCharts() {
   if (dashboardPeriodSelect) {
     dashboardPeriodSelect.addEventListener('change', () => renderCharts());
   }
+
+  window.addEventListener('app:langchange', () => {
+    if (typeof window.renderKPIs === 'function') window.renderKPIs();
+    if (typeof window.renderCharts === 'function') window.renderCharts();
+    if (typeof window.renderKpiExtra === 'function') window.renderKpiExtra();
+  });
 
   window.renderKPIs = renderKPIs;
   window.renderCharts = renderCharts;

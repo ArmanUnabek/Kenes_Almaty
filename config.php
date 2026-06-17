@@ -4,10 +4,6 @@ define('APP_ROOT', __DIR__);
 if (!defined('JSON_ENCODE_FLAGS')) {
     define('JSON_ENCODE_FLAGS', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
-if (!defined('SESSION_IDLE_TIMEOUT_SECONDS')) {
-    define('SESSION_IDLE_TIMEOUT_SECONDS', 1800);
-}
-
 // Автозагрузка классов
 require_once __DIR__ . '/src/Logger.php';
 require_once __DIR__ . '/src/ErrorHandler.php';
@@ -36,6 +32,11 @@ Logger::init();
 // База данных вынесена в отдельный файл (удобно для переноса на другой хостинг)
 require_once __DIR__ . '/db.php';
 
+if (!defined('SESSION_IDLE_TIMEOUT_SECONDS')) {
+    $sessionLifetime = (int) (envValue('SESSION_LIFETIME', '1800') ?: 1800);
+    define('SESSION_IDLE_TIMEOUT_SECONDS', max(300, $sessionLifetime));
+}
+
 // Pusher realtime settings (fill with your credentials)
 define('PUSHER_APP_ID', getenv('PUSHER_APP_ID') ?: '');
 define('PUSHER_KEY', getenv('PUSHER_KEY') ?: '');
@@ -44,7 +45,8 @@ define('PUSHER_CLUSTER', getenv('PUSHER_CLUSTER') ?: 'eu');
 
 // Настройки для загрузки фото
 define('UPLOAD_DIR', 'uploads/photos/');
-define('MAX_FILE_SIZE', 5 * 1024 * 1024); // 5 МБ
+$uploadMaxMb = (int) (envValue('UPLOAD_MAX_MB', '5') ?: 5);
+define('MAX_FILE_SIZE', max(1, $uploadMaxMb) * 1024 * 1024);
 define('ALLOWED_IMAGE_TYPES', ['image/jpeg', 'image/png', 'image/jpg']);
 
 /**
