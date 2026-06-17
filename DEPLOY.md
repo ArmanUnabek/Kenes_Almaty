@@ -9,6 +9,7 @@
   - `SMTP_*` (опционально, для email-уведомлений)
   - `HEALTH_CHECK_TOKEN` (мониторинг: `/api/health.php?token=...`)
   - `NOTIFY_ALLOWED_DOMAINS` (домены для email модераторов, напр. `gov.kz`)
+  - `KAZLLM_*` (опционально, перевод контента через Ollama — см. `docs/KAZLLM.md`)
 - [ ] `composer install --no-dev --optimize-autoloader` на сервере
 - [ ] Права на запись: `uploads/`, `cache/` (если используется)
 - [ ] Убедиться, что в репозитории лежат `uploads/.htaccess`, `uploads/photos/.htaccess`, `uploads/scans/.htaccess` (фото и сканы — только через API)

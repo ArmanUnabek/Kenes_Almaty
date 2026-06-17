@@ -229,6 +229,84 @@ function ensureAuditLogsSchema(PDO $db): void
     }
 }
 
+function ensureTranslationSchema(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    try {
+        if (DB_DRIVER === 'sqlite') {
+            $db->exec("
+                CREATE TABLE IF NOT EXISTS translation_cache (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_hash VARCHAR(64) NOT NULL UNIQUE,
+                    source_lang VARCHAR(5) NOT NULL,
+                    target_lang VARCHAR(5) NOT NULL,
+                    source_text TEXT NOT NULL,
+                    translated_text TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ");
+            return;
+        }
+
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS translation_cache (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                source_hash CHAR(64) NOT NULL,
+                source_lang VARCHAR(5) NOT NULL,
+                target_lang VARCHAR(5) NOT NULL,
+                source_text TEXT NOT NULL,
+                translated_text TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_translation_hash (source_hash, source_lang, target_lang)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (Throwable $e) {
+        error_log('ensureTranslationSchema: ' . $e->getMessage());
+    }
+}
+
+function ensureMemberI18nColumns(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    try {
+        if (DB_DRIVER === 'sqlite') {
+            foreach (['position_kz', 'organization_kz'] as $col) {
+                $exists = $db->query("PRAGMA table_info(os_members)")->fetchAll();
+                $names = array_column($exists, 'name');
+                if (!in_array($col, $names, true)) {
+                    $db->exec("ALTER TABLE os_members ADD COLUMN {$col} VARCHAR(255)");
+                }
+            }
+            return;
+        }
+
+        if (DB_DRIVER === 'mysql') {
+            $cols = [];
+            foreach ($db->query('SHOW COLUMNS FROM os_members') as $row) {
+                $cols[$row['Field']] = true;
+            }
+            if (!isset($cols['position_kz'])) {
+                $db->exec('ALTER TABLE os_members ADD COLUMN position_kz VARCHAR(255) NULL COMMENT "Должность (KZ)" AFTER position');
+            }
+            if (!isset($cols['organization_kz'])) {
+                $db->exec('ALTER TABLE os_members ADD COLUMN organization_kz VARCHAR(255) NULL COMMENT "Организация (KZ)" AFTER organization');
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('ensureMemberI18nColumns: ' . $e->getMessage());
+    }
+}
+
 /**
  * Создание соединения с БД (PDO singleton).
  */
@@ -273,6 +351,8 @@ function getDBConnection(): PDO
         }
 
         ensureAuditLogsSchema($db);
+        ensureTranslationSchema($db);
+        ensureMemberI18nColumns($db);
         
         return $db;
     } catch (PDOException $e) {

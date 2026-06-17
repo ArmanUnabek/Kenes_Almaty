@@ -116,15 +116,17 @@ class MemberRepository
     public function create(array $data): int
     {
         $stmt = $this->db->prepare("
-            INSERT INTO os_members (region_id, full_name, position, organization, commission_id, email, phone, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO os_members (region_id, full_name, position, position_kz, organization, organization_kz, commission_id, email, phone, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
 
         $stmt->execute([
             $data['region_id'] ?? 1,
             $data['full_name'],
             $data['position'] ?? null,
+            $data['position_kz'] ?? null,
             $data['organization'] ?? null,
+            $data['organization_kz'] ?? null,
             $data['commission_id'] ?? null,
             $data['email'] ?? null,
             $data['phone'] ?? null,
@@ -138,14 +140,16 @@ class MemberRepository
     {
         $query = "
             UPDATE os_members 
-            SET full_name = ?, position = ?, organization = ?, commission_id = ?, 
+            SET full_name = ?, position = ?, position_kz = ?, organization = ?, organization_kz = ?, commission_id = ?, 
                 email = ?, phone = ?, status = ?
             WHERE id = ?
         ";
         $params = [
             $data['full_name'],
             $data['position'] ?? null,
+            $data['position_kz'] ?? null,
             $data['organization'] ?? null,
+            $data['organization_kz'] ?? null,
             $data['commission_id'] ?? null,
             $data['email'] ?? null,
             $data['phone'] ?? null,
