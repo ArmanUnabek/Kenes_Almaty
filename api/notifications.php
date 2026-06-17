@@ -5,6 +5,7 @@ require_once __DIR__ . '/../auth_middleware.php';
 use App\Middleware\CsrfMiddleware;
 use App\Services\EmailService;
 use App\Middleware\RateLimiter;
+use App\Services\NotificationRecipientPolicy;
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -31,6 +32,7 @@ if ($method === 'POST') {
         echo json_encode(['error' => 'Некорректный email'], JSON_ENCODE_FLAGS);
         exit;
     }
+    NotificationRecipientPolicy::assertAllowed($db, $to);
     EmailService::enqueue($db, $to, $subject, $body, strip_tags($body));
     echo json_encode(['message' => 'Письмо поставлено в очередь'], JSON_ENCODE_FLAGS);
     exit;

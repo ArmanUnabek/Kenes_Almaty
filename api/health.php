@@ -1,7 +1,23 @@
 <?php
+
 require_once __DIR__ . '/../config.php';
 
 header('Content-Type: application/json; charset=utf-8');
+
+$expectedToken = getenv('HEALTH_CHECK_TOKEN') ?: '';
+$providedToken = (string)($_GET['token'] ?? $_SERVER['HTTP_X_HEALTH_TOKEN'] ?? '');
+
+if ($expectedToken !== '') {
+    if ($providedToken === '' || !hash_equals($expectedToken, $providedToken)) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Forbidden'], JSON_ENCODE_FLAGS);
+        exit;
+    }
+} else {
+    require_once __DIR__ . '/../auth_middleware.php';
+    checkAuth();
+    requireRole(['admin']);
+}
 
 $checks = [
     'database' => false,
@@ -15,7 +31,7 @@ try {
     $db->query('SELECT 1');
     $checks['database'] = true;
 } catch (\Throwable $e) {
-    $messages[] = 'database: ' . $e->getMessage();
+    $messages[] = 'database: unavailable';
 }
 
 $uploadDir = defined('UPLOAD_DIR') ? UPLOAD_DIR : 'uploads/photos/';

@@ -69,6 +69,7 @@
 
   async function renderEmailTab(box) {
     const canSend = window.canWrite?.();
+    const isAdmin = !!(window.getSessionUser?.()?.is_admin || window.sessionUser?.is_admin);
     let items = [];
     try {
       const resp = await fetch(`${API}/notifications.php`);
@@ -108,6 +109,7 @@
         <div class="col-12">
           <button type="submit" class="btn btn-sm btn-primary">${t('notify.email.send', 'Отправить')}</button>
         </div>
+        ${!isAdmin ? `<div class="col-12"><p class="small text-muted mb-0">${t('notify.email.moderator_hint', 'Модератор: только email пользователей/членов ОС вашего региона или домены из NOTIFY_ALLOWED_DOMAINS.')}</p></div>` : ''}
       </form>` : '<p class="small text-muted">Отправка email доступна модераторам и админам.</p>'}
       <h6 class="small fw-semibold">${t('notify.email.queue', 'Очередь отправки')}</h6>
       <div class="table-responsive">

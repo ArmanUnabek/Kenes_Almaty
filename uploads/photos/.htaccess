@@ -1,11 +1,7 @@
-# Запрет выполнения PHP в uploads
-<FilesMatch "\.(php|phtml|php3|php4|php5|phar)$">
-    <IfModule mod_authz_core.c>
-        Require all denied
-    </IfModule>
-    <IfModule !mod_authz_core.c>
-        Deny from all
-    </IfModule>
-</FilesMatch>
-
-Options -Indexes
+# Фото членов ОС — только через api/member_photo.php (с авторизацией)
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Deny from all
+</IfModule>

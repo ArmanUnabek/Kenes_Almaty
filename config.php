@@ -23,6 +23,7 @@ require_once __DIR__ . '/src/Services/RegionService.php';
 require_once __DIR__ . '/src/Services/LetterPersistenceService.php';
 require_once __DIR__ . '/src/Services/SecurityAuditService.php';
 require_once __DIR__ . '/src/Services/AuditSanitizer.php';
+require_once __DIR__ . '/src/Services/NotificationRecipientPolicy.php';
 
 use App\Logger;
 use App\ErrorHandler;

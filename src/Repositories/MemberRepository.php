@@ -6,6 +6,11 @@ class MemberRepository
 {
     public function __construct(private \PDO $db) {}
 
+    public static function photoApiUrl(int $memberId): string
+    {
+        return '/api/member_photo.php?member_id=' . $memberId;
+    }
+
     public function getById(int $id, ?int $regionId = null): ?array
     {
         $query = "
@@ -26,7 +31,7 @@ class MemberRepository
         $member = $stmt->fetch();
 
         if ($member && $member['photo_path']) {
-            $member['photo_url'] = '/' . $member['photo_path'];
+            $member['photo_url'] = self::photoApiUrl((int)$member['id']);
         }
 
         return $member ?: null;
@@ -74,7 +79,7 @@ class MemberRepository
 
         foreach ($members as &$member) {
             if ($member['photo_path']) {
-                $member['photo_url'] = '/' . $member['photo_path'];
+                $member['photo_url'] = self::photoApiUrl((int)$member['id']);
             }
         }
 
