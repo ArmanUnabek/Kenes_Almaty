@@ -89,6 +89,40 @@
       'action.delete': 'Удалить',
       'error.no_permission': 'Недостаточно прав',
       'error.save_failed': 'Не удалось сохранить',
+      'dash.incoming': 'Входящих',
+      'dash.outgoing': 'Исходящих',
+      'dash.closed': 'Закрыто ответом',
+      'dash.avg_days': 'Средний срок ответа',
+      'dash.dynamics': 'Динамика обращений',
+      'dash.period': 'Период',
+      'dash.working_days': 'рабочих дней',
+      'dash.all_time': 'за всё время',
+      'dash.os_replies': 'ответы ОС',
+      'common.loading': 'Загрузка...',
+      'common.cancel': 'Отмена',
+      'common.close': 'Закрыть',
+      'common.save': 'Сохранить',
+      'common.confirm_delete': 'Вы уверены, что хотите удалить этот элемент?',
+      'common.logout': 'Выйти',
+      'common.guest': 'Гость',
+      'common.more': 'Ещё',
+      'search.title': 'Поиск по журналу',
+      'search.placeholder': 'Введите запрос...',
+      'filter.all': 'Все',
+      'filter.year': 'Год',
+      'filter.month': 'Месяц',
+      'filter.status': 'Статус',
+      'status.pending': 'Без ответа',
+      'status.overdue': 'Просрочено',
+      'status.due_soon': 'Скоро срок',
+      'letters.incoming_add': 'Новое входящее',
+      'letters.outgoing_add': 'Новый ответ ОС',
+      'letters.save': 'Сохранить',
+      'letters.reset': 'Сбросить',
+      'mobile.incoming': 'Входящие',
+      'mobile.outgoing': 'Исходящие',
+      'mobile.members': 'Члены',
+      'mobile.menu': 'Ещё',
     },
     kz: {
       'nav.dashboard': 'Статистика',
@@ -174,6 +208,40 @@
       'action.delete': 'Жою',
       'error.no_permission': 'Құқық жеткіліксіз',
       'error.save_failed': 'Сақтау сәтсіз',
+      'dash.incoming': 'Кіріс',
+      'dash.outgoing': 'Шығыс',
+      'dash.closed': 'Жауаппен жабылды',
+      'dash.avg_days': 'Орташа жауап мерзімі',
+      'dash.dynamics': 'Өтініштер динамикасы',
+      'dash.period': 'Кезең',
+      'dash.working_days': 'жұмыс күні',
+      'dash.all_time': 'барлық уақыт',
+      'dash.os_replies': 'ОС жауаптары',
+      'common.loading': 'Жүктелуде...',
+      'common.cancel': 'Бас тарту',
+      'common.close': 'Жабу',
+      'common.save': 'Сақтау',
+      'common.confirm_delete': 'Бұл элементті жоюға сенімдісіз бе?',
+      'common.logout': 'Шығу',
+      'common.guest': 'Қонақ',
+      'common.more': 'Тағы',
+      'search.title': 'Журнал бойынша іздеу',
+      'search.placeholder': 'Сұрау енгізіңіз...',
+      'filter.all': 'Барлығы',
+      'filter.year': 'Жыл',
+      'filter.month': 'Ай',
+      'filter.status': 'Күйі',
+      'status.pending': 'Жауапсыз',
+      'status.overdue': 'Мерзімі өткен',
+      'status.due_soon': 'Мерзімі жақында',
+      'letters.incoming_add': 'Жаңа кіріс',
+      'letters.outgoing_add': 'Жаңа ОС жауабы',
+      'letters.save': 'Сақтау',
+      'letters.reset': 'Тазалау',
+      'mobile.incoming': 'Кіріс',
+      'mobile.outgoing': 'Шығыс',
+      'mobile.members': 'Мүшелер',
+      'mobile.menu': 'Тағы',
     },
   };
 
@@ -210,8 +278,20 @@
         else el.textContent = val;
       }
     });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+      const key = el.getAttribute('data-i18n-placeholder');
+      el.placeholder = t(key, el.placeholder);
+    });
+    document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+      const key = el.getAttribute('data-i18n-title');
+      el.title = t(key, el.title);
+    });
     const switchBtn = document.getElementById('langToggleBtn');
     if (switchBtn) switchBtn.textContent = t('lang.switch', 'Қазақша');
+    const confirmMsg = document.getElementById('confirmDeleteMessage');
+    if (confirmMsg && !confirmMsg.dataset.i18nCustom) {
+      confirmMsg.textContent = t('common.confirm_delete', confirmMsg.textContent);
+    }
   }
 
   document.addEventListener('DOMContentLoaded', () => {

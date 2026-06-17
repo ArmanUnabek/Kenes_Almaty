@@ -158,6 +158,8 @@ window.addEventListener('app:langchange', () => {
   if (typeof renderEvents === 'function') renderEvents();
   if (typeof renderIncoming === 'function') renderIncoming();
   if (typeof renderOutgoing === 'function') renderOutgoing();
+  if (typeof renderMembersGrid === 'function') renderMembersGrid();
+  if (typeof renderCommissionsGrid === 'function') renderCommissionsGrid();
 });
 
 function renderAll() {

@@ -69,7 +69,7 @@
 
   async function loadMembersCatalog() {
     try {
-      const response = await fetch(`${api()}/members.php`);
+      const response = await fetch(`${api()}/members.php?limit=500`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       window.membersCatalog = await response.json();
     } catch (error) {
@@ -140,7 +140,7 @@
         ? `<span class="badge commission-badge" style="background:${color}20;color:${color}">${escapeHtml(member.commission_name)}</span>`
         : '';
       const avatarContent = member.photo_url
-        ? `<img src="${escapeHtml(member.photo_url)}" alt="" class="member-avatar-img">`
+        ? `<img src="${escapeHtml(member.photo_url)}" alt="" class="member-avatar-img" loading="lazy" referrerpolicy="same-origin">`
         : getInitials(member.full_name);
       return `
         <div class="col-12 col-sm-6 col-lg-4 col-xl-3">

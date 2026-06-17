@@ -68,7 +68,7 @@ class PhotoUploadController extends ApiController
             $this->logAction('os_members', $member_id, 'UPDATE_PHOTO', null, ['photo_path' => $filepath]);
 
             $this->success([
-                'photo_url' => MemberRepository::photoApiUrl($member_id),
+                'photo_url' => MemberRepository::photoApiUrl($member_id, (string)time()),
             ], 'Фото успешно загружено', 201);
         } catch (\Exception $e) {
             $this->handleException($e, 'PhotoUploadController');

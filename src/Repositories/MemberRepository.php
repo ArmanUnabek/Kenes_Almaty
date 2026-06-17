@@ -6,9 +6,27 @@ class MemberRepository
 {
     public function __construct(private \PDO $db) {}
 
-    public static function photoApiUrl(int $memberId): string
+    public static function photoApiUrl(int $memberId, ?string $cacheKey = null): string
     {
-        return '/api/member_photo.php?member_id=' . $memberId;
+        $url = '/api/member_photo.php?member_id=' . $memberId;
+        if ($cacheKey !== null && $cacheKey !== '') {
+            $url .= '&v=' . rawurlencode($cacheKey);
+        }
+        return $url;
+    }
+
+    private static function resolvePhotoUrl(array $member): ?string
+    {
+        if (empty($member['photo_path']) || empty($member['id'])) {
+            return null;
+        }
+        $relative = ltrim((string)$member['photo_path'], '/');
+        if (str_starts_with($relative, 'api/member_photo.php')) {
+            return '/' . $relative;
+        }
+        $full = defined('APP_ROOT') ? APP_ROOT . '/' . $relative : $relative;
+        $cacheKey = (is_string($full) && is_file($full)) ? (string)filemtime($full) : null;
+        return self::photoApiUrl((int)$member['id'], $cacheKey);
     }
 
     public function getById(int $id, ?int $regionId = null): ?array
@@ -30,8 +48,11 @@ class MemberRepository
         $stmt->execute($params);
         $member = $stmt->fetch();
 
-        if ($member && $member['photo_path']) {
-            $member['photo_url'] = self::photoApiUrl((int)$member['id']);
+        if ($member) {
+            $photoUrl = self::resolvePhotoUrl($member);
+            if ($photoUrl) {
+                $member['photo_url'] = $photoUrl;
+            }
         }
 
         return $member ?: null;
@@ -78,8 +99,9 @@ class MemberRepository
         $members = $stmt->fetchAll();
 
         foreach ($members as &$member) {
-            if ($member['photo_path']) {
-                $member['photo_url'] = self::photoApiUrl((int)$member['id']);
+            $photoUrl = self::resolvePhotoUrl($member);
+            if ($photoUrl) {
+                $member['photo_url'] = $photoUrl;
             }
         }
 
@@ -168,7 +190,15 @@ class MemberRepository
 
         $stmt = $this->db->prepare($query);
         $stmt->execute($params);
-        return $stmt->fetchAll();
+        $list = $stmt->fetchAll();
+        foreach ($list as &$member) {
+            $photoUrl = self::resolvePhotoUrl($member);
+            if ($photoUrl) {
+                $member['photo_url'] = $photoUrl;
+            }
+        }
+        unset($member);
+        return $list;
     }
 
     public function updatePhotoPath(int $id, string $photoPath): bool

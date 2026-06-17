@@ -9,6 +9,7 @@ let auditDetailModal;
 let auditPage = 1;
 let auditItems = [];
 let auditSecurityOnly = false;
+let auditRegionId = '';
 const auditLimit = 50;
 
 async function apiFetch(url, options = {}) {
@@ -55,6 +56,16 @@ async function loadRegionsWithStats() {
   renderRegionsGrid();
   renderOverview();
   populateRegionSelects();
+  populateAuditRegionFilter();
+}
+
+function populateAuditRegionFilter() {
+  const select = document.getElementById('auditRegionFilter');
+  if (!select) return;
+  const prev = select.value;
+  select.innerHTML = '<option value="">Все регионы</option>' +
+    regions.map((r) => `<option value="${r.id}">${escapeHtml(r.name_ru)}</option>`).join('');
+  if (prev) select.value = prev;
 }
 
 function renderRegionsGrid() {
@@ -85,6 +96,7 @@ function renderRegionsGrid() {
             <button class="btn btn-sm btn-outline-success" data-action="open-region" data-id="${r.id}">Открыть журнал</button>
             <button class="btn btn-sm btn-outline-warning" data-action="bootstrap-region" data-id="${r.id}">Инициализировать</button>
             <a class="btn btn-sm btn-outline-secondary" href="${API}/region_export.php?region_id=${r.id}&download=1">Экспорт</a>
+            ${active ? `<button class="btn btn-sm btn-outline-secondary" data-action="deactivate-region" data-id="${r.id}">Деактивировать</button>` : ''}
             ${active ? '' : `<button class="btn btn-sm btn-outline-secondary" data-action="activate-region" data-id="${r.id}">Активировать</button>`}
           </div>
         </div>
@@ -99,6 +111,9 @@ function renderRegionsGrid() {
   });
   grid.querySelectorAll('[data-action="activate-region"]').forEach((btn) => {
     btn.addEventListener('click', () => activateRegion(Number(btn.dataset.id)));
+  });
+  grid.querySelectorAll('[data-action="deactivate-region"]').forEach((btn) => {
+    btn.addEventListener('click', () => deactivateRegion(Number(btn.dataset.id)));
   });
   grid.querySelectorAll('[data-action="bootstrap-region"]').forEach((btn) => {
     btn.addEventListener('click', () => openBootstrapRegion(Number(btn.dataset.id)));
@@ -227,6 +242,17 @@ async function activateRegion(id) {
   await loadRegionsWithStats();
 }
 
+async function deactivateRegion(id) {
+  const r = regions.find((x) => Number(x.id) === id);
+  if (!r || !confirm(`Деактивировать регион «${r.name_ru}»?`)) return;
+  await apiFetch(`${API}/regions.php`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...r, id, is_active: false }),
+  });
+  await loadRegionsWithStats();
+}
+
 function openBootstrapRegion(id) {
   const r = regions.find((x) => Number(x.id) === id);
   if (!r) return;
@@ -253,10 +279,12 @@ function openBootstrapRegion(id) {
 async function loadAuditLogs(page = auditPage) {
   auditPage = page;
   const securityParam = auditSecurityOnly ? '&security=1' : '';
-  const data = await apiFetch(`${API}/audit_logs.php?page=${page}&limit=${auditLimit}${securityParam}`);
+  const regionParam = auditRegionId ? `&region_id=${encodeURIComponent(auditRegionId)}` : '';
   const tbody = document.querySelector('#auditTable tbody');
-  auditItems = data.items || [];
-  tbody.innerHTML = auditItems.length
+  try {
+    const data = await apiFetch(`${API}/audit_logs.php?page=${page}&limit=${auditLimit}${securityParam}${regionParam}`);
+    auditItems = data.items || [];
+    tbody.innerHTML = auditItems.length
     ? auditItems.map((row, idx) => {
       const op = row.operation || '';
       const isSecurity = op === 'EXPORT' || op === 'DOWNLOAD';
@@ -284,6 +312,15 @@ async function loadAuditLogs(page = auditPage) {
     `Страница ${auditPage} из ${pages} · всего ${total}`;
   document.getElementById('auditPrevBtn').disabled = auditPage <= 1;
   document.getElementById('auditNextBtn').disabled = auditPage >= pages;
+  } catch (err) {
+    console.error(err);
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">${escapeHtml(err.message || 'Ошибка загрузки аудита')}</td></tr>`;
+    }
+    document.getElementById('auditPaginationInfo').textContent = '—';
+    document.getElementById('auditPrevBtn').disabled = true;
+    document.getElementById('auditNextBtn').disabled = true;
+  }
 }
 
 function formatAuditDate(value) {
@@ -410,6 +447,10 @@ document.getElementById('auditSecurityOnly')?.addEventListener('change', (e) => 
   auditSecurityOnly = !!e.target.checked;
   loadAuditLogs(1);
 });
+document.getElementById('auditRegionFilter')?.addEventListener('change', (e) => {
+  auditRegionId = e.target.value || '';
+  loadAuditLogs(1);
+});
 document.getElementById('auditPrevBtn')?.addEventListener('click', () => {
   if (auditPage > 1) loadAuditLogs(auditPage - 1);
 });
@@ -498,5 +539,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   auditDetailModal = new bootstrap.Modal(document.getElementById('auditDetailModal'));
   const user = await ensureAdmin();
   if (!user) return;
+  const welcome = document.getElementById('adminWelcome');
+  if (welcome) welcome.textContent = `${user.full_name || user.username} · управление регионами и пользователями`;
   await loadRegionsWithStats();
+  await loadUsers();
 });

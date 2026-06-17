@@ -82,7 +82,6 @@
       const member = membersCatalog.find((m) => String(m.id) === String(memberId));
       if (member) {
         member.photo_url = photoUrl;
-        member.photo_path = photoUrl.replace(/^\//, '');
       }
     }
     return photoUrl;

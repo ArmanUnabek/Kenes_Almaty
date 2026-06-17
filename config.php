@@ -47,7 +47,21 @@ define('UPLOAD_DIR', 'uploads/photos/');
 define('MAX_FILE_SIZE', 5 * 1024 * 1024); // 5 МБ
 define('ALLOWED_IMAGE_TYPES', ['image/jpeg', 'image/png', 'image/jpg']);
 
-if (isApiContext()) {
+/**
+ * Эндпоинты, отдающие бинарные файлы (не JSON).
+ */
+function isBinaryApiEndpoint(): bool
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+    $base = basename(str_replace('\\', '/', $_SERVER['SCRIPT_FILENAME'] ?? ''));
+    $cache = in_array($base, ['member_photo.php', 'scan_download.php'], true);
+    return $cache;
+}
+
+if (isApiContext() && !isBinaryApiEndpoint()) {
     // Rate limiting
     // Более мягкий лимит для SPA: множество фоновых API-запросов
     // с одного IP не должны блокировать вход в систему.

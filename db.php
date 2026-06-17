@@ -173,6 +173,63 @@ function ensureSqliteSchema(PDO $db): void
 }
 
 /**
+ * Приводит audit_logs к актуальной схеме (старый database.sql → deploy_database.sql).
+ */
+function ensureAuditLogsSchema(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    try {
+        if (DB_DRIVER === 'sqlite') {
+            $db->exec("
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    region_id INTEGER,
+                    table_name VARCHAR(100),
+                    operation VARCHAR(50),
+                    record_id INTEGER,
+                    old_values TEXT,
+                    new_values TEXT,
+                    ip_address VARCHAR(45),
+                    user_agent TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ");
+            return;
+        }
+
+        if (DB_DRIVER === 'mysql') {
+            $cols = [];
+            foreach ($db->query('SHOW COLUMNS FROM audit_logs') as $row) {
+                $cols[$row['Field']] = true;
+            }
+            if (isset($cols['entity_id']) && !isset($cols['record_id'])) {
+                $db->exec('ALTER TABLE audit_logs CHANGE entity_id record_id INT');
+            }
+            if (isset($cols['action']) && !isset($cols['operation'])) {
+                $db->exec("ALTER TABLE audit_logs CHANGE action operation VARCHAR(50) NOT NULL DEFAULT 'UPDATE'");
+            }
+            if (isset($cols['old_data']) && !isset($cols['old_values'])) {
+                $db->exec('ALTER TABLE audit_logs CHANGE old_data old_values JSON NULL');
+            }
+            if (isset($cols['new_data']) && !isset($cols['new_values'])) {
+                $db->exec('ALTER TABLE audit_logs CHANGE new_data new_values JSON NULL');
+            }
+            if (!isset($cols['region_id'])) {
+                $db->exec('ALTER TABLE audit_logs ADD COLUMN region_id INT NULL AFTER user_id');
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('ensureAuditLogsSchema: ' . $e->getMessage());
+    }
+}
+
+/**
  * Создание соединения с БД (PDO singleton).
  */
 function getDBConnection(): PDO
@@ -214,6 +271,8 @@ function getDBConnection(): PDO
             $db->exec("SET CHARACTER SET utf8mb4");
             $db->exec("SET character_set_connection=utf8mb4");
         }
+
+        ensureAuditLogsSchema($db);
         
         return $db;
     } catch (PDOException $e) {
