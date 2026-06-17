@@ -75,6 +75,9 @@
             </div>
             <div class="page-context-actions" id="pageContextActions"></div>
             <div class="topbar-actions">
+                <button class="btn btn-outline-secondary btn-sm" id="globalSearchBtn" title="Поиск (Ctrl+K)">
+                    <i class="bi bi-search"></i> <span class="btn-label">Поиск</span>
+                </button>
                 <select class="form-select form-select-sm d-none" id="adminRegionSelect" style="width:auto;max-width:200px;" title="Регион"></select>
                 <span class="notify-btn-wrap">
                     <button class="btn btn-outline-secondary btn-sm" id="notifyBtn" title="Уведомления">
@@ -85,6 +88,9 @@
                 <button class="btn btn-outline-secondary btn-sm" id="exportCsvBtn">
                     <i class="bi bi-file-earmark-spreadsheet"></i> <span class="btn-label">CSV</span>
                 </button>
+                <a class="btn btn-outline-secondary btn-sm" id="exportPdfBtn" href="/api/export_pdf.php?type=summary" target="_blank" rel="noopener">
+                    <i class="bi bi-file-earmark-pdf"></i> <span class="btn-label">PDF</span>
+                </a>
                 <button class="btn btn-primary btn-sm" id="exportJsonBtn">
                     <i class="bi bi-download"></i> <span class="btn-label">JSON</span>
                 </button>
@@ -174,14 +180,14 @@
                             <div class="card-header">Оперативная сводка</div>
                             <div class="card-body p-0">
                                 <ul class="dash-insight-list list-unstyled mb-0">
-                                    <li class="dash-insight dash-insight--warn">
+                                    <li class="dash-insight dash-insight--warn dash-insight--clickable" id="dashInsightPending" role="button" tabindex="0">
                                         <i class="bi bi-exclamation-triangle"></i>
                                         <div>
                                             <div class="dash-insight__label">Без ответа</div>
                                             <div class="dash-insight__value" id="kpiPending">0</div>
                                         </div>
                                     </li>
-                                    <li class="dash-insight dash-insight--danger">
+                                    <li class="dash-insight dash-insight--danger dash-insight--clickable" id="dashInsightOverdue" role="button" tabindex="0">
                                         <i class="bi bi-alarm"></i>
                                         <div>
                                             <div class="dash-insight__label">Просрочено</div>
@@ -207,6 +213,7 @@
                                         <div>
                                             <div class="dash-insight__label">Членов ОС</div>
                                             <div class="dash-insight__value" id="kpiMembersCount">0</div>
+                                            <div class="dash-insight__note small text-muted d-none" id="kpiMembersPhotoNote"></div>
                                         </div>
                                     </li>
                                     <li class="dash-insight">
@@ -289,9 +296,9 @@
                 </div>
 
                 <div class="card data-card">
-                    <div class="card-header d-flex align-items-center justify-content-between">
-                        <span>Список мероприятий</span>
-                        <input type="text" class="form-control form-control-sm" id="searchEvents" placeholder="Поиск..." />
+                    <div class="card-header toolbar-panel d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <span><i class="bi bi-calendar-event"></i> Список мероприятий</span>
+                        <input type="text" class="form-control form-control-sm" id="searchEvents" placeholder="Поиск..." style="max-width:240px;" />
                     </div>
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0" id="tableEvents">
@@ -866,6 +873,25 @@
         </div>
     </div>
 
+    <!-- Глобальный поиск -->
+    <div class="modal fade" id="globalSearchModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Поиск по журналу</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div class="p-3 border-bottom">
+                        <input type="search" class="form-control" id="globalSearchInput" placeholder="Письма, организации, члены ОС..." autocomplete="off" />
+                        <div class="form-text">Горячая клавиша: Ctrl+K</div>
+                    </div>
+                    <div id="globalSearchResults" class="global-search-results"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Модальное окно Уведомления/Данные -->
     <div class="modal fade" id="notifyModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-md modal-dialog-centered">
@@ -899,7 +925,9 @@
     <script src="../csrf-handler.js?v=4"></script>
     <script src="js/utils.js?v=1"></script>
     <script src="js/session.js?v=1"></script>
-    <script src="app.js?v=13"></script>
+    <script src="app.js?v=14"></script>
+    <script src="js/search.js?v=1"></script>
+    <script src="js/dashboard-enhanced.js?v=1"></script>
     <script>
         // Проверка сессии и показ пользователя
         document.addEventListener('DOMContentLoaded', async () => {

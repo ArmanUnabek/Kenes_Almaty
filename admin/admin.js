@@ -4,7 +4,10 @@ let regions = [];
 let users = [];
 let editRegionModal;
 let bootstrapRegionModal;
+let editUserModal;
+let auditDetailModal;
 let auditPage = 1;
+let auditItems = [];
 const auditLimit = 50;
 
 async function apiFetch(url, options = {}) {
@@ -80,6 +83,7 @@ function renderRegionsGrid() {
             <button class="btn btn-sm btn-outline-primary" data-action="edit-region" data-id="${r.id}">Изменить</button>
             <button class="btn btn-sm btn-outline-success" data-action="open-region" data-id="${r.id}">Открыть журнал</button>
             <button class="btn btn-sm btn-outline-warning" data-action="bootstrap-region" data-id="${r.id}">Инициализировать</button>
+            <a class="btn btn-sm btn-outline-secondary" href="${API}/region_export.php?region_id=${r.id}&download=1">Экспорт</a>
             ${active ? '' : `<button class="btn btn-sm btn-outline-secondary" data-action="activate-region" data-id="${r.id}">Активировать</button>`}
           </div>
         </div>
@@ -119,13 +123,21 @@ function renderOverview() {
   }).join('');
 }
 
+function parseRegionSettings(raw) {
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw); } catch { return {}; }
+  }
+  return raw || {};
+}
+
 function populateRegionSelects() {
   const select = document.getElementById('userRegionId');
-  if (select) {
-    select.innerHTML = '<option value="">— без региона (админ) —</option>' +
-      regions.filter((r) => r.is_active == 1 || r.is_active === true)
-        .map((r) => `<option value="${r.id}">${escapeHtml(r.name_ru)}</option>`).join('');
-  }
+  const editSelect = document.getElementById('editUserRegionId');
+  const options = '<option value="">— без региона (админ) —</option>' +
+    regions.filter((r) => r.is_active == 1 || r.is_active === true)
+      .map((r) => `<option value="${r.id}">${escapeHtml(r.name_ru)}</option>`).join('');
+  if (select) select.innerHTML = options;
+  if (editSelect) editSelect.innerHTML = options;
 
   const tpl = document.getElementById('bootstrapTemplateRegion');
   if (tpl) {
@@ -149,7 +161,8 @@ function renderUsersTable() {
       <td><span class="badge bg-light text-dark border">${escapeHtml(u.role)}</span></td>
       <td>${escapeHtml(u.region_name || '—')}</td>
       <td>${u.is_active == 1 || u.is_active === true ? 'Да' : 'Нет'}</td>
-      <td class="text-end">
+      <td class="text-end d-flex gap-1 justify-content-end">
+        <button class="btn btn-sm btn-outline-primary" data-edit-user="${u.id}">Изменить</button>
         ${u.is_active == 1 || u.is_active === true
           ? `<button class="btn btn-sm btn-outline-danger" data-deactivate="${u.id}">Деактивировать</button>`
           : ''}
@@ -159,6 +172,24 @@ function renderUsersTable() {
   tbody.querySelectorAll('[data-deactivate]').forEach((btn) => {
     btn.addEventListener('click', () => deactivateUser(Number(btn.dataset.deactivate)));
   });
+  tbody.querySelectorAll('[data-edit-user]').forEach((btn) => {
+    btn.addEventListener('click', () => openEditUser(Number(btn.dataset.editUser)));
+  });
+}
+
+function openEditUser(id) {
+  const user = users.find((u) => Number(u.id) === id);
+  if (!user) return;
+  document.getElementById('editUserId').value = user.id;
+  document.getElementById('editUserUsername').value = user.username || '';
+  document.getElementById('editUserEmail').value = user.email || '';
+  document.getElementById('editUserFullName').value = user.full_name || '';
+  document.getElementById('editUserRole').value = user.role || 'viewer';
+  document.getElementById('editUserRegionId').value = user.region_id || '';
+  document.getElementById('editUserRegionId').disabled = user.role === 'admin';
+  document.getElementById('editUserPassword').value = '';
+  document.getElementById('editUserActive').checked = !!(user.is_active == 1 || user.is_active === true);
+  editUserModal.show();
 }
 
 function openEditRegion(id) {
@@ -169,6 +200,9 @@ function openEditRegion(id) {
   document.getElementById('editRegionNameKz').value = r.name_kz || '';
   document.getElementById('editRegionCode').value = r.code || '';
   document.getElementById('editRegionActive').checked = !!(r.is_active == 1 || r.is_active === true);
+  const settings = parseRegionSettings(r.settings);
+  document.getElementById('editRegionSeqIncoming').value = settings.seq_baseline_incoming ?? 0;
+  document.getElementById('editRegionSeqOutgoing').value = settings.seq_baseline_outgoing ?? 0;
   editRegionModal.show();
 }
 
@@ -219,10 +253,10 @@ async function loadAuditLogs(page = auditPage) {
   auditPage = page;
   const data = await apiFetch(`${API}/audit_logs.php?page=${page}&limit=${auditLimit}`);
   const tbody = document.querySelector('#auditTable tbody');
-  const items = data.items || [];
-  tbody.innerHTML = items.length
-    ? items.map((row) => `
-      <tr>
+  auditItems = data.items || [];
+  tbody.innerHTML = auditItems.length
+    ? auditItems.map((row, idx) => `
+      <tr class="audit-row" data-audit-idx="${idx}" style="cursor:pointer;">
         <td class="text-nowrap small">${escapeHtml(formatAuditDate(row.created_at))}</td>
         <td>${escapeHtml(row.user_name || row.user_login || '—')}</td>
         <td><code>${escapeHtml(row.table_name || '')}</code></td>
@@ -231,6 +265,10 @@ async function loadAuditLogs(page = auditPage) {
         <td class="small text-muted">${escapeHtml(row.ip_address || '')}</td>
       </tr>`).join('')
     : '<tr><td colspan="6" class="text-center text-muted py-4">Записей нет</td></tr>';
+
+  tbody.querySelectorAll('.audit-row').forEach((row) => {
+    row.addEventListener('click', () => showAuditDetail(Number(row.dataset.auditIdx)));
+  });
 
   const pagination = data.pagination || {};
   const total = pagination.total ?? 0;
@@ -246,6 +284,35 @@ function formatAuditDate(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleString('ru-RU');
+}
+
+function formatAuditJson(value) {
+  if (!value) return '—';
+  if (typeof value === 'string') {
+    try { return JSON.stringify(JSON.parse(value), null, 2); } catch { return value; }
+  }
+  return JSON.stringify(value, null, 2);
+}
+
+function showAuditDetail(index) {
+  const row = auditItems[index];
+  if (!row) return;
+  const body = document.getElementById('auditDetailBody');
+  body.innerHTML = `
+    <dl class="row small mb-3">
+      <dt class="col-sm-3">Дата</dt><dd class="col-sm-9">${escapeHtml(formatAuditDate(row.created_at))}</dd>
+      <dt class="col-sm-3">Пользователь</dt><dd class="col-sm-9">${escapeHtml(row.user_name || row.user_login || '—')}</dd>
+      <dt class="col-sm-3">Таблица</dt><dd class="col-sm-9"><code>${escapeHtml(row.table_name || '')}</code></dd>
+      <dt class="col-sm-3">Операция</dt><dd class="col-sm-9">${escapeHtml(row.operation || '')}</dd>
+      <dt class="col-sm-3">ID записи</dt><dd class="col-sm-9">${row.record_id ?? '—'}</dd>
+      <dt class="col-sm-3">IP</dt><dd class="col-sm-9">${escapeHtml(row.ip_address || '')}</dd>
+    </dl>
+    <div class="mb-2 fw-semibold">Было</div>
+    <pre class="audit-json-block">${escapeHtml(formatAuditJson(row.old_values))}</pre>
+    <div class="mb-2 mt-3 fw-semibold">Стало</div>
+    <pre class="audit-json-block">${escapeHtml(formatAuditJson(row.new_values))}</pre>
+  `;
+  auditDetailModal.show();
 }
 
 async function deactivateUser(id) {
@@ -342,6 +409,8 @@ document.getElementById('auditNextBtn')?.addEventListener('click', () => {
 document.getElementById('formEditRegion').addEventListener('submit', async (e) => {
   e.preventDefault();
   const id = Number(document.getElementById('editRegionId').value);
+  const existing = regions.find((r) => Number(r.id) === id);
+  const prevSettings = parseRegionSettings(existing?.settings);
   try {
     await apiFetch(`${API}/regions.php`, {
       method: 'PUT',
@@ -352,6 +421,11 @@ document.getElementById('formEditRegion').addEventListener('submit', async (e) =
         name_kz: document.getElementById('editRegionNameKz').value.trim(),
         code: document.getElementById('editRegionCode').value.trim(),
         is_active: document.getElementById('editRegionActive').checked,
+        settings: {
+          ...prevSettings,
+          seq_baseline_incoming: Number(document.getElementById('editRegionSeqIncoming').value) || 0,
+          seq_baseline_outgoing: Number(document.getElementById('editRegionSeqOutgoing').value) || 0,
+        },
       }),
     });
     editRegionModal.hide();
@@ -359,6 +433,40 @@ document.getElementById('formEditRegion').addEventListener('submit', async (e) =
   } catch (err) {
     alert(err.message);
   }
+});
+
+document.getElementById('formEditUser').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = Number(document.getElementById('editUserId').value);
+  const role = document.getElementById('editUserRole').value;
+  const regionId = document.getElementById('editUserRegionId').value;
+  const payload = {
+    id,
+    username: document.getElementById('editUserUsername').value.trim(),
+    email: document.getElementById('editUserEmail').value.trim(),
+    full_name: document.getElementById('editUserFullName').value.trim(),
+    role,
+    region_id: role === 'admin' ? null : (regionId || null),
+    is_active: document.getElementById('editUserActive').checked,
+  };
+  const password = document.getElementById('editUserPassword').value;
+  if (password) payload.password = password;
+  try {
+    await apiFetch(`${API}/users.php`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    editUserModal.hide();
+    await loadUsers();
+    alert('Пользователь обновлён');
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+document.getElementById('editUserRole')?.addEventListener('change', (e) => {
+  document.getElementById('editUserRegionId').disabled = e.target.value === 'admin';
 });
 
 document.getElementById('userRole').addEventListener('change', (e) => {
@@ -375,6 +483,8 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
 document.addEventListener('DOMContentLoaded', async () => {
   editRegionModal = new bootstrap.Modal(document.getElementById('editRegionModal'));
   bootstrapRegionModal = new bootstrap.Modal(document.getElementById('bootstrapRegionModal'));
+  editUserModal = new bootstrap.Modal(document.getElementById('editUserModal'));
+  auditDetailModal = new bootstrap.Modal(document.getElementById('auditDetailModal'));
   const user = await ensureAdmin();
   if (!user) return;
   await loadRegionsWithStats();

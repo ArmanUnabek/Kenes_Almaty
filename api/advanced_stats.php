@@ -13,8 +13,7 @@ $JSON_FLAGS = JSON_ENCODE_FLAGS;
 checkAuth();
 
 $db = getDBConnection();
-$user = getCurrentUser();
-$regionId = $user['region_id'] ?? null;
+$regionId = getCurrentRegionId();
 
 try {
     $stats = [];

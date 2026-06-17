@@ -68,6 +68,30 @@ async function saveCommission(payload, isEdit) {
   return data;
 }
 
+async function deleteMember(id) {
+  const resp = await fetch(`${API_BASE}/members.php?id=${id}`, { method: 'DELETE' });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.error || 'Не удалось удалить');
+}
+
+async function deleteCommission(id) {
+  const resp = await fetch(`${API_BASE}/commissions.php?id=${id}`, { method: 'DELETE' });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.error || 'Не удалось удалить');
+}
+
+function goToIncomingStatus(status) {
+  if (filterStatusIncoming) filterStatusIncoming.value = status;
+  if (filterYearIncoming) filterYearIncoming.value = 'Все годы';
+  if (filterMonthIncoming) filterMonthIncoming.value = 'all';
+  if (filterScansIncoming) filterScansIncoming.value = 'all';
+  if (filterRecipientIncoming) filterRecipientIncoming.value = 'all';
+  if (searchIncoming) searchIncoming.value = '';
+  document.getElementById('tab-incoming')?.click();
+  renderIncoming();
+}
+window.goToIncomingStatus = goToIncomingStatus;
+
 function resetMemberForm() {
   const form = document.getElementById('formMember');
   if (!form) return;
@@ -1466,6 +1490,7 @@ function renderMembersGrid() {
                   <i class="bi bi-camera"></i> Фото
                   <input type="file" accept="image/jpeg,image/png" class="d-none" data-photo-upload="${member.id}">
                 </label>
+                ${canDelete() ? `<button type="button" class="btn btn-sm btn-outline-danger" data-delete-member="${member.id}"><i class="bi bi-trash"></i></button>` : ''}
               </div>` : ''}
           </div>
         </div>
@@ -1496,8 +1521,28 @@ function renderMembersGrid() {
         }
       });
     });
+    grid.querySelectorAll('[data-delete-member]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const memberId = btn.dataset.deleteMember;
+        const member = membersCatalog.find((m) => String(m.id) === String(memberId));
+        const name = member?.full_name || 'члена ОС';
+        confirmDelete(`Удалить «${name}»?`, async () => {
+          try {
+            await deleteMember(memberId);
+            membersCatalog = membersCatalog.filter((m) => String(m.id) !== String(memberId));
+            renderMembersGrid();
+            renderCommissionsGrid();
+            if (window.showSuccess) showSuccess('Член ОС удалён');
+          } catch (err) {
+            if (window.showError) showError(err.message);
+            else alert(err.message);
+          }
+        });
+      });
+    });
   }
 }
+window.renderMembersGrid = renderMembersGrid;
 
 function renderCommissionsGrid() {
   const grid = document.getElementById('commissionsGrid');
@@ -1528,7 +1573,10 @@ function renderCommissionsGrid() {
             </div>
             <h5 class="commission-title">${escapeHtml(commission.name || 'Комиссия')}</h5>
             <p class="text-muted small mb-0">${escapeHtml(commission.description || 'Комиссия Общественного Совета')}</p>
-            ${canWrite() ? `<div class="mt-3"><button type="button" class="btn btn-sm btn-outline-primary" data-edit-commission="${commission.id}"><i class="bi bi-pencil"></i> Изменить</button></div>` : ''}
+            ${canWrite() ? `<div class="mt-3 d-flex gap-2 flex-wrap">
+              <button type="button" class="btn btn-sm btn-outline-primary" data-edit-commission="${commission.id}"><i class="bi bi-pencil"></i> Изменить</button>
+              ${canDelete() ? `<button type="button" class="btn btn-sm btn-outline-danger" data-delete-commission="${commission.id}"><i class="bi bi-trash"></i></button>` : ''}
+            </div>` : ''}
           </div>
         </div>
       </div>
@@ -1540,6 +1588,25 @@ function renderCommissionsGrid() {
       btn.addEventListener('click', () => {
         const commission = commissionsCatalog.find((c) => String(c.id) === btn.dataset.editCommission);
         if (commission) editCommission(commission);
+      });
+    });
+    grid.querySelectorAll('[data-delete-commission]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const commissionId = btn.dataset.deleteCommission;
+        const commission = commissionsCatalog.find((c) => String(c.id) === String(commissionId));
+        const name = commission?.name || 'комиссию';
+        confirmDelete(`Удалить «${name}»?`, async () => {
+          try {
+            await deleteCommission(commissionId);
+            commissionsCatalog = commissionsCatalog.filter((c) => String(c.id) !== String(commissionId));
+            renderCommissionsGrid();
+            populateMemberCommissionSelect();
+            if (window.showSuccess) showSuccess('Комиссия удалена');
+          } catch (err) {
+            if (window.showError) showError(err.message);
+            else alert(err.message);
+          }
+        });
       });
     });
   }
@@ -1594,7 +1661,7 @@ function updateNotifyBadge() {
     <button type="button" class="btn btn-sm btn-outline-primary ms-auto" id="dashViewPending">Открыть журнал</button>
   `;
   document.getElementById('dashViewPending')?.addEventListener('click', () => {
-    document.getElementById('tab-incoming')?.click();
+    goToIncomingStatus('pending');
   });
 }
 
@@ -2256,6 +2323,9 @@ async function editOutgoing(id) {
   }
 }
 
+
+window.editIncoming = editIncoming;
+window.editOutgoing = editOutgoing;
 
 // Debounce function for optimization
 function debounce(func, wait) {
@@ -3258,18 +3328,6 @@ async function deleteOutgoing(id) {
 async function renderKPIs() {
   const period = dashboardPeriodSelect?.value || 'month';
 
-  function goToIncomingStatus(status) {
-    if (filterStatusIncoming) filterStatusIncoming.value = status;
-    if (filterYearIncoming) filterYearIncoming.value = 'Все годы';
-    if (filterMonthIncoming) filterMonthIncoming.value = 'all';
-    if (filterScansIncoming) filterScansIncoming.value = 'all';
-    if (filterRecipientIncoming) filterRecipientIncoming.value = 'all';
-    if (searchIncoming) searchIncoming.value = '';
-
-    document.getElementById('tab-incoming')?.click();
-    renderIncoming();
-  }
-
   // 1) Server-side KPI values (no hardcoded client duplication).
   let stats = null;
   try {
@@ -3389,6 +3447,10 @@ async function renderKPIs() {
   }
 
   updateNotifyBadge();
+
+  if (typeof window.refreshDashboardEnhanced === 'function') {
+    window.refreshDashboardEnhanced();
+  }
 }
 
 function updateKpiValue(element, key, value, nonNumeric = false) {
@@ -3542,6 +3604,7 @@ function renderCharts() {
         } 
       }
     });
+    window.chartTopOrgs = chartTopOrgs;
   }
 
   // Pie (donut) charts

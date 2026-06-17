@@ -4,6 +4,7 @@ require_once __DIR__ . '/../auth_middleware.php';
 require_once __DIR__ . '/../src/Middleware/CsrfMiddleware.php';
 
 use App\Middleware\CsrfMiddleware;
+use App\Middleware\RateLimiter;
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -45,6 +46,13 @@ try {
 function handleLogin($db) {
     $username = $_POST['username'] ?? '';
     $password = $_POST['password'] ?? '';
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+
+    if (!RateLimiter::check('login_' . $ip, 10, 900)) {
+        http_response_code(429);
+        echo json_encode(['error' => 'Слишком много попыток входа. Попробуйте через 15 минут.'], JSON_ENCODE_FLAGS);
+        return;
+    }
 
     if (empty($username) || empty($password)) {
         http_response_code(400);
@@ -57,6 +65,12 @@ function handleLogin($db) {
     $user = $stmt->fetch();
 
     if (!$user || !password_verify($password, $user['password_hash'])) {
+        try {
+            $db->prepare('INSERT INTO activity_logs (user_id, action, entity_type, ip_address) VALUES (NULL, ?, ?, ?)')
+                ->execute(['login_failed', 'user:' . $username, $ip]);
+        } catch (\Throwable $e) {
+            error_log('Failed to log login attempt: ' . $e->getMessage());
+        }
         http_response_code(401);
         echo json_encode(['error' => 'Неверный логин или пароль'], JSON_ENCODE_FLAGS);
         return;

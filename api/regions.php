@@ -149,6 +149,14 @@ switch ($method) {
             echo json_encode(['error' => 'ID не указан'], $JSON_FLAGS);
             break;
         }
+
+        $existingStmt = $db->prepare('SELECT settings FROM regions WHERE id = ?');
+        $existingStmt->execute([$id]);
+        $existingRow = $existingStmt->fetch();
+        $existingSettings = RegionService::parseSettings($existingRow['settings'] ?? null);
+        $newSettings = array_key_exists('settings', $data)
+            ? array_merge($existingSettings, is_array($data['settings']) ? $data['settings'] : [])
+            : $existingSettings;
         
         $stmt = $db->prepare("
             UPDATE regions 
@@ -161,7 +169,7 @@ switch ($method) {
             $data['name_ru'] ?? '',
             $data['code'] ?? '',
             $data['is_active'] ?? TRUE,
-            json_encode($data['settings'] ?? []),
+            json_encode($newSettings, JSON_ENCODE_FLAGS),
             $id
         ]);
         
