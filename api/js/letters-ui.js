@@ -4,6 +4,7 @@
 (function (window) {
   const API_BASE = window.API_BASE;
   const store = window.store;
+  const t = (k, fb) => window.AppI18n?.t(k, fb) ?? fb;
   const canWrite = () => window.canWrite?.() ?? false;
   const canDelete = () => window.canDelete?.() ?? false;
   const confirmDelete = (...args) => window.confirmDelete?.(...args);
@@ -23,6 +24,7 @@
   const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
   function formatMonthLabel(key) {
+    if (window.AppI18n?.formatMonthLabel) return window.AppI18n.formatMonthLabel(key);
     if (!key) return '';
     const [y, mm] = String(key).split('-');
     const m = Number(mm);
@@ -124,7 +126,7 @@ function updateRecipientFilterSelect(selectEl, options) {
   selectEl.innerHTML = '';
   const def = document.createElement('option');
   def.value = 'all';
-  def.textContent = 'Все адресаты';
+  def.textContent = window.AppI18n?.t('filter.all_recipients', 'Все адресаты') || 'Все адресаты';
   selectEl.appendChild(def);
   options.forEach(name => {
     const opt = document.createElement('option');
@@ -267,9 +269,9 @@ function renderLetterScans(letter, type, container) {
       const scans = (detail.scans || []).map(normalizeScanFromApi).filter(Boolean);
       if (!scans.length) {
         if (window.showWarning) {
-          showWarning('Сканы не найдены');
+          showWarning(t('letters.no_scans', 'Сканы не найдены'));
         } else {
-          alert('Сканы не найдены');
+          alert(t('letters.no_scans', 'Сканы не найдены'));
         }
         return;
       }
@@ -278,9 +280,9 @@ function renderLetterScans(letter, type, container) {
     } catch (error) {
       console.error('Ошибка загрузки сканов', error);
       if (window.showError) {
-        showError('Не удалось загрузить сканы');
+        showError(t('letters.scans_load_error', 'Не удалось загрузить сканы'));
       } else {
-        alert('Не удалось загрузить сканы');
+        alert(t('letters.scans_load_error', 'Не удалось загрузить сканы'));
       }
     }
   });
@@ -325,7 +327,7 @@ function renderRecipientsCell(recipients, container, type, id) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'btn btn-sm btn-outline-secondary ms-1';
-  btn.textContent = 'Просмотр';
+  btn.textContent = t('letters.view', 'Просмотр');
   btn.addEventListener('click', () => viewLetterRecipients(type, id));
   container.appendChild(btn);
 }
@@ -623,7 +625,7 @@ function applySelectedOutgoingForForm(outgoingId) {
 async function handleIncomingSubmit(event) {
   event.preventDefault();
   if (!canWrite()) {
-    window.showError?.('Недостаточно прав для сохранения');
+    window.showError?.(t('letters.no_permission', 'Недостаточно прав для сохранения'));
     return;
   }
   try {
@@ -672,14 +674,14 @@ async function handleIncomingSubmit(event) {
     await refreshLetters();
     renderAll();
     if (window.showSuccess) {
-      showSuccess('Входящее письмо успешно сохранено');
+      showSuccess(t('letters.incoming_saved', 'Входящее письмо успешно сохранено'));
     }
   } catch (error) {
     console.error('Ошибка добавления входящего письма', error);
     if (window.showError) {
-      showError('Не удалось сохранить входящее письмо');
+      showError(t('letters.save_incoming_error', 'Не удалось сохранить входящее письмо'));
     } else {
-      alert('Не удалось сохранить входящее письмо');
+      alert(t('letters.save_incoming_error', 'Не удалось сохранить входящее письмо'));
     }
   }
 }
@@ -687,7 +689,7 @@ async function handleIncomingSubmit(event) {
 async function handleOutgoingSubmit(event) {
   event.preventDefault();
   if (!canWrite()) {
-    window.showError?.('Недостаточно прав для сохранения');
+    window.showError?.(t('letters.no_permission', 'Недостаточно прав для сохранения'));
     return;
   }
   try {
@@ -701,18 +703,18 @@ async function handleOutgoingSubmit(event) {
     }
     if (!recipientsList.length) {
       if (window.showWarning) {
-        showWarning('Добавьте хотя бы одного адресата или укажите организацию');
+        showWarning(t('letters.add_recipient_warn', 'Добавьте хотя бы одного адресата или укажите организацию'));
       } else {
-        alert('Добавьте хотя бы одного адресата или укажите организацию');
+        alert(t('letters.add_recipient_warn', 'Добавьте хотя бы одного адресата или укажите организацию'));
       }
       return;
     }
     const organization = (incomingItem?.organization || recipientsList[0] || '').trim();
     if (!organization) {
       if (window.showWarning) {
-        showWarning('Укажите организацию получателя');
+        showWarning(t('letters.org_required', 'Укажите организацию получателя'));
       } else {
-        alert('Укажите организацию получателя');
+        alert(t('letters.org_required', 'Укажите организацию получателя'));
       }
       return;
     }
@@ -754,14 +756,14 @@ async function handleOutgoingSubmit(event) {
     await refreshLetters();
     renderAll();
     if (window.showSuccess) {
-      showSuccess('Исходящее письмо успешно сохранено');
+      showSuccess(t('letters.outgoing_saved', 'Исходящее письмо успешно сохранено'));
     }
   } catch (error) {
     console.error('Ошибка добавления исходящего письма', error);
     if (window.showError) {
-      showError('Не удалось сохранить исходящее письмо');
+      showError(t('letters.save_outgoing_error', 'Не удалось сохранить исходящее письмо'));
     } else {
-      alert('Не удалось сохранить исходящее письмо');
+      alert(t('letters.save_outgoing_error', 'Не удалось сохранить исходящее письмо'));
     }
   }
 }
@@ -1044,7 +1046,7 @@ async function viewLetterDetail(type, id) {
   if (!modalEl || !body) return;
   try {
     const letter = await fetchLetterDetail(type, Number(id));
-    const label = type === 'incoming' ? 'Входящее' : 'Исходящее';
+    const label = type === 'incoming' ? t('letters.type_incoming', 'Входящее') : t('letters.type_outgoing', 'Исходящее');
     if (titleEl) titleEl.textContent = `${label} №${letter.seq || id}`;
     const members = (letter.members || []).map((m) => m.full_name).join(', ') || '—';
     const recipients = (letter.recipients || []).length
@@ -1159,7 +1161,7 @@ function renderIncoming() {
   const rowsData = pageItems.map((i) => {
       const linked = i.linkedOutgoingId ? store.outgoing.find(o => o.id === i.linkedOutgoingId) : null;
       const linkHtml = linked
-        ? `<span class="badge badge-outgoing rounded-pill">Ответ: ${linked.outgoingNumber || 'Исх.' + linked.seq}</span>`
+        ? `<span class="badge badge-outgoing rounded-pill">${t('letters.linked_reply', 'Ответ')}: ${linked.outgoingNumber || 'Исх.' + linked.seq}</span>`
         : `<div class="d-flex flex-column gap-1 align-items-start">
              <span class="badge badge-status-pending rounded-pill">Нет ответа</span>
              <div class="d-flex flex-wrap gap-2">
@@ -1396,7 +1398,7 @@ async function linkExistingOutgoing(outgoingId) {
     await refreshLetters();
     renderAll();
     if (window.showSuccess) {
-      showSuccess('Исходящее письмо успешно привязано');
+      showSuccess(t('letters.linked_ok', 'Исходящее письмо успешно привязано'));
     }
   } catch (error) {
     console.error('Ошибка привязки исходящего', error);

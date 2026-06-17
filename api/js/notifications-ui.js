@@ -141,7 +141,7 @@
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(data.error || 'Ошибка отправки');
-        window.showSuccess?.(data.message || 'Поставлено в очередь');
+        window.showSuccess?.(data.message || t('notify.queued', 'Поставлено в очередь'));
         await renderEmailTab(emailPane);
       } catch (err) {
         window.showError?.(err.message) || alert(err.message);
@@ -157,7 +157,7 @@
     const deadlinesPane = document.getElementById('notifyDeadlinesPane');
     const emailPane = document.getElementById('notifyEmailPane');
     if (deadlinesPane) {
-      deadlinesPane.textContent = 'Загрузка...';
+      deadlinesPane.textContent = t('common.loading', 'Загрузка...');
       renderDeadlinesTab(deadlinesPane);
     }
     modal.show();
@@ -165,7 +165,7 @@
     const emailTab = document.getElementById('notify-tab-email');
     emailTab?.addEventListener('shown.bs.tab', async () => {
       if (emailPane) {
-        emailPane.textContent = 'Загрузка...';
+        emailPane.textContent = t('common.loading', 'Загрузка...');
         await renderEmailTab(emailPane);
       }
     }, { once: true });
