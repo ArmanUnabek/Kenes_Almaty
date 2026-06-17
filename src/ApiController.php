@@ -158,8 +158,8 @@ abstract class ApiController
                 $table,
                 $entityId,
                 $action,
-                $oldData,
-                $newData,
+                \App\Services\AuditSanitizer::sanitize($oldData),
+                \App\Services\AuditSanitizer::sanitize($newData),
                 (int)($this->currentUser['id'] ?? 0)
             );
         } catch (\Exception $e) {

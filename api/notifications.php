@@ -4,6 +4,9 @@ require_once __DIR__ . '/../auth_middleware.php';
 
 use App\Middleware\CsrfMiddleware;
 use App\Services\EmailService;
+use App\Middleware\RateLimiter;
+
+use App\Middleware\RateLimiter;
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -14,6 +17,7 @@ $db = getDBConnection();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 if ($method === 'POST') {
+    RateLimiter::requireCheck('notify_email_' . RateLimiter::getIdentifier(), 10, 3600);
     CsrfMiddleware::requireVerification();
     $data = json_decode(file_get_contents('php://input'), true) ?: [];
     $to = trim((string)($data['to'] ?? ''));

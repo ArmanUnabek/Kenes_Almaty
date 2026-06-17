@@ -54,7 +54,7 @@ function getCurrentUser(): ?array
         return null;
     }
 
-    $stmt = $db->prepare("SELECT * FROM users WHERE id = ? AND is_active = TRUE");
+    $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, email, is_active, last_login, created_at, updated_at FROM users WHERE id = ? AND is_active = TRUE');
     $stmt->execute([$_SESSION['user_id']]);
     $user = $stmt->fetch();
     if (!$user) {
@@ -118,6 +118,46 @@ function canExport(): bool
 function requireExportAccess(): void
 {
     requireRole(['admin']);
+}
+
+/**
+ * Определяет region_id для создания записи с проверкой прав.
+ * Модератор/viewer не может писать в чужой регион.
+ */
+function resolveRegionIdForWrite(?int $requestedRegionId = null): int
+{
+    $user = getCurrentUser();
+    if (!$user) {
+        denyWithStatus(401, 'Требуется авторизация');
+    }
+
+    if (isAdmin()) {
+        $regionId = $requestedRegionId ?? getCurrentRegionId() ?? ($user['region_id'] ?? null);
+        if (!$regionId || (int)$regionId <= 0) {
+            denyWithStatus(400, 'Укажите регион (region_id) для операции');
+        }
+        return (int)$regionId;
+    }
+
+    $ownRegion = (int)($user['region_id'] ?? 0);
+    if ($ownRegion <= 0) {
+        denyWithStatus(403, 'У пользователя не назначен регион');
+    }
+    if ($requestedRegionId !== null && (int)$requestedRegionId !== $ownRegion) {
+        denyWithStatus(403, 'Нельзя создавать данные в другом регионе');
+    }
+    return $ownRegion;
+}
+
+function assertEventRegionAccess(?array $event): void
+{
+    if (!$event) {
+        return;
+    }
+    $regionId = (int)($event['region_id'] ?? 0);
+    if ($regionId > 0 && !canAccessRegion($regionId)) {
+        denyWithStatus(403, 'Доступ к мероприятию запрещён');
+    }
 }
 
 function getCurrentRegionId(): ?int

@@ -622,6 +622,10 @@ function applySelectedOutgoingForForm(outgoingId) {
 
 async function handleIncomingSubmit(event) {
   event.preventDefault();
+  if (!canWrite()) {
+    window.showError?.('Недостаточно прав для сохранения');
+    return;
+  }
   try {
     autoFillIncomingNumber(false);
     const respondsId = incRespondsOutgoing?.value ? Number(incRespondsOutgoing.value) : null;
@@ -643,7 +647,7 @@ async function handleIncomingSubmit(event) {
     if (!payload.organization && recipientsList.length) {
       payload.organization = recipientsList[0];
     }
-    const user = getSessionUser();
+    const user = window.getSessionUser?.() || window.sessionUser;
     if (user?.region?.id) {
       payload.region_id = user.region.id;
     }
@@ -682,6 +686,10 @@ async function handleIncomingSubmit(event) {
 
 async function handleOutgoingSubmit(event) {
   event.preventDefault();
+  if (!canWrite()) {
+    window.showError?.('Недостаточно прав для сохранения');
+    return;
+  }
   try {
     const incomingId = outLinkedIncoming.value;
     const incomingItem = store.incoming.find((i) => String(i.id) === String(incomingId));
@@ -721,7 +729,7 @@ async function handleOutgoingSubmit(event) {
       outgoing_type: selectedType
     };
     payload.recipients = recipientsList;
-    const user = getSessionUser();
+    const user = window.getSessionUser?.() || window.sessionUser;
     if (user?.region?.id) {
       payload.region_id = user.region.id;
     }
@@ -812,6 +820,7 @@ async function updateLetter(type, payload) {
 }
 
 async function editIncoming(id) {
+  if (!canWrite()) return;
   try {
     const detail = await fetchLetterDetail('incoming', Number(id));
     if (!formIncoming) return;
@@ -872,6 +881,7 @@ async function editIncoming(id) {
 }
 
 async function editOutgoing(id) {
+  if (!canWrite()) return;
   try {
     const detail = await fetchLetterDetail('outgoing', Number(id));
     if (!formOutgoing) return;
@@ -938,7 +948,7 @@ function renderIncomingOptions() {
       const closed = i.linkedOutgoingId ? " (ответ отправлен)" : "";
       const cat = i.category || "KK";
       options.push(
-        `<option value="${i.id}">[${cat}] Вх.${i.seq} • ${formatDateISOtoRus(i.date)} • ${i.organization} • ${i.kkNumber}${closed}</option>`
+        `<option value="${i.id}">[${escapeHtml(cat)}] Вх.${i.seq} • ${formatDateISOtoRus(i.date)} • ${escapeHtml(i.organization)} • ${escapeHtml(i.kkNumber)}${closed}</option>`
       );
     });
     outLinkedIncoming.innerHTML = options.join("");
@@ -1078,8 +1088,7 @@ function renderIncoming() {
   }
 
   const statusFilter = filterStatusIncoming?.value || 'all';
-  const overdueThreshold = new Date();
-  overdueThreshold.setDate(overdueThreshold.getDate() - 21);
+  const isOverdue = (i) => window.AppUtils?.isLetterOverdue?.(i) ?? false;
 
   const filteredIncoming = [...store.incoming]
     .sort((a, b) => a.seq - b.seq)
@@ -1095,7 +1104,7 @@ function renderIncoming() {
       const isPending = !i.linkedOutgoingId;
       if (statusFilter === 'pending') return isPending;
       if (statusFilter === 'overdue') {
-        return isPending && new Date(i.date) < overdueThreshold;
+        return isPending && isOverdue(i);
       }
       return true;
     })
@@ -1739,8 +1748,11 @@ async function deleteOutgoing(id) {
       const files = Array.from(e.target.files);
       if (files.length === 0) return;
 
-      incScansPreview.innerHTML = '<div class="text-muted">Обработка файлов...</div>';
-      
+      const statusEl = document.createElement('div');
+      statusEl.className = 'text-muted small mb-2';
+      statusEl.textContent = 'Обработка файлов...';
+      incScansPreview.appendChild(statusEl);
+
       for (const file of files) {
         try {
           const prepared = await compressImage(file);
@@ -1751,6 +1763,7 @@ async function deleteOutgoing(id) {
           alert(`Ошибка при обработке файла ${file.name}`);
         }
       }
+      statusEl.remove();
       
       e.target.value = '';
     });
@@ -1762,8 +1775,11 @@ async function deleteOutgoing(id) {
       const files = Array.from(e.target.files);
       if (files.length === 0) return;
 
-      outScansPreview.innerHTML = '<div class="text-muted">Обработка файлов...</div>';
-      
+      const statusEl = document.createElement('div');
+      statusEl.className = 'text-muted small mb-2';
+      statusEl.textContent = 'Обработка файлов...';
+      outScansPreview.appendChild(statusEl);
+
       for (const file of files) {
         try {
           const prepared = await compressImage(file);
@@ -1774,7 +1790,7 @@ async function deleteOutgoing(id) {
           alert(`Ошибка при обработке файла ${file.name}`);
         }
       }
-      
+      statusEl.remove();
       e.target.value = '';
     });
   }

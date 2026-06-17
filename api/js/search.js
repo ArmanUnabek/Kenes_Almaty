@@ -20,14 +20,14 @@
   function navigateToResult(item) {
     if (item.source === 'incoming') {
       document.getElementById('tab-incoming')?.click();
-      if (typeof window.editIncoming === 'function') {
+      if (window.canWrite?.() && typeof window.editIncoming === 'function') {
         setTimeout(() => window.editIncoming(item.id), 150);
       }
       return;
     }
     if (item.source === 'outgoing') {
       document.getElementById('tab-outgoing')?.click();
-      if (typeof window.editOutgoing === 'function') {
+      if (window.canWrite?.() && typeof window.editOutgoing === 'function') {
         setTimeout(() => window.editOutgoing(item.id), 150);
       }
       return;

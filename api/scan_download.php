@@ -1,6 +1,7 @@
 <?php
-require_once '../config.php';
-require_once '../auth_middleware.php';
+
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../auth_middleware.php';
 
 use App\Middleware\RateLimiter;
 use App\Services\SecurityAuditService;
@@ -67,18 +68,26 @@ SecurityAuditService::logScanDownload(
 
 $contentType = $scan['scan_type'] ?: 'application/octet-stream';
 $inline = isset($_GET['inline']) && $_GET['inline'] === '1';
+$allowedInline = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+if ($inline && !in_array($contentType, $allowedInline, true)) {
+    $inline = false;
+}
 $disposition = ($inline ? 'inline' : 'attachment') . '; filename="' . $filename . '"';
 
 if (!empty($scan['file_path'])) {
-    $fullPath = APP_ROOT . '/' . ltrim($scan['file_path'], '/');
-    if (is_file($fullPath)) {
-        header('Content-Type: ' . $contentType);
-        header('Content-Length: ' . filesize($fullPath));
-        header('Content-Disposition: ' . $disposition);
-        header('X-Content-Type-Options: nosniff');
-        readfile($fullPath);
+    $uploadsRoot = realpath(APP_ROOT . '/uploads');
+    $fullPath = realpath(APP_ROOT . '/' . ltrim((string)$scan['file_path'], '/'));
+    if (!$uploadsRoot || !$fullPath || !str_starts_with($fullPath, $uploadsRoot . DIRECTORY_SEPARATOR)) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Файл не найден'], $JSON_FLAGS);
         exit;
     }
+    header('Content-Type: ' . $contentType);
+    header('Content-Length: ' . filesize($fullPath));
+    header('Content-Disposition: ' . $disposition);
+    header('X-Content-Type-Options: nosniff');
+    readfile($fullPath);
+    exit;
 }
 
 if (!empty($scan['scan_data'])) {

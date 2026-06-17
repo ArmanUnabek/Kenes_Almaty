@@ -12,7 +12,10 @@ class StatisticsController extends ApiController
     {
         try {
             $this->requireAuth();
-            $regionId = $this->getCurrentRegionId() ?? 1;
+            $regionId = $this->getCurrentRegionId();
+            if (!$regionId) {
+                $this->error('Регион не выбран. Администратору нужно переключить активный регион.', 400);
+            }
 
             $stats = [
                 'total_incoming' => 0,

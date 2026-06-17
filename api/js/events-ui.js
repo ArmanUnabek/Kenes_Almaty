@@ -4,6 +4,7 @@
 (function (window) {
   const API_BASE = window.API_BASE;
   const store = window.store;
+  const canWrite = () => window.canWrite?.() ?? false;
   const canDelete = () => window.canDelete?.() ?? false;
   const confirmDelete = (...args) => window.confirmDelete?.(...args);
   const formatDateISOtoRus = window.AppUtils?.formatDateISOtoRus
@@ -102,6 +103,10 @@
 
   async function handleEventSubmit(e) {
     e.preventDefault();
+    if (!canWrite()) {
+      window.showError?.(t('events.save_error', 'Не удалось сохранить мероприятие'));
+      return;
+    }
     const payload = {
       title: evTitle.value.trim(),
       event_date: evDate.value,
@@ -156,7 +161,7 @@
           <td class="text-end" data-label="% явки">${Number(ev.attendance_percent || 0).toFixed(2)}%</td>
           <td class="text-end table-actions" data-label="">
             <button class="btn btn-sm btn-outline-secondary" data-action="view-att" data-id="${ev.id}" title="${t('events.view_att', 'Участники')}"><i class="bi bi-people"></i></button>
-            <button class="btn btn-sm btn-outline-primary" data-action="edit-event" data-id="${ev.id}" title="${t('action.edit', 'Изменить')}"><i class="bi bi-pencil"></i></button>
+            ${canWrite() ? `<button class="btn btn-sm btn-outline-primary" data-action="edit-event" data-id="${ev.id}" title="${t('action.edit', 'Изменить')}"><i class="bi bi-pencil"></i></button>` : ''}
             ${canDelete() ? `<button class="btn btn-sm btn-outline-danger" data-action="del-event" data-id="${ev.id}" title="${t('action.delete', 'Удалить')}"><i class="bi bi-trash"></i></button>` : ''}
           </td></tr>`;
       }).join('');
@@ -188,6 +193,7 @@
   }
 
   async function editEvent(id) {
+    if (!canWrite()) return;
     const resp = await fetch(`${API_BASE}/events.php?id=${id}`);
     if (!resp.ok) return alert(t('events.load_error', 'Не удалось загрузить'));
     const ev = await resp.json();

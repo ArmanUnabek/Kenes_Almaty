@@ -9,6 +9,7 @@
   - `SMTP_*` (опционально, для email-уведомлений)
 - [ ] `composer install --no-dev --optimize-autoloader` на сервере
 - [ ] Права на запись: `uploads/`, `cache/` (если используется)
+- [ ] Убедиться, что в репозитории лежат `uploads/.htaccess`, `uploads/photos/.htaccess`, `uploads/scans/.htaccess` (защита от выполнения PHP и прямого доступа к сканам)
 
 ## 2. База данных
 
@@ -53,7 +54,7 @@
 
 После изменений CSS/JS обновите `?v=` в `api/index.html`, `login.html`, `admin/index.html` для сброса кэша браузера.
 
-Текущая версия статики: **?v=13** (CSS, JS, csrf-handler)
+Текущая версия статики: **?v=14** (CSS, JS, csrf-handler)
 
 ## 8. SaaS: юридические страницы и реквизиты
 

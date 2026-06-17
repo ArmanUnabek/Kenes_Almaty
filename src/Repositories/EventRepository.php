@@ -8,6 +8,14 @@ class EventRepository
     {
     }
 
+    public function getRegionId(int $id): ?int
+    {
+        $stmt = $this->db->prepare('SELECT region_id FROM events WHERE id = ?');
+        $stmt->execute([$id]);
+        $value = $stmt->fetchColumn();
+        return $value !== false ? (int)$value : null;
+    }
+
     public function getById(int $id): ?array
     {
         $stmt = $this->db->prepare('SELECT * FROM events WHERE id = ?');

@@ -213,25 +213,13 @@ async function renderKpiExtra() {
       : '<li class="list-group-item text-muted">Нет данных</li>';
   }
 
-  await renderCommissionsHighlights(kpi);
+  if (typeof window.refreshDashboardEnhanced !== 'function') {
+    await renderCommissionsHighlights(kpi);
+  }
 }
 function getPendingLettersSummary() {
-  const today = new Date();
-  let overdue = 0;
-  let warning = 0;
-  let pending = 0;
-  (store.incoming || []).filter((item) => !item.linkedOutgoingId).forEach((item) => {
-    pending += 1;
-    const due = window.addWorkingDays(item.date, 15);
-    const daysLeft = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    if (daysLeft < 0) {
-      overdue += 1;
-      return;
-    }
-    const warnFrom = window.subtractWorkingDays(due, 3);
-    if (today >= warnFrom && today <= due) warning += 1;
-  });
-  return { pending, overdue, warning };
+  return window.AppUtils?.getPendingLettersSummary?.(store.incoming)
+    || { pending: 0, overdue: 0, warning: 0 };
 }
 
 function updateNotifyBadge() {
@@ -387,10 +375,8 @@ async function renderKPIs() {
   }).filter(x => x !== null);
   const avgFallback = days.length ? (days.reduce((a, b) => a + b, 0) / days.length) : null;
 
-  const overdueThreshold = new Date();
-  overdueThreshold.setDate(overdueThreshold.getDate() - 21);
-  const pendingFallback = store.incoming.filter(i => !i.linkedOutgoingId).length;
-  const overdueFallback = store.incoming.filter(i => !i.linkedOutgoingId && new Date(i.date) < overdueThreshold).length;
+  const pendingFallback = store.incoming.filter((i) => window.AppUtils?.isLetterPending?.(i)).length;
+  const overdueFallback = store.incoming.filter((i) => window.AppUtils?.isLetterOverdue?.(i)).length;
 
   const withScansFallback = [...store.incoming, ...store.outgoing].filter(item => (item.scansCount || 0) > 0).length;
   const totalScansFallback = [...store.incoming, ...store.outgoing].reduce((sum, item) => sum + (item.scansCount || 0), 0);

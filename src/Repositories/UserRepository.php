@@ -66,7 +66,7 @@ class UserRepository
             $data['full_name'],
             $data['role'] ?? 'viewer',
             $data['region_id'] ?? null,
-            !empty($data['is_active']) ? 1 : 1,
+            !empty($data['is_active']) ? 1 : 0,
         ]);
         return (int)$this->db->lastInsertId();
     }

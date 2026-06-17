@@ -7,6 +7,7 @@ require_once __DIR__ . '/../src/Repositories/EventRepository.php';
 
 use App\ApiController;
 use App\Repositories\EventRepository;
+use App\Services\AuditSanitizer;
 use App\Services\AuditLogger;
 use App\Services\FileCache;
 use App\Services\LetterService;
@@ -60,6 +61,7 @@ class EventsController extends ApiController
             if (!$event) {
                 $this->error('Мероприятие не найдено', 404);
             }
+            assertEventRegionAccess($event);
             $this->json($event);
         }
 
@@ -78,12 +80,24 @@ class EventsController extends ApiController
         }
     }
 
+    private function requireEventAccess(int $id): array
+    {
+        $event = $this->repo->getById($id);
+        if (!$event) {
+            $this->error('Мероприятие не найдено', 404);
+        }
+        assertEventRegionAccess($event);
+        return $event;
+    }
+
     private function handleCreate(): void
     {
         $data = $this->getJsonInput() ?? [];
         $this->validateEventPayload($data);
 
-        $regionId = (int)($data['region_id'] ?? $this->currentUser['region_id'] ?? 0) ?: null;
+        $regionId = resolveRegionIdForWrite(
+            isset($data['region_id']) ? (int)$data['region_id'] : null
+        );
         $createdBy = $this->currentUser['id'] ?? null;
 
         try {
@@ -97,8 +111,8 @@ class EventsController extends ApiController
             throw $e;
         }
 
-        pusherTrigger('council-events', 'events-updated', ['action' => 'create', 'id' => $eventId]);
-        AuditLogger::log($this->db, 'events', $eventId, 'CREATE', null, $data, (int)($createdBy ?? 0));
+        pusherTrigger('council-events', 'events-updated', ['action' => 'create', 'id' => $eventId, 'region_id' => $regionId]);
+        AuditLogger::log($this->db, 'events', $eventId, 'CREATE', null, AuditSanitizer::sanitize($data), (int)($createdBy ?? 0));
         (new FileCache())->forgetPrefix('kpi:');
         $this->json(['id' => $eventId, 'message' => 'Мероприятие добавлено'], 201);
     }
@@ -110,6 +124,7 @@ class EventsController extends ApiController
         if ($id <= 0) {
             $this->error('ID не указан', 400);
         }
+        $this->requireEventAccess($id);
         $this->validateEventPayload($data);
 
         try {
@@ -124,7 +139,7 @@ class EventsController extends ApiController
         }
 
         pusherTrigger('council-events', 'events-updated', ['action' => 'update', 'id' => $id]);
-        AuditLogger::log($this->db, 'events', $id, 'UPDATE', null, $data, (int)($this->currentUser['id'] ?? 0));
+        AuditLogger::log($this->db, 'events', $id, 'UPDATE', null, AuditSanitizer::sanitize($data), (int)($this->currentUser['id'] ?? 0));
         (new FileCache())->forgetPrefix('kpi:');
         $this->json(['message' => 'Мероприятие обновлено']);
     }
@@ -135,6 +150,7 @@ class EventsController extends ApiController
         if ($id <= 0) {
             $this->error('ID не указан', 400);
         }
+        $this->requireEventAccess($id);
 
         $this->repo->delete($id);
         pusherTrigger('council-events', 'events-updated', ['action' => 'delete', 'id' => $id]);

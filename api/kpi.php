@@ -16,7 +16,7 @@ checkAuth();
 
 $db = getDBConnection();
 $user = getCurrentUser();
-$regionId = $user['region_id'] ?? null;
+$regionId = getCurrentRegionId();
 $cache = new FileCache();
 $cacheKey = 'kpi:stats:' . ($regionId ?: 'global');
 $cached = $cache->get($cacheKey);

@@ -10,9 +10,16 @@ debug-*.log
 cache/
 
 # Загруженные файлы
-uploads/
-api/uploads/
+uploads/*
 !uploads/.gitkeep
+!uploads/.htaccess
+!uploads/photos/
+uploads/photos/*
+!uploads/photos/.htaccess
+!uploads/scans/
+uploads/scans/*
+!uploads/scans/.htaccess
+api/uploads/
 
 # Временные каталоги хостинга
 tmp/

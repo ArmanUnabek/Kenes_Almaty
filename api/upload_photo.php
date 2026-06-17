@@ -29,7 +29,7 @@ class PhotoUploadController extends ApiController
             }
 
             if (!file_exists(UPLOAD_DIR)) {
-                mkdir(UPLOAD_DIR, 0777, true);
+                mkdir(UPLOAD_DIR, 0755, true);
             }
 
             if (!isset($_FILES['photo']) || $_FILES['photo']['error'] !== UPLOAD_ERR_OK) {

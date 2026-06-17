@@ -24,15 +24,49 @@
     return !!(sessionUser?.can_export);
   }
 
+  function syncUserSession(user) {
+    sessionUser = user || null;
+    if (user) {
+      window.sessionUser = user;
+      window.AppUtils?.syncUserToStorage?.(user);
+    }
+  }
+
+  function getSessionUser() {
+    return sessionUser;
+  }
+
   function applyPermissionsUI(user) {
-    sessionUser = user || sessionUser;
-    const show = canWrite();
+    syncUserSession(user || sessionUser);
+    const showWrite = canWrite();
     const exportAllowed = canExport();
-    document.getElementById('memberFormCard')?.classList.toggle('d-none', !show);
-    document.getElementById('commissionFormCard')?.classList.toggle('d-none', !show);
+
+    document.getElementById('memberFormCard')?.classList.toggle('d-none', !showWrite);
+    document.getElementById('commissionFormCard')?.classList.toggle('d-none', !showWrite);
+
     document.querySelectorAll('.export-admin-only').forEach((el) => {
       el.classList.toggle('d-none', !exportAllowed);
     });
+
+    document.querySelectorAll('.write-admin-only').forEach((el) => {
+      el.classList.toggle('d-none', !showWrite);
+    });
+
+    document.querySelectorAll('.write-disabled').forEach((el) => {
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
+        el.disabled = !showWrite;
+      } else if (el instanceof HTMLButtonElement) {
+        el.disabled = !showWrite;
+      }
+    });
+
+    const ctx = document.getElementById('pageContextActions');
+    if (ctx && !showWrite) {
+      ctx.querySelectorAll('button').forEach((btn) => {
+        btn.disabled = true;
+        btn.classList.add('disabled');
+      });
+    }
   }
 
   async function uploadMemberPhoto(memberId, file) {
@@ -89,36 +123,26 @@
   }
 
   function goToIncomingStatus(status) {
-    const els = {
-      status: document.getElementById('filterStatusIncoming'),
-      year: document.getElementById('filterYearIncoming'),
-      month: document.getElementById('filterMonthIncoming'),
-      scans: document.getElementById('filterScansIncoming'),
-      recipient: document.getElementById('filterRecipientIncoming'),
-      search: document.getElementById('searchIncoming'),
-    };
-    if (els.status) els.status.value = status;
-    if (els.year) els.year.value = 'Все годы';
-    if (els.month) els.month.value = 'all';
-    if (els.scans) els.scans.value = 'all';
-    if (els.recipient) els.recipient.value = 'all';
-    if (els.search) els.search.value = '';
-    document.getElementById('tab-incoming')?.click();
-    if (typeof window.renderIncoming === 'function') window.renderIncoming();
+    const tab = document.getElementById('tab-incoming');
+    if (tab) tab.click();
+    const filter = document.getElementById('filterStatusIncoming');
+    if (filter) {
+      filter.value = status;
+      filter.dispatchEvent(new Event('change'));
+    }
   }
 
-  function confirmDelete(message, onConfirm) {
-    const modalEl = document.getElementById('confirmDeleteModal');
+  function confirmDelete(message, handler) {
+    const modal = document.getElementById('confirmDeleteModal');
     const msgEl = document.getElementById('confirmDeleteMessage');
-    const btnEl = document.getElementById('confirmDeleteBtn');
-    if (!modalEl || !msgEl || !btnEl) {
-      if (window.confirm(message)) onConfirm();
+    if (!modal || !msgEl) {
+      if (window.confirm(message)) handler();
       return;
     }
-    msgEl.textContent = message || 'Вы уверены, что хотите удалить этот элемент?';
-    confirmDeleteHandler = onConfirm;
+    msgEl.textContent = message;
+    confirmDeleteHandler = handler;
     if (!confirmDeleteModalInstance) {
-      confirmDeleteModalInstance = new bootstrap.Modal(modalEl);
+      confirmDeleteModalInstance = new bootstrap.Modal(modal);
     }
     confirmDeleteModalInstance.show();
   }
@@ -141,7 +165,7 @@
     API_BASE,
     store,
     get sessionUser() { return sessionUser; },
-    set sessionUser(v) { sessionUser = v; },
+    set sessionUser(v) { syncUserSession(v); },
     get membersCatalog() { return membersCatalog; },
     set membersCatalog(v) { membersCatalog = v; },
     get commissionsCatalog() { return commissionsCatalog; },
@@ -149,6 +173,8 @@
     canWrite,
     canDelete,
     canExport,
+    syncUserSession,
+    getSessionUser,
     applyPermissionsUI,
     uploadMemberPhoto,
     saveMember,
@@ -165,6 +191,8 @@
   window.canWrite = canWrite;
   window.canDelete = canDelete;
   window.canExport = canExport;
+  window.syncUserSession = syncUserSession;
+  window.getSessionUser = getSessionUser;
   window.applyPermissionsUI = applyPermissionsUI;
   window.goToIncomingStatus = goToIncomingStatus;
   window.confirmDelete = confirmDelete;
@@ -173,21 +201,4 @@
   window.saveCommission = saveCommission;
   window.deleteMember = deleteMember;
   window.deleteCommission = deleteCommission;
-  window.enableKpiCounterAnimation = true;
-
-  Object.defineProperty(window, 'sessionUser', {
-    get() { return sessionUser; },
-    set(v) { sessionUser = v; },
-    configurable: true,
-  });
-  Object.defineProperty(window, 'membersCatalog', {
-    get() { return membersCatalog; },
-    set(v) { membersCatalog = v; },
-    configurable: true,
-  });
-  Object.defineProperty(window, 'commissionsCatalog', {
-    get() { return commissionsCatalog; },
-    set(v) { commissionsCatalog = v; },
-    configurable: true,
-  });
 })(window);

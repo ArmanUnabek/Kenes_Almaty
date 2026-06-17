@@ -6,7 +6,6 @@ header('Content-Type: application/json; charset=utf-8');
 $checks = [
     'database' => false,
     'uploads_writable' => false,
-    'php_version' => PHP_VERSION,
 ];
 
 $messages = [];

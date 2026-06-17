@@ -127,6 +127,7 @@ function handleCsrf($db) {
 
 function handleSwitchRegion($db) {
     checkAuth();
+    CsrfMiddleware::requireVerification();
     if (!isAdmin()) {
         http_response_code(403);
         echo json_encode(['error' => 'Только супер-админ может переключать регион'], JSON_ENCODE_FLAGS);

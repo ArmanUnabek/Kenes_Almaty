@@ -3,6 +3,7 @@
  */
 (function (window) {
   const API = '/api';
+  let emailPaneBound = false;
 
   function t(key, fallback) {
     return window.AppI18n?.t(key) || fallback;
@@ -11,28 +12,29 @@
   function renderDeadlinesTab(box) {
     if (!window.store) window.store = { incoming: [], outgoing: [] };
     const today = new Date();
-    const pending = (window.store.incoming || []).filter((i) => !i.linkedOutgoingId).map((i) => {
-      const due = window.addWorkingDays ? window.addWorkingDays(i.date, 15) : new Date(i.date);
-      const daysLeft = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      let status = 'normal';
-      if (daysLeft < 0) status = 'overdue';
-      else if (window.subtractWorkingDays) {
-        const warnFrom = window.subtractWorkingDays(due, 3);
-        if (today >= warnFrom && today <= due) status = 'warning';
-      }
-      return {
-        seq: i.seq,
-        date: i.date,
-        org: i.organization || '',
-        due,
-        daysLeft,
-        status,
-        responsible: (i.members || []).map((m) => m.full_name).join(', ') || '—',
-      };
-    }).sort((a, b) => a.due - b.due).slice(0, 20);
+    const summary = window.AppUtils?.getPendingLettersSummary?.(window.store.incoming, today)
+      || { pending: 0, overdue: 0, warning: 0 };
 
-    const overdueCount = pending.filter((p) => p.status === 'overdue').length;
-    const warnCount = pending.filter((p) => p.status === 'warning').length;
+    const pending = (window.store.incoming || [])
+      .filter((i) => window.AppUtils?.isLetterPending?.(i))
+      .map((i) => {
+        const due = window.AppUtils?.getLetterDueDate?.(i.date) || new Date(i.date);
+        const daysLeft = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        let status = 'normal';
+        if (window.AppUtils?.isLetterOverdue?.(i, today)) status = 'overdue';
+        else if (window.AppUtils?.isLetterDueSoon?.(i, today)) status = 'warning';
+        return {
+          seq: i.seq,
+          date: i.date,
+          org: i.organization || '',
+          due,
+          daysLeft,
+          status,
+          responsible: (i.members || []).map((m) => m.full_name).join(', ') || '—',
+        };
+      })
+      .sort((a, b) => a.due - b.due)
+      .slice(0, 20);
 
     const rows = pending.map((p) => {
       const badgeClass = p.status === 'overdue' ? 'badge bg-danger'
@@ -50,9 +52,9 @@
 
     box.innerHTML = `
       <div class="modal-notify-stats mb-3">
-        <span class="stat-chip stat-chip--neutral">Без ответа: ${pending.length}</span>
-        <span class="stat-chip stat-chip--danger">Просрочено: ${overdueCount}</span>
-        <span class="stat-chip stat-chip--warning">Скоро срок: ${warnCount}</span>
+        <span class="stat-chip stat-chip--neutral">Без ответа: ${summary.pending}</span>
+        <span class="stat-chip stat-chip--danger">Просрочено: ${summary.overdue}</span>
+        <span class="stat-chip stat-chip--warning">Скоро срок: ${summary.warning}</span>
       </div>
       <div class="table-responsive">
         <table class="table table-sm align-middle">
@@ -114,27 +116,36 @@
           <tbody>${queueRows}</tbody>
         </table>
       </div>`;
+  }
 
-    document.getElementById('notifyEmailForm')?.addEventListener('submit', async (e) => {
+  function bindEmailPaneDelegation() {
+    if (emailPaneBound) return;
+    const emailPane = document.getElementById('notifyEmailPane');
+    if (!emailPane) return;
+    emailPane.addEventListener('submit', async (e) => {
+      const form = e.target.closest('#notifyEmailForm');
+      if (!form) return;
       e.preventDefault();
+      if (!window.canWrite?.()) return;
       try {
         const resp = await fetch(`${API}/notifications.php`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            to: document.getElementById('notifyEmailTo').value.trim(),
-            subject: document.getElementById('notifyEmailSubject').value.trim(),
-            body_html: document.getElementById('notifyEmailBody').value,
+            to: document.getElementById('notifyEmailTo')?.value.trim(),
+            subject: document.getElementById('notifyEmailSubject')?.value.trim(),
+            body_html: document.getElementById('notifyEmailBody')?.value,
           }),
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(data.error || 'Ошибка отправки');
         window.showSuccess?.(data.message || 'Поставлено в очередь');
-        await renderEmailTab(box);
+        await renderEmailTab(emailPane);
       } catch (err) {
         window.showError?.(err.message) || alert(err.message);
       }
     });
+    emailPaneBound = true;
   }
 
   async function openNotifyModal() {
@@ -159,6 +170,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    bindEmailPaneDelegation();
     document.getElementById('notifyBtn')?.addEventListener('click', openNotifyModal);
   });
 

@@ -124,7 +124,9 @@ class LettersController extends ApiController
         $data = $this->getJsonInput() ?? [];
         $this->validateLetter($data);
 
-        $regionId = (int)($data['region_id'] ?? $this->currentUser['region_id'] ?? 1);
+        $regionId = resolveRegionIdForWrite(
+            isset($data['region_id']) ? (int)$data['region_id'] : null
+        );
         $createdBy = $this->currentUser['id'] ?? null;
         $members = LetterPersistenceService::normalizeMembersPayload($data['members'] ?? []);
         $recipients = LetterPersistenceService::normalizeRecipientsPayload($data['recipients'] ?? []);
@@ -248,6 +250,7 @@ class LettersController extends ApiController
             }
             $this->db->prepare('DELETE FROM letter_members WHERE letter_type = ? AND letter_id = ?')->execute([$this->type, $id]);
             $this->db->prepare('DELETE FROM letter_recipients WHERE letter_type = ? AND letter_id = ?')->execute([$this->type, $id]);
+            LetterService::deleteScansForLetter($this->db, $this->type, $id);
             $this->db->prepare("DELETE FROM {$this->table} WHERE id = ?")->execute([$id]);
             $this->logAction($this->table, $id, 'DELETE', ['id' => $id], null);
             $this->db->commit();
@@ -345,10 +348,7 @@ class LettersController extends ApiController
 
     private function updateIncoming(int $id, array $data, int $regionId): void
     {
-        $seq = $data['seq'] ?? null;
-        if (!$seq) {
-            $seq = LetterService::computeNextSeq($this->db, $this->table, $regionId);
-        }
+        $seq = $this->resolveSeqForUpdate($id, $data, $regionId);
         $respondsTo = !empty($data['responds_to_outgoing_id']) ? (int)$data['responds_to_outgoing_id'] : null;
         $kkNumber = $data['kk_number'] ?? '';
         if ($respondsTo && !$kkNumber) {
@@ -377,10 +377,7 @@ class LettersController extends ApiController
 
     private function updateOutgoing(int $id, array $data, int $regionId, $previousIncomingRef): void
     {
-        $seq = $data['seq'] ?? null;
-        if (!$seq) {
-            $seq = LetterService::computeNextSeq($this->db, $this->table, $regionId);
-        }
+        $seq = $this->resolveSeqForUpdate($id, $data, $regionId);
         $outgoingNumber = $this->resolveOutgoingNumber($data, (int)$seq);
         $stmt = $this->db->prepare('
             UPDATE outgoing_letters
@@ -418,6 +415,20 @@ class LettersController extends ApiController
             $outgoingNumber = $kk ? "{$seq}/{$kk}" : (string)$seq;
         }
         return $outgoingNumber ?: (string)$seq;
+    }
+
+    private function resolveSeqForUpdate(int $id, array $data, int $regionId): int
+    {
+        if (isset($data['seq']) && $data['seq'] !== '' && $data['seq'] !== null) {
+            return (int)$data['seq'];
+        }
+        $stmt = $this->db->prepare("SELECT seq FROM {$this->table} WHERE id = ?");
+        $stmt->execute([$id]);
+        $existing = $stmt->fetchColumn();
+        if ($existing !== false) {
+            return (int)$existing;
+        }
+        return LetterService::computeNextSeq($this->db, $this->table, $regionId);
     }
 }
 

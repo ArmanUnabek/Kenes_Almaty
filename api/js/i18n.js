@@ -86,6 +86,8 @@
       'events.kpi_text': 'Текст',
       'events.no_commission': 'Без комиссии',
       'action.delete': 'Удалить',
+      'error.no_permission': 'Недостаточно прав',
+      'error.save_failed': 'Не удалось сохранить',
     },
     kz: {
       'nav.dashboard': 'Статистика',
@@ -168,6 +170,8 @@
       'events.kpi_text': 'Мәтін',
       'events.no_commission': 'Комиссиясыз',
       'action.delete': 'Жою',
+      'error.no_permission': 'Құқық жеткіліксіз',
+      'error.save_failed': 'Сақтау сәтсіз',
     },
   };
 

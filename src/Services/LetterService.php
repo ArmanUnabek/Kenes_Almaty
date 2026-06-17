@@ -126,6 +126,21 @@ class LetterService
         }
     }
 
+    public static function deleteScansForLetter(\PDO $db, string $type, int $letterId): void
+    {
+        $stmt = $db->prepare('SELECT id, file_path FROM letter_scans WHERE letter_type = ? AND letter_id = ?');
+        $stmt->execute([$type, $letterId]);
+        foreach ($stmt->fetchAll() as $row) {
+            if (!empty($row['file_path'])) {
+                $path = APP_ROOT . '/' . ltrim((string)$row['file_path'], '/');
+                if (is_file($path)) {
+                    @unlink($path);
+                }
+            }
+        }
+        $db->prepare('DELETE FROM letter_scans WHERE letter_type = ? AND letter_id = ?')->execute([$type, $letterId]);
+    }
+
     public static function validateIncoming(array $data): array
     {
         $validator = new \App\Validator();

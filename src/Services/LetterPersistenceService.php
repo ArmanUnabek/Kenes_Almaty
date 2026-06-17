@@ -123,13 +123,32 @@ class LetterPersistenceService
             VALUES (?, ?, ?, ?)
         ');
         foreach ($members as $member) {
+            $memberId = (int)($member['member_id'] ?? 0);
+            if ($memberId <= 0) {
+                continue;
+            }
+            $check = $db->prepare('SELECT region_id FROM os_members WHERE id = ?');
+            $check->execute([$memberId]);
+            $memberRegion = (int)$check->fetchColumn();
+            $letterRegion = self::getLetterRegionId($db, $type, $letterId);
+            if ($letterRegion > 0 && $memberRegion > 0 && $memberRegion !== $letterRegion) {
+                continue;
+            }
             $stmtInsert->execute([
                 $type,
                 $letterId,
-                $member['member_id'],
+                $memberId,
                 !empty($member['is_lead']) ? 1 : 0,
             ]);
         }
+    }
+
+    private static function getLetterRegionId(\PDO $db, string $type, int $letterId): int
+    {
+        $table = $type === 'incoming' ? 'incoming_letters' : 'outgoing_letters';
+        $stmt = $db->prepare("SELECT region_id FROM {$table} WHERE id = ?");
+        $stmt->execute([$letterId]);
+        return (int)$stmt->fetchColumn();
     }
 
     public static function fetchLetterMembers(\PDO $db, string $type, array $letterIds): array

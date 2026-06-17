@@ -1,16 +1,24 @@
 // Shell SPA: core, modules, app-shell, events-ui
 
 function getSessionUser() {
-  try {
-    const raw = localStorage.getItem('user');
-    return raw ? JSON.parse(raw) : null;
-  } catch (error) {
-    console.warn('Не удалось прочитать пользователя из localStorage', error);
-    return null;
-  }
+  return window.getSessionUser?.() || window.sessionUser || null;
 }
 
 let pusherClient = null;
+let realtimeRefreshTimer = null;
+
+async function scheduleRealtimeRefresh() {
+  if (realtimeRefreshTimer) clearTimeout(realtimeRefreshTimer);
+  realtimeRefreshTimer = setTimeout(async () => {
+    realtimeRefreshTimer = null;
+    try {
+      await refreshLetters();
+      renderAll();
+    } catch (e) {
+      console.warn('Realtime refresh failed', e);
+    }
+  }, 400);
+}
 
 async function initializeApp() {
   try {
@@ -21,7 +29,7 @@ async function initializeApp() {
     populateMembersCommissionFilter();
     populateMemberCommissionSelect();
     bindMembersCommissionsForms();
-    if (sessionUser) applyPermissionsUI(sessionUser);
+    if (window.sessionUser) applyPermissionsUI(window.sessionUser);
     renderMembersGrid();
     renderCommissionsGrid();
     initAppNavigation();
@@ -88,12 +96,12 @@ function updatePageContextActions(tabId) {
   const container = document.getElementById('pageContextActions');
   if (!container) return;
   const configs = {
-    'tab-incoming': [
+    'tab-incoming': window.canWrite?.() ? [
       { id: 'ctxAddIncoming', label: t('ctx.add_incoming', '+ Добавить письмо'), primary: true },
       { id: 'ctxShowPending', label: t('ctx.pending', 'Без ответа'), primary: false },
-    ],
-    'tab-outgoing': [{ id: 'ctxAddOutgoing', label: t('ctx.add_outgoing', '+ Ответ ОС'), primary: true }],
-    'tab-events': [{ id: 'ctxAddEvent', label: t('ctx.add_event', '+ Мероприятие'), primary: true }],
+    ] : [],
+    'tab-outgoing': window.canWrite?.() ? [{ id: 'ctxAddOutgoing', label: t('ctx.add_outgoing', '+ Ответ ОС'), primary: true }] : [],
+    'tab-events': window.canWrite?.() ? [{ id: 'ctxAddEvent', label: t('ctx.add_event', '+ Мероприятие'), primary: true }] : [],
   };
   container.innerHTML = (configs[tabId] || []).map((a) =>
     `<button type="button" class="btn btn-sm ${a.primary ? 'btn-primary' : 'btn-outline-secondary'}" id="${a.id}">${a.label}</button>`
@@ -192,8 +200,7 @@ function initRealtime() {
     });
     pusherClient.subscribe(window.PUSHER_CHANNEL_DOCUMENTS || 'council-documents')
       .bind('documents-updated', async (payload) => {
-        await refreshLetters();
-        renderAll();
+        scheduleRealtimeRefresh();
         const data = parseRealtimePayload(payload);
         if (data?.action) {
           const typeText = data.type === 'incoming' ? 'Входящее письмо' : 'Исходящее письмо';

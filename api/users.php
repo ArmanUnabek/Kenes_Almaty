@@ -7,6 +7,7 @@ require_once __DIR__ . '/../src/Repositories/UserRepository.php';
 
 use App\ApiController;
 use App\Repositories\UserRepository;
+use App\Services\AuditSanitizer;
 
 class UsersController extends ApiController
 {
@@ -21,6 +22,7 @@ class UsersController extends ApiController
     public function handle(): void
     {
         try {
+            $this->requireAuth();
             if (!isAdmin()) {
                 $this->error('Доступ только для супер-админа', 403);
             }
@@ -138,7 +140,9 @@ class UsersController extends ApiController
         }
 
         $this->repo->update($id, $data);
-        $this->logAction('users', $id, 'UPDATE', $existing, $data);
+        $safeData = AuditSanitizer::sanitize($data);
+        $safeExisting = AuditSanitizer::sanitize($existing);
+        $this->logAction('users', $id, 'UPDATE', $safeExisting, $safeData);
         $this->json(['message' => 'Пользователь обновлён']);
     }
 
