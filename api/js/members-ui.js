@@ -20,10 +20,9 @@
       const resp = await fetch(`${api()}/translate.php?action=status`);
       const data = await resp.json().catch(() => ({}));
       if (!data.enabled) return;
-      document.getElementById('btnTranslatePosition')?.classList.remove('d-none');
-      document.getElementById('btnTranslateOrganization')?.classList.remove('d-none');
+      document.getElementById('kazllmMemberFields')?.classList.remove('d-none');
     } catch {
-      /* KazLLM не настроен */
+      /* KazLLM не настроен — блок скрыт */
     }
   }
 
