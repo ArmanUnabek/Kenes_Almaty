@@ -2,17 +2,27 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../auth_middleware.php';
 
+use App\Middleware\RateLimiter;
+use App\Services\SecurityAuditService;
+
 checkAuth();
+requireRole(['admin']);
+
+$user = getCurrentUser();
+$userId = (int)($user['id'] ?? 0);
+
+RateLimiter::requireCheck(
+    'export_pdf_user_' . $userId,
+    SecurityAuditService::EXPORT_RATE_LIMIT,
+    SecurityAuditService::EXPORT_RATE_WINDOW
+);
+
 $db = getDBConnection();
 $type = $_GET['type'] ?? 'summary';
 $regionId = getCurrentRegionId();
 
 $regionClause = $regionId ? ' WHERE region_id = ?' : '';
 $params = $regionId ? [$regionId] : [];
-
-$incomingCount = 0;
-$outgoingCount = 0;
-$pendingCount = 0;
 
 $stmt = $db->prepare('SELECT COUNT(*) FROM incoming_letters' . $regionClause);
 $stmt->execute($params);
@@ -30,12 +40,20 @@ $stmt = $db->prepare($sqlPending);
 $stmt->execute($params);
 $pendingCount = (int)$stmt->fetchColumn();
 
+SecurityAuditService::logExport($db, $userId, $regionId, 'pdf_' . $type, $incomingCount, $outgoingCount);
+
 $regionName = 'Все регионы';
 if ($regionId) {
     $stmt = $db->prepare('SELECT name_ru FROM regions WHERE id = ?');
     $stmt->execute([$regionId]);
     $regionName = (string)($stmt->fetchColumn() ?: 'Регион');
 }
+
+$watermark = htmlspecialchars(
+    'Конфиденциально · ' . ($user['full_name'] ?? $user['username'] ?? 'admin') . ' · ' . date('d.m.Y H:i'),
+    ENT_QUOTES,
+    'UTF-8'
+);
 
 $html = '<html><head><meta charset="utf-8"><style>
 body{font-family:DejaVu Sans,sans-serif;font-size:12px;color:#111}
@@ -44,6 +62,7 @@ table{width:100%;border-collapse:collapse;margin-top:8px}
 th,td{border:1px solid #ccc;padding:6px;text-align:left}
 th{background:#f4f6fb}
 .meta{color:#666;font-size:11px}
+.watermark{color:#999;font-size:10px;margin-top:24px;border-top:1px dashed #ccc;padding-top:8px}
 </style></head><body>';
 $html .= '<h1>Журнал Общественного Совета</h1>';
 $html .= '<p class="meta">Отчёт: ' . htmlspecialchars($type, ENT_QUOTES, 'UTF-8') . ' · ' . htmlspecialchars($regionName, ENT_QUOTES, 'UTF-8') . ' · ' . date('d.m.Y H:i') . '</p>';
@@ -64,10 +83,13 @@ if ($type === 'kpi') {
     $html .= '</table>';
 }
 
+$html .= '<p class="watermark">' . $watermark . '</p>';
 $html .= '</body></html>';
 
 if (class_exists('\\Mpdf\\Mpdf')) {
     $mpdf = new \Mpdf\Mpdf(['mode' => 'utf-8', 'format' => 'A4']);
+    $mpdf->SetWatermarkText($user['full_name'] ?? 'Журнал ОС', 0.08);
+    $mpdf->showWatermarkText = true;
     $mpdf->WriteHTML($html);
     $mpdf->Output('os_journal_report.pdf', \Mpdf\Output\Destination::DOWNLOAD);
     exit;

@@ -20,11 +20,19 @@
     return !!(sessionUser?.can_delete);
   }
 
+  function canExport() {
+    return !!(sessionUser?.can_export);
+  }
+
   function applyPermissionsUI(user) {
     sessionUser = user || sessionUser;
     const show = canWrite();
+    const exportAllowed = canExport();
     document.getElementById('memberFormCard')?.classList.toggle('d-none', !show);
     document.getElementById('commissionFormCard')?.classList.toggle('d-none', !show);
+    document.querySelectorAll('.export-admin-only').forEach((el) => {
+      el.classList.toggle('d-none', !exportAllowed);
+    });
   }
 
   async function uploadMemberPhoto(memberId, file) {
@@ -140,6 +148,7 @@
     set commissionsCatalog(v) { commissionsCatalog = v; },
     canWrite,
     canDelete,
+    canExport,
     applyPermissionsUI,
     uploadMemberPhoto,
     saveMember,
@@ -155,6 +164,7 @@
   window.store = store;
   window.canWrite = canWrite;
   window.canDelete = canDelete;
+  window.canExport = canExport;
   window.applyPermissionsUI = applyPermissionsUI;
   window.goToIncomingStatus = goToIncomingStatus;
   window.confirmDelete = confirmDelete;

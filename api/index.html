@@ -91,7 +91,7 @@
                     </button>
                     <span class="notify-badge d-none" id="notifyBadge">0</span>
                 </span>
-                <div class="topbar-secondary d-none d-lg-flex align-items-center gap-2">
+                <div class="topbar-secondary export-admin-only d-none d-lg-flex align-items-center gap-2">
                     <button class="btn btn-outline-secondary btn-sm" id="exportCsvBtn">
                         <i class="bi bi-file-earmark-spreadsheet"></i> <span class="btn-label">CSV</span>
                     </button>
@@ -111,10 +111,10 @@
                         <i class="bi bi-three-dots-vertical"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end" id="topbarMoreMenu">
-                        <li><button class="dropdown-item" type="button" data-trigger="exportCsvBtn"><i class="bi bi-file-earmark-spreadsheet me-2"></i>CSV</button></li>
-                        <li><a class="dropdown-item" href="/api/export_pdf.php?type=summary" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-2"></i>PDF</a></li>
-                        <li><button class="dropdown-item" type="button" data-trigger="exportJsonBtn"><i class="bi bi-download me-2"></i>JSON</button></li>
-                        <li><button class="dropdown-item" type="button" data-trigger="importJson"><i class="bi bi-upload me-2"></i>Импорт</button></li>
+                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportCsvBtn"><i class="bi bi-file-earmark-spreadsheet me-2"></i>CSV</button></li>
+                        <li class="export-admin-only"><a class="dropdown-item" href="/api/export_pdf.php?type=summary" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-2"></i>PDF</a></li>
+                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportJsonBtn"><i class="bi bi-download me-2"></i>JSON</button></li>
+                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="importJson"><i class="bi bi-upload me-2"></i>Импорт</button></li>
                     </ul>
                 </div>
             </div>
@@ -988,12 +988,12 @@
     <script src="../csrf-handler.js?v=4"></script>
     <script src="js/utils.js?v=2"></script>
     <script src="js/i18n.js?v=2"></script>
-    <script src="js/core.js?v=1"></script>
+    <script src="js/core.js?v=2"></script>
     <script src="js/members-ui.js?v=2"></script>
     <script src="js/dashboard.js?v=2"></script>
     <script src="js/letters-ui.js?v=3"></script>
     <script src="js/events-ui.js?v=2"></script>
-    <script src="js/app-shell.js?v=1"></script>
+    <script src="js/app-shell.js?v=2"></script>
     <script src="js/session.js?v=1"></script>
     <script src="app.js?v=17"></script>
     <script src="js/search.js?v=1"></script>

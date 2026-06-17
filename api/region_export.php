@@ -3,9 +3,20 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../auth_middleware.php';
 
 use App\Services\RegionService;
+use App\Middleware\RateLimiter;
+use App\Services\SecurityAuditService;
 
 checkAuth();
 requireRole(['admin']);
+
+$user = getCurrentUser();
+$userId = (int)($user['id'] ?? 0);
+
+RateLimiter::requireCheck(
+    'region_export_user_' . $userId,
+    SecurityAuditService::REGION_EXPORT_RATE_LIMIT,
+    SecurityAuditService::REGION_EXPORT_RATE_WINDOW
+);
 
 $regionId = (int)($_GET['region_id'] ?? getCurrentRegionId() ?? 0);
 if ($regionId <= 0) {
@@ -38,6 +49,18 @@ $incoming->execute([$regionId]);
 $outgoing = $db->prepare('SELECT id, seq, date, outgoing_number, organization, subject, note FROM outgoing_letters WHERE region_id = ? ORDER BY date DESC LIMIT 5000');
 $outgoing->execute([$regionId]);
 
+$incomingRows = $incoming->fetchAll();
+$outgoingRows = $outgoing->fetchAll();
+
+SecurityAuditService::logExport(
+    $db,
+    $userId,
+    $regionId,
+    'region_json',
+    count($incomingRows),
+    count($outgoingRows)
+);
+
 $payload = [
     'exported_at' => date('c'),
     'region' => [
@@ -49,8 +72,8 @@ $payload = [
     ],
     'commissions' => $commissions->fetchAll(),
     'members' => $members->fetchAll(),
-    'incoming_letters' => $incoming->fetchAll(),
-    'outgoing_letters' => $outgoing->fetchAll(),
+    'incoming_letters' => $incomingRows,
+    'outgoing_letters' => $outgoingRows,
 ];
 
 $download = isset($_GET['download']) && $_GET['download'] === '1';

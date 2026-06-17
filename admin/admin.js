@@ -8,6 +8,7 @@ let editUserModal;
 let auditDetailModal;
 let auditPage = 1;
 let auditItems = [];
+let auditSecurityOnly = false;
 const auditLimit = 50;
 
 async function apiFetch(url, options = {}) {
@@ -251,19 +252,25 @@ function openBootstrapRegion(id) {
 
 async function loadAuditLogs(page = auditPage) {
   auditPage = page;
-  const data = await apiFetch(`${API}/audit_logs.php?page=${page}&limit=${auditLimit}`);
+  const securityParam = auditSecurityOnly ? '&security=1' : '';
+  const data = await apiFetch(`${API}/audit_logs.php?page=${page}&limit=${auditLimit}${securityParam}`);
   const tbody = document.querySelector('#auditTable tbody');
   auditItems = data.items || [];
   tbody.innerHTML = auditItems.length
-    ? auditItems.map((row, idx) => `
-      <tr class="audit-row" data-audit-idx="${idx}" style="cursor:pointer;">
+    ? auditItems.map((row, idx) => {
+      const op = row.operation || '';
+      const isSecurity = op === 'EXPORT' || op === 'DOWNLOAD';
+      const badgeClass = isSecurity ? 'bg-warning text-dark' : 'bg-light text-dark border';
+      return `
+      <tr class="audit-row${isSecurity ? ' table-warning' : ''}" data-audit-idx="${idx}" style="cursor:pointer;">
         <td class="text-nowrap small">${escapeHtml(formatAuditDate(row.created_at))}</td>
         <td>${escapeHtml(row.user_name || row.user_login || '—')}</td>
         <td><code>${escapeHtml(row.table_name || '')}</code></td>
-        <td><span class="badge bg-light text-dark border">${escapeHtml(row.operation || '')}</span></td>
+        <td><span class="badge ${badgeClass}">${escapeHtml(op)}</span></td>
         <td>${row.record_id ?? '—'}</td>
         <td class="small text-muted">${escapeHtml(row.ip_address || '')}</td>
-      </tr>`).join('')
+      </tr>`;
+    }).join('')
     : '<tr><td colspan="6" class="text-center text-muted py-4">Записей нет</td></tr>';
 
   tbody.querySelectorAll('.audit-row').forEach((row) => {
@@ -399,6 +406,10 @@ document.getElementById('formBootstrapRegion').addEventListener('submit', async 
 });
 
 document.getElementById('auditRefreshBtn')?.addEventListener('click', () => loadAuditLogs(auditPage));
+document.getElementById('auditSecurityOnly')?.addEventListener('change', (e) => {
+  auditSecurityOnly = !!e.target.checked;
+  loadAuditLogs(1);
+});
 document.getElementById('auditPrevBtn')?.addEventListener('click', () => {
   if (auditPage > 1) loadAuditLogs(auditPage - 1);
 });

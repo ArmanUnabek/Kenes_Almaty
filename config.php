@@ -21,6 +21,7 @@ require_once __DIR__ . '/src/Services/EmailService.php';
 require_once __DIR__ . '/src/Services/LetterService.php';
 require_once __DIR__ . '/src/Services/RegionService.php';
 require_once __DIR__ . '/src/Services/LetterPersistenceService.php';
+require_once __DIR__ . '/src/Services/SecurityAuditService.php';
 
 use App\Logger;
 use App\ErrorHandler;

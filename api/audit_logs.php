@@ -9,12 +9,19 @@ $db = getDBConnection();
 $page = max(1, (int)($_GET['page'] ?? 1));
 $limit = max(1, min(200, (int)($_GET['limit'] ?? 50)));
 $offset = ($page - 1) * $limit;
+$securityOnly = isset($_GET['security']) && $_GET['security'] === '1';
 
-$total = (int)$db->query("SELECT COUNT(*) FROM audit_logs")->fetchColumn();
+$where = '';
+if ($securityOnly) {
+    $where = "WHERE al.operation IN ('EXPORT', 'DOWNLOAD')";
+}
+
+$total = (int)$db->query("SELECT COUNT(*) FROM audit_logs al $where")->fetchColumn();
 $stmt = $db->prepare("
     SELECT al.*, u.full_name AS user_name, u.username AS user_login
     FROM audit_logs al
     LEFT JOIN users u ON al.user_id = u.id
+    $where
     ORDER BY al.id DESC
     LIMIT ? OFFSET ?
 ");
@@ -31,4 +38,3 @@ echo json_encode([
         'pages' => (int)ceil($total / max(1, $limit))
     ]
 ], JSON_ENCODE_FLAGS);
-

@@ -110,6 +110,16 @@ function canDelete(): bool
     return isAdmin();
 }
 
+function canExport(): bool
+{
+    return isAdmin();
+}
+
+function requireExportAccess(): void
+{
+    requireRole(['admin']);
+}
+
 function getCurrentRegionId(): ?int
 {
     $user = getCurrentUser();
@@ -153,6 +163,7 @@ function enrichUserPayload(array $user): array
     $user['is_admin'] = ($role === 'admin');
     $user['can_write'] = in_array($role, ['admin', 'moderator'], true);
     $user['can_delete'] = ($role === 'admin');
+    $user['can_export'] = ($role === 'admin');
     $user['active_region_id'] = getActiveRegionId();
 
     $regionId = $user['region_id'] ?? getActiveRegionId();

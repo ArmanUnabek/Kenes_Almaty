@@ -49,45 +49,57 @@
   function showWarning(message) { showToast(message, 'warning'); }
   function showInfo(message) { showToast(message, 'info'); }
 
+  async function exportData(format) {
+    const allowed = window.canExport?.() || window.AppCore?.canExport?.();
+    if (!allowed) {
+      showError('Экспорт данных доступен только администратору');
+      return;
+    }
+    try {
+      showLoading('Подготовка экспорта...');
+      const resp = await fetch(`/api/export.php?format=${encodeURIComponent(format)}`);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `Ошибка экспорта (${resp.status})`);
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      let filename = `os_journal_${new Date().toISOString().slice(0, 10)}.${format}`;
+      const dispo = resp.headers.get('Content-Disposition');
+      if (dispo) {
+        const match = dispo.match(/filename="?([^";]+)"?/);
+        if (match) filename = match[1];
+      }
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      showSuccess('Экспорт выполнен. Операция записана в журнал аудита.');
+    } catch (err) {
+      console.error(err);
+      showError(err.message || 'Не удалось экспортировать данные');
+    } finally {
+      hideLoading();
+    }
+  }
+
   function exportJson() {
-    const blob = new Blob([JSON.stringify(window.store, null, 2)], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `os_journal_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportData('json');
   }
 
   function exportCsv() {
-    const store = window.store || { incoming: [], outgoing: [] };
-    const incHeader = ['Тип', 'РегНомер', 'Дата', 'Организация', 'Категория', 'Номер', 'Тема', 'Примечание'].join(',');
-    const incRows = (store.incoming || []).map((i) => [
-      'Входящее', `Вх.${i.seq}`, formatDateISOtoRus(i.date), sanitizeCsv(i.organization),
-      sanitizeCsv(i.category || 'KK'), sanitizeCsv(i.kkNumber), sanitizeCsv(i.subject || ''), sanitizeCsv(i.note || ''),
-    ].join(','));
-    const outHeader = ['Тип', 'Порядк№', 'Дата', 'Исходящий№', 'Организация', 'Категория', 'Связ.Входящее', 'Тема', 'Примечание'].join(',');
-    const outRows = (store.outgoing || []).map((o) => {
-      const inc = (store.incoming || []).find((i) => i.id === o.incomingRefId);
-      return [
-        'Исходящее', `Исх.${o.seq}`, formatDateISOtoRus(o.date), sanitizeCsv(o.outgoingNumber),
-        sanitizeCsv(inc?.organization || ''), sanitizeCsv(inc?.category || 'KK'),
-        sanitizeCsv(`Вх.${inc?.seq ?? '?'} ${inc?.kkNumber ?? ''}`), sanitizeCsv(o.subject || ''), sanitizeCsv(o.note || ''),
-      ].join(',');
-    });
-    const csv = [incHeader, ...incRows, '', outHeader, ...outRows].join('\n');
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `os_journal_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportData('csv');
   }
 
   async function importJson(ev) {
     const file = ev?.target?.files?.[0];
     if (!file) return;
+    if (!window.canExport?.() && !window.AppCore?.canExport?.()) {
+      showError('Импорт данных доступен только администратору');
+      if (ev?.target) ev.target.value = '';
+      return;
+    }
     if (!window.confirm('Импорт добавит письма через API. Продолжить?')) {
       ev.target.value = '';
       return;
