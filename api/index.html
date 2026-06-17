@@ -50,6 +50,9 @@
             <button class="nav-link" id="tab-events" data-bs-toggle="tab" data-bs-target="#pane-events" type="button" role="tab">
                 <i class="bi bi-calendar-event"></i> Мероприятия
             </button>
+            <a class="nav-link d-none" id="navAdminPanel" href="/admin/">
+                <i class="bi bi-shield-lock"></i> Админ-панель
+            </a>
         </nav>
 
         <div class="sidebar-user">
@@ -72,6 +75,7 @@
             </div>
             <div class="page-context-actions" id="pageContextActions"></div>
             <div class="topbar-actions">
+                <select class="form-select form-select-sm d-none" id="adminRegionSelect" style="width:auto;max-width:200px;" title="Регион"></select>
                 <span class="notify-btn-wrap">
                     <button class="btn btn-outline-secondary btn-sm" id="notifyBtn" title="Уведомления">
                         <i class="bi bi-bell"></i> <span class="btn-label">Уведомления</span>
@@ -589,6 +593,56 @@
 
             <!-- Вкладка Члены ОС -->
             <div class="tab-pane fade" id="pane-members" role="tabpanel">
+                <div class="card form-card mb-3 d-none" id="memberFormCard">
+                    <div class="card-header form-card-header" data-bs-toggle="collapse" data-bs-target="#collapseMemberForm" aria-expanded="false">
+                        <span><i class="bi bi-person-plus"></i> <span id="memberFormTitle">Добавить члена ОС</span></span>
+                        <i class="bi bi-chevron-down form-card-chevron"></i>
+                    </div>
+                    <div class="collapse" id="collapseMemberForm">
+                    <div class="card-body">
+                        <form id="formMember" class="row g-3">
+                            <input type="hidden" id="memberEditId" />
+                            <div class="col-md-6">
+                                <label class="form-label">ФИО</label>
+                                <input type="text" class="form-control" id="memberFullName" required />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Комиссия</label>
+                                <select class="form-select" id="memberCommissionId">
+                                    <option value="">— не назначена —</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Должность</label>
+                                <input type="text" class="form-control" id="memberPosition" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Организация</label>
+                                <input type="text" class="form-control" id="memberOrganization" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Телефон</label>
+                                <input type="text" class="form-control" id="memberPhone" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Email</label>
+                                <input type="email" class="form-control" id="memberEmail" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Статус</label>
+                                <select class="form-select" id="memberStatus">
+                                    <option value="active">Активен</option>
+                                    <option value="inactive">Неактивен</option>
+                                </select>
+                            </div>
+                            <div class="col-12 d-flex gap-2">
+                                <button class="btn btn-primary" type="submit">Сохранить</button>
+                                <button class="btn btn-outline-secondary" type="button" id="memberFormReset">Очистить</button>
+                            </div>
+                        </form>
+                    </div>
+                    </div>
+                </div>
                 <div class="toolbar-panel mb-3">
                     <label class="toolbar-label" for="filterMembersCommission">Комиссия</label>
                     <select class="form-select form-select-sm" id="filterMembersCommission">
@@ -602,6 +656,35 @@
 
             <!-- Вкладка Комиссии -->
             <div class="tab-pane fade" id="pane-commissions" role="tabpanel">
+                <div class="card form-card mb-3 d-none" id="commissionFormCard">
+                    <div class="card-header form-card-header" data-bs-toggle="collapse" data-bs-target="#collapseCommissionForm" aria-expanded="false">
+                        <span><i class="bi bi-building-add"></i> <span id="commissionFormTitle">Добавить комиссию</span></span>
+                        <i class="bi bi-chevron-down form-card-chevron"></i>
+                    </div>
+                    <div class="collapse" id="collapseCommissionForm">
+                    <div class="card-body">
+                        <form id="formCommission" class="row g-3">
+                            <input type="hidden" id="commissionEditId" />
+                            <div class="col-md-8">
+                                <label class="form-label">Название</label>
+                                <input type="text" class="form-control" id="commissionName" required />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Порядок</label>
+                                <input type="number" class="form-control" id="commissionSortOrder" value="0" min="0" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Цвет</label>
+                                <input type="color" class="form-control form-control-color w-100" id="commissionColor" value="#0d6efd" />
+                            </div>
+                            <div class="col-12 d-flex gap-2">
+                                <button class="btn btn-primary" type="submit">Сохранить</button>
+                                <button class="btn btn-outline-secondary" type="button" id="commissionFormReset">Очистить</button>
+                            </div>
+                        </form>
+                    </div>
+                    </div>
+                </div>
                 <div class="row g-3" id="commissionsGrid">
                                     <!-- Комиссии будут загружены динамически -->
                 </div>
@@ -816,7 +899,7 @@
     <script src="../csrf-handler.js?v=4"></script>
     <script src="js/utils.js?v=1"></script>
     <script src="js/session.js?v=1"></script>
-    <script src="app.js?v=12"></script>
+    <script src="app.js?v=13"></script>
     <script>
         // Проверка сессии и показ пользователя
         document.addEventListener('DOMContentLoaded', async () => {
@@ -826,9 +909,43 @@
                 const data = await resp.json();
                 if (!data.authenticated) throw new Error('unauth');
                 const user = data.user;
+                window.sessionUser = user;
+                window.allRegions = data.regions || [];
                 const displayName = user.full_name || user.username || 'Пользователь';
                 document.getElementById('userName').textContent = displayName;
-                document.getElementById('userRegion').textContent = user.region?.name_ru ? ('Регион: ' + user.region.name_ru) : (user.role === 'admin' ? 'Администратор' : 'Пользователь');
+                const regionLabel = user.region?.name_ru
+                    ? ('Регион: ' + user.region.name_ru)
+                    : (user.is_admin ? 'Супер-админ' : 'Пользователь');
+                document.getElementById('userRegion').textContent = regionLabel;
+
+                if (user.is_admin) {
+                    const navAdmin = document.getElementById('navAdminPanel');
+                    if (navAdmin) navAdmin.classList.remove('d-none');
+                    const regionSelect = document.getElementById('adminRegionSelect');
+                    if (regionSelect && window.allRegions.length) {
+                        regionSelect.classList.remove('d-none');
+                        regionSelect.innerHTML = window.allRegions
+                            .filter((r) => r.is_active == 1 || r.is_active === true)
+                            .map((r) => `<option value="${r.id}"${Number(user.active_region_id) === Number(r.id) ? ' selected' : ''}>${r.name_ru}</option>`)
+                            .join('');
+                        regionSelect.addEventListener('change', async () => {
+                            try {
+                                await fetch('auth.php?action=switch_region', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                    body: new URLSearchParams({ action: 'switch_region', region_id: regionSelect.value }),
+                                });
+                                window.location.reload();
+                            } catch (err) {
+                                console.error(err);
+                            }
+                        });
+                    }
+                }
+
+                if (typeof applyPermissionsUI === 'function') {
+                    applyPermissionsUI(user);
+                }
                 const avatar = document.getElementById('sidebarAvatar');
                 if (avatar) {
                     const parts = displayName.trim().split(/\s+/);

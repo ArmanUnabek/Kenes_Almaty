@@ -1,15 +1,13 @@
 <?php
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../auth_middleware.php';
 require_once __DIR__ . '/../src/Middleware/CsrfMiddleware.php';
 
 use App\Middleware\CsrfMiddleware;
 
-configureSessionCookie();
-session_start();
-
 header('Content-Type: application/json; charset=utf-8');
 
-$action = $_GET['action'] ?? 'check';
+$action = $_GET['action'] ?? $_POST['action'] ?? 'check';
 
 try {
     $db = getDBConnection();
@@ -25,6 +23,10 @@ try {
 
         case 'csrf':
             handleCsrf($db);
+            break;
+
+        case 'switch_region':
+            handleSwitchRegion($db);
             break;
 
         case 'check':
@@ -46,21 +48,17 @@ function handleLogin($db) {
 
     if (empty($username) || empty($password)) {
         http_response_code(400);
-        echo json_encode([
-            'error' => 'Логин и пароль обязательны'
-        ], JSON_ENCODE_FLAGS);
+        echo json_encode(['error' => 'Логин и пароль обязательны'], JSON_ENCODE_FLAGS);
         return;
     }
 
-    $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, password_hash FROM users WHERE username = ?');
+    $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, password_hash FROM users WHERE username = ? AND is_active = TRUE');
     $stmt->execute([$username]);
     $user = $stmt->fetch();
 
     if (!$user || !password_verify($password, $user['password_hash'])) {
         http_response_code(401);
-        echo json_encode([
-            'error' => 'Неверный логин или пароль'
-        ], JSON_ENCODE_FLAGS);
+        echo json_encode(['error' => 'Неверный логин или пароль'], JSON_ENCODE_FLAGS);
         return;
     }
 
@@ -72,21 +70,23 @@ function handleLogin($db) {
     $_SESSION['region_id'] = $user['region_id'];
     $_SESSION['last_activity_at'] = time();
 
+    if (normalizeRole($user['role'] ?? '') === 'admin') {
+        $defaultRegion = $user['region_id'] ? (int)$user['region_id'] : 1;
+        $_SESSION['active_region_id'] = $defaultRegion;
+    }
+
     $now = date('Y-m-d H:i:s');
     $db->prepare('UPDATE users SET last_login = ? WHERE id = ?')->execute([$now, $user['id']]);
 
     $db->prepare('INSERT INTO activity_logs (user_id, action, entity_type, ip_address) VALUES (?, ?, ?, ?)')
         ->execute([$user['id'], 'login', 'user', $_SERVER['REMOTE_ADDR'] ?? '']);
 
+    unset($user['password_hash']);
+    $user = enrichUserPayload($user);
+
     echo json_encode([
         'authenticated' => true,
-        'user' => [
-            'id' => $user['id'],
-            'username' => $user['username'],
-            'full_name' => $user['full_name'],
-            'role' => $user['role'],
-            'region_id' => $user['region_id']
-        ]
+        'user' => $user
     ], JSON_ENCODE_FLAGS);
 }
 
@@ -111,12 +111,47 @@ function handleCsrf($db) {
     ], JSON_ENCODE_FLAGS);
 }
 
+function handleSwitchRegion($db) {
+    checkAuth();
+    if (!isAdmin()) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Только супер-админ может переключать регион'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
+    $regionId = (int)($_POST['region_id'] ?? $_GET['region_id'] ?? 0);
+    if ($regionId <= 0) {
+        http_response_code(400);
+        echo json_encode(['error' => 'region_id обязателен'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
+    $stmt = $db->prepare('SELECT id FROM regions WHERE id = ? AND is_active = TRUE');
+    $stmt->execute([$regionId]);
+    if (!$stmt->fetch()) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Регион не найден или неактивен'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
+    setActiveRegionId($regionId);
+    $user = getCurrentUser();
+    if ($user) {
+        $user = enrichUserPayload($user);
+    }
+
+    echo json_encode([
+        'success' => true,
+        'active_region_id' => $regionId,
+        'user' => $user,
+        'message' => 'Регион переключён'
+    ], JSON_ENCODE_FLAGS);
+}
+
 function handleCheck($db) {
     if (!isset($_SESSION['user_id'])) {
         http_response_code(401);
-        echo json_encode([
-            'authenticated' => false
-        ], JSON_ENCODE_FLAGS);
+        echo json_encode(['authenticated' => false], JSON_ENCODE_FLAGS);
         return;
     }
 
@@ -132,7 +167,7 @@ function handleCheck($db) {
         return;
     }
 
-    $stmt = $db->prepare('SELECT id, username, full_name, role, region_id FROM users WHERE id = ?');
+    $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, email FROM users WHERE id = ? AND is_active = TRUE');
     $stmt->execute([$_SESSION['user_id']]);
     $user = $stmt->fetch();
 
@@ -140,16 +175,22 @@ function handleCheck($db) {
         $_SESSION = [];
         session_destroy();
         http_response_code(401);
-        echo json_encode([
-            'authenticated' => false
-        ], JSON_ENCODE_FLAGS);
+        echo json_encode(['authenticated' => false], JSON_ENCODE_FLAGS);
         return;
     }
 
     $_SESSION['last_activity_at'] = time();
+    $user = enrichUserPayload($user);
 
-    echo json_encode([
+    $payload = [
         'authenticated' => true,
-        'user' => $user
-    ], JSON_ENCODE_FLAGS);
+        'user' => $user,
+    ];
+
+    if ($user['is_admin']) {
+        $regions = $db->query('SELECT id, name_kz, name_ru, code, is_active FROM regions ORDER BY name_ru')->fetchAll();
+        $payload['regions'] = $regions;
+    }
+
+    echo json_encode($payload, JSON_ENCODE_FLAGS);
 }

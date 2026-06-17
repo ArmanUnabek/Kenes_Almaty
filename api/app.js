@@ -3,7 +3,171 @@ const store = {
   incoming: [],
   outgoing: []
 };
+let sessionUser = null;
 let membersCatalog = [];
+
+function canWrite() {
+  return !!(sessionUser?.can_write);
+}
+
+function canDelete() {
+  return !!(sessionUser?.can_delete);
+}
+
+function applyPermissionsUI(user) {
+  sessionUser = user || sessionUser;
+  const show = canWrite();
+  document.getElementById('memberFormCard')?.classList.toggle('d-none', !show);
+  document.getElementById('commissionFormCard')?.classList.toggle('d-none', !show);
+}
+
+async function saveMember(payload, isEdit) {
+  const url = `${API_BASE}/members.php`;
+  const resp = await fetch(url, {
+    method: isEdit ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.error || 'Ошибка сохранения');
+  return data;
+}
+
+async function saveCommission(payload, isEdit) {
+  const resp = await fetch(`${API_BASE}/commissions.php`, {
+    method: isEdit ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.error || 'Ошибка сохранения');
+  return data;
+}
+
+function resetMemberForm() {
+  const form = document.getElementById('formMember');
+  if (!form) return;
+  form.reset();
+  document.getElementById('memberEditId').value = '';
+  document.getElementById('memberFormTitle').textContent = 'Добавить члена ОС';
+  document.getElementById('memberStatus').value = 'active';
+}
+
+function resetCommissionForm() {
+  const form = document.getElementById('formCommission');
+  if (!form) return;
+  form.reset();
+  document.getElementById('commissionEditId').value = '';
+  document.getElementById('commissionFormTitle').textContent = 'Добавить комиссию';
+  document.getElementById('commissionColor').value = '#0d6efd';
+  document.getElementById('commissionSortOrder').value = '0';
+}
+
+function populateMemberCommissionSelect() {
+  const select = document.getElementById('memberCommissionId');
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = '<option value="">— не назначена —</option>' +
+    commissionsCatalog.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  if (current) select.value = current;
+}
+
+function editMember(member) {
+  if (!canWrite()) return;
+  document.getElementById('memberEditId').value = member.id;
+  document.getElementById('memberFullName').value = member.full_name || '';
+  document.getElementById('memberCommissionId').value = member.commission_id || '';
+  document.getElementById('memberPosition').value = member.position || '';
+  document.getElementById('memberOrganization').value = member.organization || '';
+  document.getElementById('memberPhone').value = member.phone || '';
+  document.getElementById('memberEmail').value = member.email || '';
+  document.getElementById('memberStatus').value = member.status || 'active';
+  document.getElementById('memberFormTitle').textContent = 'Редактировать члена ОС';
+  const collapse = document.getElementById('collapseMemberForm');
+  if (collapse && !collapse.classList.contains('show')) {
+    new bootstrap.Collapse(collapse, { toggle: true });
+  }
+}
+
+function editCommission(commission) {
+  if (!canWrite()) return;
+  document.getElementById('commissionEditId').value = commission.id;
+  document.getElementById('commissionName').value = commission.name || '';
+  document.getElementById('commissionSortOrder').value = commission.sort_order || 0;
+  document.getElementById('commissionColor').value = commission.color || '#0d6efd';
+  document.getElementById('commissionFormTitle').textContent = 'Редактировать комиссию';
+  const collapse = document.getElementById('collapseCommissionForm');
+  if (collapse && !collapse.classList.contains('show')) {
+    new bootstrap.Collapse(collapse, { toggle: true });
+  }
+}
+
+function bindMembersCommissionsForms() {
+  const formMember = document.getElementById('formMember');
+  if (formMember) {
+    formMember.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const editId = document.getElementById('memberEditId').value;
+      const payload = {
+        full_name: document.getElementById('memberFullName').value.trim(),
+        commission_id: document.getElementById('memberCommissionId').value || null,
+        position: document.getElementById('memberPosition').value.trim(),
+        organization: document.getElementById('memberOrganization').value.trim(),
+        phone: document.getElementById('memberPhone').value.trim(),
+        email: document.getElementById('memberEmail').value.trim(),
+        status: document.getElementById('memberStatus').value,
+      };
+      if (editId) payload.id = Number(editId);
+      try {
+        await saveMember(payload, !!editId);
+        resetMemberForm();
+        await loadMembersCatalog();
+        await loadCommissionsCatalog();
+        populateMemberSelects();
+        populateMembersCommissionFilter();
+        populateMemberCommissionSelect();
+        renderMembersGrid();
+        renderCommissionsGrid();
+        if (window.showSuccess) showSuccess(editId ? 'Член ОС обновлён' : 'Член ОС добавлен');
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  }
+  document.getElementById('memberFormReset')?.addEventListener('click', resetMemberForm);
+
+  const formCommission = document.getElementById('formCommission');
+  if (formCommission) {
+    formCommission.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const editId = document.getElementById('commissionEditId').value;
+      const payload = {
+        name: document.getElementById('commissionName').value.trim(),
+        sort_order: Number(document.getElementById('commissionSortOrder').value || 0),
+        color: document.getElementById('commissionColor').value,
+      };
+      if (editId) payload.id = Number(editId);
+      try {
+        await saveCommission(payload, !!editId);
+        resetCommissionForm();
+        await loadCommissionsCatalog();
+        await loadMembersCatalog();
+        populateMemberSelects();
+        populateMembersCommissionFilter();
+        populateMemberCommissionSelect();
+        renderMembersGrid();
+        renderCommissionsGrid();
+        if (window.showSuccess) showSuccess(editId ? 'Комиссия обновлена' : 'Комиссия добавлена');
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  }
+  document.getElementById('commissionFormReset')?.addEventListener('click', resetCommissionForm);
+}
+
+window.applyPermissionsUI = applyPermissionsUI;
+
 let commissionsCatalog = [];
 const letterDetailsCache = {
   incoming: new Map(),
@@ -787,6 +951,9 @@ async function initializeApp() {
     await loadCommissionsCatalog();
     populateMemberSelects();
     populateMembersCommissionFilter();
+    populateMemberCommissionSelect();
+    bindMembersCommissionsForms();
+    if (sessionUser) applyPermissionsUI(sessionUser);
     renderMembersGrid();
     renderCommissionsGrid();
     initAppNavigation();
@@ -1265,11 +1432,21 @@ function renderMembersGrid() {
             ${commissionBadge}
             ${member.organization ? `<p class="small text-muted mt-2 mb-0">${escapeHtml(member.organization)}</p>` : ''}
             ${member.phone ? `<p class="small text-muted mb-0">${escapeHtml(member.phone)}</p>` : ''}
+            ${canWrite() ? `<div class="mt-3"><button type="button" class="btn btn-sm btn-outline-primary" data-edit-member="${member.id}"><i class="bi bi-pencil"></i> Изменить</button></div>` : ''}
           </div>
         </div>
       </div>
     `;
   }).join('');
+
+  if (canWrite()) {
+    grid.querySelectorAll('[data-edit-member]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const member = membersCatalog.find((m) => String(m.id) === btn.dataset.editMember);
+        if (member) editMember(member);
+      });
+    });
+  }
 }
 
 function renderCommissionsGrid() {
@@ -1301,11 +1478,21 @@ function renderCommissionsGrid() {
             </div>
             <h5 class="commission-title">${escapeHtml(commission.name || 'Комиссия')}</h5>
             <p class="text-muted small mb-0">${escapeHtml(commission.description || 'Комиссия Общественного Совета')}</p>
+            ${canWrite() ? `<div class="mt-3"><button type="button" class="btn btn-sm btn-outline-primary" data-edit-commission="${commission.id}"><i class="bi bi-pencil"></i> Изменить</button></div>` : ''}
           </div>
         </div>
       </div>
     `;
   }).join('');
+
+  if (canWrite()) {
+    grid.querySelectorAll('[data-edit-commission]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const commission = commissionsCatalog.find((c) => String(c.id) === btn.dataset.editCommission);
+        if (commission) editCommission(commission);
+      });
+    });
+  }
 }
 
 function getPendingLettersSummary() {

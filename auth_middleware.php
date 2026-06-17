@@ -100,14 +100,71 @@ function isManager(): bool
     return (bool)$user && in_array(normalizeRole($user['role'] ?? ''), ['admin', 'moderator'], true);
 }
 
+function canWrite(): bool
+{
+    return isManager();
+}
+
+function canDelete(): bool
+{
+    return isAdmin();
+}
+
 function getCurrentRegionId(): ?int
 {
     $user = getCurrentUser();
     if (!$user) {
         return null;
     }
+
+    if (isAdmin()) {
+        if (isset($_SESSION['active_region_id']) && $_SESSION['active_region_id'] !== '' && $_SESSION['active_region_id'] !== null) {
+            return (int)$_SESSION['active_region_id'];
+        }
+        return null;
+    }
+
     $regionId = $user['region_id'] ?? null;
     return $regionId ? (int)$regionId : null;
+}
+
+function setActiveRegionId(?int $regionId): void
+{
+    if ($regionId === null || $regionId <= 0) {
+        unset($_SESSION['active_region_id']);
+        return;
+    }
+    if (!canAccessRegion($regionId)) {
+        denyWithStatus(403, 'Доступ к этому региону запрещён');
+    }
+    $_SESSION['active_region_id'] = $regionId;
+}
+
+function getActiveRegionId(): ?int
+{
+    return isset($_SESSION['active_region_id']) ? (int)$_SESSION['active_region_id'] : null;
+}
+
+function enrichUserPayload(array $user): array
+{
+    global $db;
+    $role = normalizeRole($user['role'] ?? 'viewer');
+    $user['role'] = $role;
+    $user['is_admin'] = ($role === 'admin');
+    $user['can_write'] = in_array($role, ['admin', 'moderator'], true);
+    $user['can_delete'] = ($role === 'admin');
+    $user['active_region_id'] = getActiveRegionId();
+
+    $regionId = $user['region_id'] ?? getActiveRegionId();
+    if ($regionId) {
+        $stmt = $db->prepare('SELECT id, name_kz, name_ru, code, is_active FROM regions WHERE id = ?');
+        $stmt->execute([(int)$regionId]);
+        $user['region'] = $stmt->fetch() ?: null;
+    } else {
+        $user['region'] = null;
+    }
+
+    return $user;
 }
 
 function canAccessRegion($regionId): bool

@@ -80,17 +80,27 @@ class MembersController extends ApiController
         $this->json($result['items']);
     }
 
-    private function handleCreate(?int $regionId): void
+    private function buildMemberRules(array $data): array
     {
-        $data = $this->getJsonInput() ?? [];
-        $this->validateInput($data, [
+        $rules = [
             'full_name' => 'required|string|min:2|max:255',
-            'email' => 'email|max:255',
-            'phone' => 'phone|max:50',
             'position' => 'string|max:255',
             'organization' => 'string|max:255',
             'status' => 'in:active,inactive',
-        ]);
+        ];
+        if (!empty($data['email'])) {
+            $rules['email'] = 'email|max:255';
+        }
+        if (!empty($data['phone'])) {
+            $rules['phone'] = 'phone|max:50';
+        }
+        return $rules;
+    }
+
+    private function handleCreate(?int $regionId): void
+    {
+        $data = $this->getJsonInput() ?? [];
+        $this->validateInput($data, $this->buildMemberRules($data));
 
         $targetRegion = (int)($data['region_id'] ?? $regionId ?? 1);
         $this->requireRegionAccess($targetRegion);
@@ -114,14 +124,7 @@ class MembersController extends ApiController
             $this->error('Член ОС не найден', 404);
         }
 
-        $this->validateInput($data, [
-            'full_name' => 'required|string|min:2|max:255',
-            'email' => 'email|max:255',
-            'phone' => 'phone|max:50',
-            'position' => 'string|max:255',
-            'organization' => 'string|max:255',
-            'status' => 'in:active,inactive',
-        ]);
+        $this->validateInput($data, $this->buildMemberRules($data));
 
         $this->repo->update($id, $data, $regionId);
         $this->logAction('os_members', $id, 'UPDATE', $existing, $data);
