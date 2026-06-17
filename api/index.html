@@ -30,29 +30,32 @@
 
         <nav class="sidebar-nav" id="sidebarNav" role="tablist">
             <button class="nav-link active" id="tab-dashboard" data-bs-toggle="tab" data-bs-target="#pane-dashboard" type="button" role="tab">
-                <i class="bi bi-bar-chart"></i> Статистика
+                <i class="bi bi-bar-chart"></i> <span class="sidebar-label" data-i18n="nav.dashboard">Статистика</span>
             </button>
             <button class="nav-link" id="tab-incoming" data-bs-toggle="tab" data-bs-target="#pane-incoming" type="button" role="tab">
-                <i class="bi bi-inbox"></i> Входящий журнал
+                <i class="bi bi-inbox"></i> <span class="sidebar-label" data-i18n="nav.incoming">Входящий журнал</span>
             </button>
             <button class="nav-link" id="tab-outgoing" data-bs-toggle="tab" data-bs-target="#pane-outgoing" type="button" role="tab">
-                <i class="bi bi-send"></i> Исходящий журнал
+                <i class="bi bi-send"></i> <span class="sidebar-label" data-i18n="nav.outgoing">Исходящий журнал</span>
             </button>
             <button class="nav-link" id="tab-members" data-bs-toggle="tab" data-bs-target="#pane-members" type="button" role="tab">
-                <i class="bi bi-people"></i> Члены ОС
+                <i class="bi bi-people"></i> <span class="sidebar-label" data-i18n="nav.members">Члены ОС</span>
             </button>
             <button class="nav-link" id="tab-commissions" data-bs-toggle="tab" data-bs-target="#pane-commissions" type="button" role="tab">
-                <i class="bi bi-building"></i> Комиссии
+                <i class="bi bi-building"></i> <span class="sidebar-label" data-i18n="nav.commissions">Комиссии</span>
             </button>
             <button class="nav-link" id="tab-kpi" data-bs-toggle="tab" data-bs-target="#pane-kpi" type="button" role="tab">
-                <i class="bi bi-graph-up"></i> KPI
+                <i class="bi bi-graph-up"></i> <span class="sidebar-label" data-i18n="nav.kpi">KPI</span>
             </button>
             <button class="nav-link" id="tab-events" data-bs-toggle="tab" data-bs-target="#pane-events" type="button" role="tab">
-                <i class="bi bi-calendar-event"></i> Мероприятия
+                <i class="bi bi-calendar-event"></i> <span class="sidebar-label" data-i18n="nav.events">Мероприятия</span>
             </button>
             <a class="nav-link d-none" id="navAdminPanel" href="/admin/">
-                <i class="bi bi-shield-lock"></i> Админ-панель
+                <i class="bi bi-shield-lock"></i> <span class="sidebar-label" data-i18n="nav.admin">Админ-панель</span>
             </a>
+            <button class="nav-link border-0 bg-transparent text-start w-100" id="langToggleBtn" type="button" title="Тіл / Язык">
+                <i class="bi bi-translate"></i> <span class="sidebar-label">Қазақша</span>
+            </button>
         </nav>
 
         <div class="sidebar-user">
@@ -76,12 +79,12 @@
             <div class="page-context-actions" id="pageContextActions"></div>
             <div class="topbar-actions">
                 <button class="btn btn-outline-secondary btn-sm" id="globalSearchBtn" title="Поиск (Ctrl+K)">
-                    <i class="bi bi-search"></i> <span class="btn-label">Поиск</span>
+                    <i class="bi bi-search"></i> <span class="btn-label" data-i18n="topbar.search">Поиск</span>
                 </button>
                 <select class="form-select form-select-sm d-none" id="adminRegionSelect" style="width:auto;max-width:200px;" title="Регион"></select>
                 <span class="notify-btn-wrap">
                     <button class="btn btn-outline-secondary btn-sm" id="notifyBtn" title="Уведомления">
-                        <i class="bi bi-bell"></i> <span class="btn-label">Уведомления</span>
+                        <i class="bi bi-bell"></i> <span class="btn-label" data-i18n="topbar.notify">Уведомления</span>
                     </button>
                     <span class="notify-badge d-none" id="notifyBadge">0</span>
                 </span>
@@ -894,15 +897,24 @@
 
     <!-- Модальное окно Уведомления/Данные -->
     <div class="modal fade" id="notifyModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-md modal-dialog-centered">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Уведомления</h5>
+                    <h5 class="modal-title" data-i18n="notify.title">Уведомления</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
                 </div>
                 <div class="modal-body">
-                    <div id="notifyContent" class="small">
-                        Загрузка данных...
+                    <ul class="nav nav-tabs mb-3" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="notify-tab-deadlines" data-bs-toggle="tab" data-bs-target="#notifyDeadlinesPane" type="button" role="tab" data-i18n="notify.tab.deadlines">Сроки</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="notify-tab-email" data-bs-toggle="tab" data-bs-target="#notifyEmailPane" type="button" role="tab" data-i18n="notify.tab.email">Email</button>
+                        </li>
+                    </ul>
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="notifyDeadlinesPane" role="tabpanel"></div>
+                        <div class="tab-pane fade" id="notifyEmailPane" role="tabpanel"></div>
                     </div>
                 </div>
             </div>
@@ -924,10 +936,14 @@
     </script>
     <script src="../csrf-handler.js?v=4"></script>
     <script src="js/utils.js?v=1"></script>
+    <script src="js/i18n.js?v=1"></script>
+    <script src="js/core.js?v=1"></script>
+    <script src="js/members-ui.js?v=1"></script>
     <script src="js/session.js?v=1"></script>
-    <script src="app.js?v=14"></script>
+    <script src="app.js?v=15"></script>
     <script src="js/search.js?v=1"></script>
     <script src="js/dashboard-enhanced.js?v=1"></script>
+    <script src="js/notifications-ui.js?v=1"></script>
     <script>
         // Проверка сессии и показ пользователя
         document.addEventListener('DOMContentLoaded', async () => {
@@ -974,6 +990,7 @@
                 if (typeof applyPermissionsUI === 'function') {
                     applyPermissionsUI(user);
                 }
+                if (window.AppI18n?.apply) window.AppI18n.apply();
                 const avatar = document.getElementById('sidebarAvatar');
                 if (avatar) {
                     const parts = displayName.trim().split(/\s+/);
@@ -1003,83 +1020,6 @@
             }
         });
 
-        // Уведомления: собираем краткую сводку из KPI
-        document.getElementById('notifyBtn')?.addEventListener('click', async () => {
-            const modal = new bootstrap.Modal(document.getElementById('notifyModal'));
-            const box = document.getElementById('notifyContent');
-            box.textContent = 'Загрузка данных...';
-            modal.show();
-            try {
-                // Обновим данные, если нужно
-                if (!window.store) { window.store = { incoming: [], outgoing: [] }; }
-                // Список входящих без ответа
-                const today = new Date();
-                const pending = (window.store.incoming || []).filter(i => !i.linkedOutgoingId).map(i => {
-                    const due = addWorkingDays(i.date, 15);
-                    const msLeft = due.getTime() - today.getTime();
-                    const daysLeft = Math.ceil(msLeft / (1000*60*60*24));
-                    let status = 'normal';
-                    if (daysLeft < 0) status = 'overdue';
-                    else {
-                        const warnFrom = subtractWorkingDays(due, 3);
-                        if (today >= warnFrom && today <= due) status = 'warning';
-                    }
-                    const resp = (i.members || []).map(m => m.full_name).join(', ') || 'не назначены';
-                    return { 
-                        id: i.id, seq: i.seq, date: i.date, kk: i.kkNumber || '',
-                        org: i.organization || '', due, daysLeft, status, responsible: resp
-                    };
-                }).sort((a,b) => a.due - b.due).slice(0, 20);
-
-                const overdueCount = pending.filter(p => p.status === 'overdue').length;
-                const warnCount = pending.filter(p => p.status === 'warning').length;
-
-                const rows = pending.map(p => {
-                    const badgeClass = p.status === 'overdue' ? 'badge bg-danger' :
-                                       p.status === 'warning' ? 'badge bg-warning text-dark' :
-                                       'badge bg-secondary';
-                    const daysTxt = p.daysLeft < 0 ? `-${Math.abs(p.daysLeft)}` : `${p.daysLeft}`;
-                    return `
-                        <tr>
-                            <td class="text-nowrap">Вх.${p.seq}</td>
-                            <td>${new Date(p.date).toLocaleDateString('ru-RU')}</td>
-                            <td>${p.org ? `<span class="text-nowrap">${p.org}</span>` : '—'}</td>
-                            <td><span class="${badgeClass}">${new Date(p.due).toLocaleDateString('ru-RU')}</span></td>
-                            <td class="text-end">${daysTxt}</td>
-                            <td>${p.responsible}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                box.innerHTML = `
-                    <div class="modal-notify-stats">
-                        <span class="stat-chip stat-chip--neutral">Без ответа: ${pending.length}</span>
-                        <span class="stat-chip stat-chip--danger">Просрочено: ${overdueCount}</span>
-                        <span class="stat-chip stat-chip--warning">Скоро срок: ${warnCount}</span>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Рег. №</th>
-                                    <th>Дата</th>
-                                    <th>От кого</th>
-                                    <th>Срок ответа</th>
-                                    <th class="text-end">Осталось (дн.)</th>
-                                    <th>Ответственные</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${rows || '<tr><td colspan="6" class="text-center text-muted">Нет элементов</td></tr>'}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="small text-muted mt-2">Срок рассчитывается как 15 рабочих дней от даты входящего. Ответственные берутся из карточки письма.</div>
-                `;
-            } catch (err) {
-                box.textContent = 'Не удалось получить данные.';
-            }
-        });
     </script>
 </body>
 </html>
