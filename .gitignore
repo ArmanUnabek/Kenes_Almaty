@@ -39,6 +39,8 @@ database_sqlite.sql
 .env.local
 .env*.local
 composer.lock
+vendor/
+.phpunit.cache/
 
 # Node (если используется)
 node_modules/

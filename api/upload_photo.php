@@ -43,7 +43,7 @@ class PhotoUploadController extends ApiController
             }
             $member_id = (int)$member_id;
 
-            $member = $this->memberRepo->getById($member_id);
+            $member = $this->memberRepo->getById($member_id, $this->getCurrentRegionId());
             if (!$member) {
                 $this->error('Член ОС не найден', 404);
             }

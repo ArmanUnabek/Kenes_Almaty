@@ -1,15 +1,24 @@
 <?php
 define('APP_ROOT', __DIR__);
 
+if (!defined('JSON_ENCODE_FLAGS')) {
+    define('JSON_ENCODE_FLAGS', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+if (!defined('SESSION_IDLE_TIMEOUT_SECONDS')) {
+    define('SESSION_IDLE_TIMEOUT_SECONDS', 1800);
+}
+
 // Автозагрузка классов
 require_once __DIR__ . '/src/Logger.php';
 require_once __DIR__ . '/src/ErrorHandler.php';
+require_once __DIR__ . '/src/Validator.php';
 require_once __DIR__ . '/src/Middleware/CsrfMiddleware.php';
 require_once __DIR__ . '/src/Middleware/RateLimiter.php';
 require_once __DIR__ . '/src/Services/AuditLogger.php';
 require_once __DIR__ . '/src/Services/FileCache.php';
 require_once __DIR__ . '/src/Services/FileStorage.php';
 require_once __DIR__ . '/src/Services/EmailService.php';
+require_once __DIR__ . '/src/Services/LetterService.php';
 
 use App\Logger;
 use App\ErrorHandler;
@@ -68,7 +77,7 @@ function pusherTrigger(string $channel, string $event, array $payload = []): boo
         return false;
     }
 
-    $dataString = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $dataString = json_encode($payload, JSON_ENCODE_FLAGS);
     if ($dataString === false) {
         $dataString = '{}';
     }
@@ -77,7 +86,7 @@ function pusherTrigger(string $channel, string $event, array $payload = []): boo
         'name' => $event,
         'channel' => $channel,
         'data' => $dataString,
-    ], JSON_UNESCAPED_UNICODE);
+    ], JSON_ENCODE_FLAGS);
 
     $bodyMd5 = md5($body);
     $timestamp = time();

@@ -8,19 +8,24 @@ use App\Services\AuditLogger;
 abstract class ApiController
 {
     protected \PDO $db;
-    protected int $JSON_FLAGS = \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES;
+    protected int $JSON_FLAGS = JSON_ENCODE_FLAGS;
     protected ?array $currentUser = null;
 
     public function __construct()
     {
-        header('Content-Type: application/json; charset=utf-8');
-        $this->db = getDBConnection();
-        CsrfMiddleware::init();
-        
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+        }
+
+        if (function_exists('configureSessionCookie')) {
+            configureSessionCookie();
+        }
         if (session_status() === \PHP_SESSION_NONE) {
             session_start();
         }
-        
+
+        $this->db = getDBConnection();
+        CsrfMiddleware::init();
         $this->currentUser = getCurrentUser();
     }
 
@@ -34,6 +39,14 @@ abstract class ApiController
     protected function error(string $message, int $code = 400): void
     {
         $this->json(['error' => $message], $code);
+    }
+
+    protected function validationError(array $errors, int $code = 422): void
+    {
+        $this->json([
+            'error' => 'Ошибка валидации',
+            'errors' => $errors,
+        ], $code);
     }
 
     protected function success($data = null, string $message = 'Success', int $code = 200): void
@@ -56,13 +69,15 @@ abstract class ApiController
                 'total' => $total,
                 'page' => $page,
                 'limit' => $limit,
-                'pages' => (int)ceil($total / max(1, $limit))
-            ]
+                'pages' => (int)ceil($total / max(1, $limit)),
+            ],
         ]);
     }
 
     protected function requireAuth(): void
     {
+        checkAuth();
+        $this->currentUser = getCurrentUser();
         if (!$this->currentUser) {
             $this->error('Требуется авторизация', 401);
         }
@@ -92,10 +107,20 @@ abstract class ApiController
         CsrfMiddleware::requireVerification();
     }
 
+    protected function validateInput(array $data, array $rules): array
+    {
+        $validator = new Validator();
+        if (!$validator->validate($data, $rules)) {
+            $this->validationError($validator->getErrors());
+        }
+        return $data;
+    }
+
     protected function getJsonInput(): ?array
     {
         $input = file_get_contents('php://input');
-        return json_decode($input, true);
+        $decoded = json_decode($input, true);
+        return is_array($decoded) ? $decoded : null;
     }
 
     protected function getQueryParam(string $key, $default = null)
@@ -110,23 +135,19 @@ abstract class ApiController
 
     protected function getCurrentRegionId(): ?int
     {
-        if (!$this->currentUser) {
-            return null;
-        }
-        $regionId = $this->currentUser['region_id'] ?? null;
-        return $regionId ? (int)$regionId : null;
+        return getCurrentRegionId();
     }
 
     protected function canAccessRegion(int $regionId): bool
     {
-        if (!$this->currentUser) {
-            return false;
+        return canAccessRegion($regionId);
+    }
+
+    protected function requireRegionAccess(int $regionId): void
+    {
+        if (!$this->canAccessRegion($regionId)) {
+            $this->error('Доступ к данным этого региона запрещён', 403);
         }
-        $userRole = normalizeRole($this->currentUser['role'] ?? 'viewer');
-        if ($userRole === 'admin') {
-            return true;
-        }
-        return (int)$regionId === (int)($this->currentUser['region_id'] ?? 0);
     }
 
     protected function logAction(string $table, int $entityId, string $action, ?array $oldData = null, ?array $newData = null): void

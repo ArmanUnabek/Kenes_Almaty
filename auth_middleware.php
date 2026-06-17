@@ -12,12 +12,10 @@ if (!isset($db)) {
     $db = getDBConnection();
 }
 
-const SESSION_IDLE_TIMEOUT_SECONDS = 1800;
-
 function denyWithStatus(int $status, string $message): void
 {
     http_response_code($status);
-    echo json_encode(['error' => $message], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(['error' => $message], JSON_ENCODE_FLAGS);
     exit;
 }
 

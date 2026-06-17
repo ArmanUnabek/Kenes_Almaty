@@ -63,7 +63,7 @@ class RateLimiter
             http_response_code(429);
             echo json_encode([
                 'error' => 'Слишком много запросов. Попробуйте позже.'
-            ], JSON_UNESCAPED_UNICODE);
+            ], JSON_ENCODE_FLAGS);
             exit;
         }
     }

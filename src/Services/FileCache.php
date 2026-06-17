@@ -38,16 +38,37 @@ class FileCache
     public function set(string $key, $value, int $ttlSeconds): void
     {
         $payload = [
+            'key' => $key,
             'expires_at' => time() + max(1, $ttlSeconds),
             'value' => $value,
         ];
-        @file_put_contents($this->pathFor($key), json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        @file_put_contents($this->pathFor($key), json_encode($payload, JSON_ENCODE_FLAGS));
+    }
+
+    public function forget(string $key): void
+    {
+        $path = $this->pathFor($key);
+        if (is_file($path)) {
+            @unlink($path);
+        }
     }
 
     public function forgetPrefix(string $prefix): void
     {
-        // For file cache without key index, safest invalidation is full flush.
-        $this->flushAll();
+        foreach (glob($this->basePath . '/*.json') ?: [] as $file) {
+            $raw = @file_get_contents($file);
+            if ($raw === false) {
+                continue;
+            }
+            $payload = json_decode($raw, true);
+            if (!is_array($payload)) {
+                continue;
+            }
+            $key = (string)($payload['key'] ?? '');
+            if ($key !== '' && str_starts_with($key, $prefix)) {
+                @unlink($file);
+            }
+        }
     }
 
     public function flushAll(): void
@@ -62,4 +83,3 @@ class FileCache
         return $this->basePath . '/' . md5($key) . '.json';
     }
 }
-

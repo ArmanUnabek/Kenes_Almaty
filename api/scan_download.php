@@ -2,7 +2,7 @@
 require_once '../config.php';
 require_once '../auth_middleware.php';
 
-$JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+$JSON_FLAGS = JSON_ENCODE_FLAGS;
 
 checkAuth();
 $id = (int)($_GET['id'] ?? 0);
@@ -24,13 +24,15 @@ if (!$scan) {
 
 $contentType = $scan['scan_type'] ?: 'application/octet-stream';
 $filename = basename($scan['file_name'] ?: 'scan.bin');
+$inline = isset($_GET['inline']) && $_GET['inline'] === '1';
+$disposition = ($inline ? 'inline' : 'attachment') . '; filename="' . $filename . '"';
 
 if (!empty($scan['file_path'])) {
     $fullPath = APP_ROOT . '/' . ltrim($scan['file_path'], '/');
     if (is_file($fullPath)) {
         header('Content-Type: ' . $contentType);
         header('Content-Length: ' . filesize($fullPath));
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Disposition: ' . $disposition);
         readfile($fullPath);
         exit;
     }
@@ -39,7 +41,7 @@ if (!empty($scan['file_path'])) {
 if (!empty($scan['scan_data'])) {
     header('Content-Type: ' . $contentType);
     header('Content-Length: ' . strlen($scan['scan_data']));
-    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Disposition: ' . $disposition);
     echo $scan['scan_data'];
     exit;
 }

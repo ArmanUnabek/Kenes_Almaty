@@ -10,7 +10,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 header('Content-Type: application/json; charset=utf-8');
 
-$JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+$JSON_FLAGS = JSON_ENCODE_FLAGS;
 
 checkAuth();
 

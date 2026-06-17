@@ -5,6 +5,7 @@ require_once '../auth_middleware.php';
 use App\Middleware\CsrfMiddleware;
 use App\Services\AuditLogger;
 use App\Services\FileCache;
+use App\Services\LetterService;
 
 if (session_status() === PHP_SESSION_NONE) {
 	session_start();
@@ -12,7 +13,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 header('Content-Type: application/json; charset=utf-8');
 
-$JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+$JSON_FLAGS = JSON_ENCODE_FLAGS;
 
 $db = getDBConnection();
 $method = $_SERVER['REQUEST_METHOD'];
@@ -96,6 +97,14 @@ switch ($method) {
 		requireWriteAccess();
         CsrfMiddleware::requireVerification();
 		$data = json_decode(file_get_contents('php://input'), true);
+        try {
+            LetterService::validateEvent($data ?? []);
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(422);
+            echo json_encode(['error' => $e->getMessage()], $JSON_FLAGS);
+            break;
+        }
+
 		$user = getCurrentUser();
 		$regionId = $data['region_id'] ?? ($user['region_id'] ?? null);
 
@@ -152,7 +161,7 @@ switch ($method) {
 			'id' => $eventId,
 		]);
         AuditLogger::log($db, 'events', $eventId, 'CREATE', null, $data, (int)($user['id'] ?? 0));
-        (new FileCache())->flushAll();
+        (new FileCache())->forgetPrefix('kpi:');
 		echo json_encode(['id' => $eventId, 'message' => 'Мероприятие добавлено'], $JSON_FLAGS);
 		break;
 
@@ -166,6 +175,13 @@ switch ($method) {
 			echo json_encode(['error' => 'ID не указан'], $JSON_FLAGS);
 			exit;
 		}
+        try {
+            LetterService::validateEvent($data ?? []);
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(422);
+            echo json_encode(['error' => $e->getMessage()], $JSON_FLAGS);
+            break;
+        }
 		try {
 			$db->beginTransaction();
 
@@ -220,7 +236,7 @@ switch ($method) {
 			'id' => (int)$id,
 		]);
         AuditLogger::log($db, 'events', (int)$id, 'UPDATE', null, $data, currentUserIdOrNull());
-        (new FileCache())->flushAll();
+        (new FileCache())->forgetPrefix('kpi:');
 		echo json_encode(['message' => 'Мероприятие обновлено'], $JSON_FLAGS);
 		break;
 
@@ -241,7 +257,7 @@ switch ($method) {
 			'id' => (int)$id,
 		]);
         AuditLogger::log($db, 'events', (int)$id, 'DELETE', ['id' => (int)$id], null, currentUserIdOrNull());
-        (new FileCache())->flushAll();
+        (new FileCache())->forgetPrefix('kpi:');
 		echo json_encode(['message' => 'Мероприятие удалено'], $JSON_FLAGS);
 		break;
 

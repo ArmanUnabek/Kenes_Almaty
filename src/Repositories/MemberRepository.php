@@ -107,16 +107,15 @@ class MemberRepository
         return (int)$this->db->lastInsertId();
     }
 
-    public function update(int $id, array $data): bool
+    public function update(int $id, array $data, ?int $regionId = null): bool
     {
-        $stmt = $this->db->prepare("
+        $query = "
             UPDATE os_members 
             SET full_name = ?, position = ?, organization = ?, commission_id = ?, 
                 email = ?, phone = ?, status = ?
             WHERE id = ?
-        ");
-
-        return $stmt->execute([
+        ";
+        $params = [
             $data['full_name'],
             $data['position'] ?? null,
             $data['organization'] ?? null,
@@ -124,14 +123,27 @@ class MemberRepository
             $data['email'] ?? null,
             $data['phone'] ?? null,
             $data['status'] ?? 'active',
-            $id
-        ]);
+            $id,
+        ];
+        if ($regionId) {
+            $query .= ' AND region_id = ?';
+            $params[] = $regionId;
+        }
+
+        $stmt = $this->db->prepare($query);
+        return $stmt->execute($params);
     }
 
-    public function delete(int $id): bool
+    public function delete(int $id, ?int $regionId = null): bool
     {
-        $stmt = $this->db->prepare("UPDATE os_members SET status = 'inactive' WHERE id = ?");
-        return $stmt->execute([$id]);
+        $query = "UPDATE os_members SET status = 'inactive' WHERE id = ?";
+        $params = [$id];
+        if ($regionId) {
+            $query .= ' AND region_id = ?';
+            $params[] = $regionId;
+        }
+        $stmt = $this->db->prepare($query);
+        return $stmt->execute($params);
     }
 
     public function getByCommission(int $commissionId, ?int $regionId = null): array

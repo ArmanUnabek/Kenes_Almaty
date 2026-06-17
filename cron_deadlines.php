@@ -18,7 +18,7 @@ if (!$isCli) {
     if (!is_string($expectedToken) || $expectedToken === '' || !is_string($providedToken)
         || !hash_equals($expectedToken, $providedToken)) {
         http_response_code(403);
-        echo json_encode(['error' => 'Доступ запрещён'], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['error' => 'Доступ запрещён'], JSON_ENCODE_FLAGS);
         exit;
     }
 }
@@ -95,11 +95,11 @@ try {
         'notifications_sent' => count($notifications),
         'timestamp' => $now->format(DATE_ATOM),
     ];
-    echo json_encode($response, JSON_UNESCAPED_UNICODE);
+    echo json_encode($response, JSON_ENCODE_FLAGS);
 } catch (Throwable $e) {
     http_response_code(500);
     error_log('cron_deadlines failed: ' . $e->getMessage());
-    echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_ENCODE_FLAGS);
 }
 
 

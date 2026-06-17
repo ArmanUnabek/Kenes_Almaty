@@ -24,5 +24,5 @@ echo json_encode([
         'limit' => $limit,
         'pages' => (int)ceil($total / max(1, $limit))
     ]
-], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+], JSON_ENCODE_FLAGS);
 

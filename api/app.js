@@ -489,8 +489,9 @@ function renderRecipientsCell(recipients, container, type, id) {
 
 function normalizeScanFromApi(scan) {
   if (!scan) return null;
+  const data = scan.scan_data || scan.data || scan.scan_url || null;
   return {
-    data: scan.scan_data || scan.data,
+    data,
     type: scan.scan_type || scan.type || 'application/octet-stream',
     name: scan.file_name || scan.name || 'scan',
     size: scan.file_size || scan.size || null

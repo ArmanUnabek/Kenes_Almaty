@@ -4,6 +4,7 @@ require_once __DIR__ . '/../auth_middleware.php';
 
 use App\Middleware\CsrfMiddleware;
 use App\Services\AuditLogger;
+use App\Services\LetterService;
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -11,7 +12,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 header('Content-Type: application/json; charset=utf-8');
 
-$JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+$JSON_FLAGS = JSON_ENCODE_FLAGS;
 
 function ensureRecipientsSupport(PDO $db) {
     static $checked = false;
@@ -234,14 +235,22 @@ switch ($method) {
             $letter = $stmt->fetch();
 
             if ($letter) {
+                LetterService::assertRegionAccess($letter);
                 // Получить сканы
                 $stmt2 = $db->prepare("
-                    SELECT * FROM letter_scans 
+                    SELECT id, letter_type, letter_id, file_path, scan_type, file_name, file_size, created_at,
+                           CASE WHEN file_path IS NOT NULL THEN NULL ELSE scan_data END AS scan_data
+                    FROM letter_scans 
                     WHERE letter_type = ? AND letter_id = ?
                     ORDER BY created_at
                 ");
                 $stmt2->execute([$type, $id]);
-                $letter['scans'] = $stmt2->fetchAll();
+                $letter['scans'] = array_map(static function (array $scan): array {
+                    if (!empty($scan['file_path'])) {
+                        $scan['scan_url'] = '/api/scan_download.php?id=' . (int)$scan['id'] . '&inline=1';
+                    }
+                    return $scan;
+                }, $stmt2->fetchAll());
 
                 $members = fetchLetterMembers($db, $type, [$letter['id']]);
                 $letter['members'] = $members[$letter['id']] ?? [];
@@ -325,6 +334,18 @@ switch ($method) {
         requireWriteAccess();
         CsrfMiddleware::requireVerification();
         $data = json_decode(file_get_contents('php://input'), true);
+
+        try {
+            if ($type === 'incoming') {
+                LetterService::validateIncoming($data ?? []);
+            } else {
+                LetterService::validateOutgoing($data ?? []);
+            }
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(422);
+            echo json_encode(['error' => $e->getMessage()], $JSON_FLAGS);
+            break;
+        }
 
         $currentUser = getCurrentUser();
         $regionId = $data['region_id'] ?? ($currentUser['region_id'] ?? 1); // по умолчанию регион 1 (Алматы)
@@ -412,21 +433,7 @@ switch ($method) {
 
             // Сохранить сканы, если есть
             if (!empty($data['scans'])) {
-                $stmt2 = $db->prepare("
-                    INSERT INTO letter_scans (letter_type, letter_id, scan_data, scan_type, file_name, file_size)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ");
-
-                foreach ($data['scans'] as $scan) {
-                    $stmt2->execute([
-                        $type,
-                        $letter_id,
-                        $scan['data'],
-                        $scan['type'],
-                        $scan['name'] ?? null,
-                        $scan['size'] ?? null
-                    ]);
-                }
+                LetterService::insertScans($db, $type, (int)$letter_id, $data['scans']);
             }
 
             AuditLogger::log($db, $table, (int)$letter_id, 'CREATE', null, $data, (int)($_SESSION['user_id'] ?? 0) ?: null);
@@ -462,6 +469,18 @@ switch ($method) {
             break;
         }
 
+        try {
+            if ($type === 'incoming') {
+                LetterService::validateIncoming($data ?? []);
+            } else {
+                LetterService::validateOutgoing($data ?? []);
+            }
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(422);
+            echo json_encode(['error' => $e->getMessage()], $JSON_FLAGS);
+            break;
+        }
+
         $table = $type === 'incoming' ? 'incoming_letters' : 'outgoing_letters';
         // incoming_ref_id есть только в outgoing_letters
         $refColumn = $type === 'outgoing' ? ', incoming_ref_id' : '';
@@ -473,6 +492,7 @@ switch ($method) {
             echo json_encode(['error' => 'Письмо не найдено'], $JSON_FLAGS);
             break;
         }
+        LetterService::assertRegionAccess($existingRow);
         $existingRegionId = (int)$existingRow['region_id'];
         $previousIncomingRef = $existingRow['incoming_ref_id'] ?? null;
 
@@ -571,20 +591,7 @@ switch ($method) {
 
             // Добавление новых сканов (если есть)
             if (!empty($data['scans']) && is_array($data['scans'])) {
-                $stmt2 = $db->prepare("
-                    INSERT INTO letter_scans (letter_type, letter_id, scan_data, scan_type, file_name, file_size)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ");
-                foreach ($data['scans'] as $scan) {
-                    $stmt2->execute([
-                        $type,
-                        $id,
-                        $scan['data'] ?? '',
-                        $scan['type'] ?? 'application/octet-stream',
-                        $scan['name'] ?? null,
-                        $scan['size'] ?? null
-                    ]);
-                }
+                LetterService::insertScans($db, $type, (int)$id, $data['scans']);
             }
 
             AuditLogger::log($db, $table, (int)$id, 'UPDATE', null, $data, (int)($_SESSION['user_id'] ?? 0) ?: null);
@@ -618,6 +625,16 @@ switch ($method) {
             echo json_encode(['error' => 'ID не указан'], $JSON_FLAGS);
             break;
         }
+
+        $stmtRegion = $db->prepare("SELECT region_id FROM {$table} WHERE id = ?");
+        $stmtRegion->execute([$id]);
+        $letterRow = $stmtRegion->fetch();
+        if (!$letterRow) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Письмо не найдено'], $JSON_FLAGS);
+            break;
+        }
+        LetterService::assertRegionAccess($letterRow);
 
         try {
             $db->beginTransaction();
