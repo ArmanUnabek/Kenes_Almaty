@@ -20,15 +20,40 @@ class UserRepository
         return $row ?: null;
     }
 
-    public function getAll(?int $regionId = null, int $page = 1, int $limit = 50): array
-    {
+    public function getAll(
+        ?int $regionId = null,
+        int $page = 1,
+        int $limit = 50,
+        ?string $search = null,
+        ?string $role = null,
+        ?string $status = null
+    ): array {
         $offset = ($page - 1) * $limit;
-        $where = '';
+        $conditions = [];
         $params = [];
+
         if ($regionId) {
-            $where = ' WHERE u.region_id = ?';
+            $conditions[] = 'u.region_id = ?';
             $params[] = $regionId;
         }
+        if ($role !== null && $role !== '') {
+            $conditions[] = 'u.role = ?';
+            $params[] = $role;
+        }
+        if ($status === 'active') {
+            $conditions[] = 'u.is_active = 1';
+        } elseif ($status === 'inactive') {
+            $conditions[] = 'u.is_active = 0';
+        }
+        if ($search !== null && $search !== '') {
+            $conditions[] = '(u.username LIKE ? OR u.email LIKE ? OR u.full_name LIKE ?)';
+            $like = '%' . $search . '%';
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+        }
+
+        $where = $conditions ? (' WHERE ' . implode(' AND ', $conditions)) : '';
 
         $countStmt = $this->db->prepare('SELECT COUNT(*) FROM users u' . $where);
         $countStmt->execute($params);
@@ -40,10 +65,9 @@ class UserRepository
             FROM users u
             LEFT JOIN regions r ON u.region_id = r.id
         ' . $where . ' ORDER BY u.full_name LIMIT ? OFFSET ?';
-        $params[] = $limit;
-        $params[] = $offset;
+        $queryParams = array_merge($params, [$limit, $offset]);
         $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
+        $stmt->execute($queryParams);
 
         return [
             'items' => $stmt->fetchAll(),

@@ -67,7 +67,23 @@ class UsersController extends ApiController
         $regionFilter = $this->getQueryParam('region_id');
         $page = max(1, (int)$this->getQueryParam('page', 1));
         $limit = max(1, min(200, (int)$this->getQueryParam('limit', 50)));
-        $result = $this->repo->getAll($regionFilter ? (int)$regionFilter : null, $page, $limit);
+        $search = trim((string)$this->getQueryParam('search', ''));
+        $role = trim((string)$this->getQueryParam('role', ''));
+        $status = trim((string)$this->getQueryParam('status', ''));
+        if ($role !== '' && !in_array($role, ['admin', 'moderator', 'viewer'], true)) {
+            $role = '';
+        }
+        if ($status !== '' && !in_array($status, ['active', 'inactive'], true)) {
+            $status = '';
+        }
+        $result = $this->repo->getAll(
+            $regionFilter ? (int)$regionFilter : null,
+            $page,
+            $limit,
+            $search !== '' ? $search : null,
+            $role !== '' ? $role : null,
+            $status !== '' ? $status : null
+        );
         $this->paginated($result['items'], $result['total'], $page, $limit);
     }
 

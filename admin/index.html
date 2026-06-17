@@ -3,203 +3,301 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Админ-панель — Журнал ОС</title>
+    <title data-i18n="admin.title">Админ-панель — Журнал ОС</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <link href="/styles.css?v=17" rel="stylesheet" />
+    <link href="/styles.css?v=18" rel="stylesheet" />
+    <link href="/admin/admin.css?v=18" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <style>
-        body { background: #f4f6fb; min-height: 100vh; }
-        .admin-shell { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
-        .admin-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; }
-        .region-card { transition: box-shadow .2s; }
-        .region-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); }
-        .stat-pill { font-size: .85rem; color: #6c757d; }
-    </style>
 </head>
-<body>
-    <div class="admin-shell">
-        <div class="admin-header">
-            <div>
-                <h1 class="h3 mb-1">Админ-панель</h1>
-                <p class="text-muted mb-0" id="adminWelcome">Управление регионами и пользователями</p>
+<body class="admin-body">
+    <div class="admin-layout">
+        <aside class="admin-sidebar" id="adminSidebar">
+            <div class="admin-sidebar-brand">
+                <h1 data-i18n="admin.title">Админ-панель</h1>
+                <p data-i18n="admin.subtitle">Управление системой</p>
             </div>
-            <div class="d-flex gap-2">
-                <a href="/api/" class="btn btn-outline-primary btn-sm"><i class="bi bi-journal-text"></i> Журнал</a>
-                <button class="btn btn-outline-secondary btn-sm" id="logoutBtn"><i class="bi bi-box-arrow-right"></i> Выход</button>
-            </div>
-        </div>
+            <nav class="admin-nav" id="adminNav">
+                <button class="admin-nav-item active" data-tab="dashboard"><i class="bi bi-speedometer2"></i><span data-i18n="nav.dashboard">Сводка</span></button>
+                <button class="admin-nav-item" data-tab="regions"><i class="bi bi-geo-alt"></i><span data-i18n="nav.regions">Регионы</span></button>
+                <button class="admin-nav-item" data-tab="users"><i class="bi bi-people"></i><span data-i18n="nav.users">Пользователи</span></button>
+                <button class="admin-nav-item" data-tab="audit"><i class="bi bi-shield-check"></i><span data-i18n="nav.audit">Аудит</span></button>
+                <button class="admin-nav-item" data-tab="system"><i class="bi bi-gear"></i><span data-i18n="nav.system">Система</span></button>
+            </nav>
+        </aside>
 
-        <ul class="nav nav-tabs mb-3" id="adminTabs">
-            <li class="nav-item"><button class="nav-link active" data-tab="regions">Регионы</button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="users">Пользователи</button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="overview">Сводка</button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="audit">Аудит</button></li>
-        </ul>
-
-        <div id="tab-regions">
-            <div class="card mb-3">
-                <div class="card-header">Добавить регион / город</div>
-                <div class="card-body">
-                    <form id="formRegion" class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Название (RU)</label>
-                            <input type="text" class="form-control" id="regionNameRu" required />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Название (KZ)</label>
-                            <input type="text" class="form-control" id="regionNameKz" required />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Код</label>
-                            <input type="text" class="form-control" id="regionCode" placeholder="astana" required pattern="[a-z0-9_-]+" />
-                        </div>
-                        <div class="col-12">
-                            <button type="submit" class="btn btn-primary">Создать регион</button>
-                        </div>
-                    </form>
+        <div class="admin-main">
+            <header class="admin-topbar">
+                <div class="admin-topbar-left">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="adminSidebarToggle" aria-label="Меню"><i class="bi bi-list"></i></button>
+                    <select class="form-select form-select-sm" id="headerRegionSelect" style="max-width:220px;" title="Активный регион">
+                        <option value="">—</option>
+                    </select>
                 </div>
-            </div>
-            <div class="row g-3" id="regionsGrid"></div>
-        </div>
-
-        <div id="tab-users" class="d-none">
-            <div class="card mb-3">
-                <div class="card-header">Создать пользователя</div>
-                <div class="card-body">
-                    <form id="formUser" class="row g-3">
-                        <div class="col-md-3">
-                            <label class="form-label">Логин</label>
-                            <input type="text" class="form-control" id="userUsername" required />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Email</label>
-                            <input type="email" class="form-control" id="userEmail" required />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">ФИО</label>
-                            <input type="text" class="form-control" id="userFullName" required />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Пароль</label>
-                            <input type="password" class="form-control" id="userPassword" required minlength="6" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Роль</label>
-                            <select class="form-select" id="userRole">
-                                <option value="moderator">Модератор</option>
-                                <option value="viewer">Наблюдатель</option>
-                                <option value="admin">Супер-админ</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Регион</label>
-                            <select class="form-select" id="userRegionId"></select>
-                        </div>
-                        <div class="col-12">
-                            <button type="submit" class="btn btn-primary">Создать пользователя</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-header">Пользователи системы</div>
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0" id="usersTable">
-                        <thead class="table-light">
-                            <tr>
-                                <th>ФИО</th>
-                                <th>Логин</th>
-                                <th>Роль</th>
-                                <th>Регион</th>
-                                <th>Активен</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div id="tab-overview" class="d-none">
-            <div class="row g-3" id="overviewGrid"></div>
-        </div>
-
-        <div id="tab-audit" class="d-none">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-                    <span>Журнал аудита</span>
-                    <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <select class="form-select form-select-sm" id="auditRegionFilter" style="width:auto;max-width:220px;">
-                            <option value="">Все регионы</option>
-                        </select>
-                        <div class="form-check form-check-inline mb-0">
-                            <input class="form-check-input" type="checkbox" id="auditSecurityOnly" />
-                            <label class="form-check-label small" for="auditSecurityOnly">Только экспорт/скачивания</label>
-                        </div>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="auditRefreshBtn">Обновить</button>
+                <div class="admin-topbar-right">
+                    <div class="btn-group lang-toggle" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-lang="ru">RU</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-lang="kk">KK</button>
                     </div>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0" id="auditTable">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Дата</th>
-                                <th>Пользователь</th>
-                                <th>Таблица</th>
-                                <th>Операция</th>
-                                <th>ID записи</th>
-                                <th>IP</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-                <div class="card-footer d-flex justify-content-between align-items-center">
-                    <span class="small text-muted" id="auditPaginationInfo"></span>
-                    <div class="btn-group btn-group-sm">
-                        <button type="button" class="btn btn-outline-secondary" id="auditPrevBtn">Назад</button>
-                        <button type="button" class="btn btn-outline-secondary" id="auditNextBtn">Вперёд</button>
+                    <div class="admin-user-chip" id="adminUserChip">
+                        <span class="avatar" id="adminUserAvatar">A</span>
+                        <span id="adminUserName">—</span>
                     </div>
+                    <a href="/api/" class="btn btn-outline-primary btn-sm"><i class="bi bi-journal-text"></i> <span data-i18n="common.journal">Журнал</span></a>
+                    <button class="btn btn-outline-secondary btn-sm" id="logoutBtn"><i class="bi bi-box-arrow-right"></i> <span data-i18n="common.logout">Выход</span></button>
                 </div>
-            </div>
+            </header>
+
+            <main class="admin-content">
+                <!-- Dashboard -->
+                <section id="tab-dashboard">
+                    <h2 class="admin-section-title" data-i18n="nav.dashboard">Сводка</h2>
+                    <div class="kpi-grid" id="dashboardKpi"></div>
+                    <div class="admin-card">
+                        <div class="admin-card-header" data-i18n="dashboard.byRegion">По регионам</div>
+                        <div class="admin-card-body" id="dashboardRegions"></div>
+                    </div>
+                </section>
+
+                <!-- Regions -->
+                <section id="tab-regions" class="d-none">
+                    <h2 class="admin-section-title" data-i18n="nav.regions">Регионы</h2>
+                    <div class="admin-card">
+                        <div class="admin-card-header" data-i18n="region.add">Добавить регион</div>
+                        <div class="admin-card-body">
+                            <form id="formRegion" class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label" data-i18n="region.nameRu">Название (RU)</label>
+                                    <input type="text" class="form-control" id="regionNameRu" required />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" data-i18n="region.nameKz">Название (KZ)</label>
+                                    <input type="text" class="form-control" id="regionNameKz" required />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" data-i18n="region.code">Код</label>
+                                    <input type="text" class="form-control" id="regionCode" placeholder="astana" required pattern="[a-z0-9_-]+" />
+                                </div>
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-primary" data-i18n="region.create">Создать регион</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="row g-3" id="regionsGrid"></div>
+                </section>
+
+                <!-- Users -->
+                <section id="tab-users" class="d-none">
+                    <h2 class="admin-section-title" data-i18n="nav.users">Пользователи</h2>
+                    <div class="admin-card">
+                        <div class="admin-card-header" data-i18n="user.create">Создать пользователя</div>
+                        <div class="admin-card-body">
+                            <form id="formUser" class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label" data-i18n="user.username">Логин</label>
+                                    <input type="text" class="form-control" id="userUsername" required />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" data-i18n="user.email">Email</label>
+                                    <input type="email" class="form-control" id="userEmail" required />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" data-i18n="user.fullName">ФИО</label>
+                                    <input type="text" class="form-control" id="userFullName" required />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" data-i18n="user.password">Пароль</label>
+                                    <input type="password" class="form-control" id="userPassword" required minlength="6" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" data-i18n="user.role">Роль</label>
+                                    <select class="form-select" id="userRole">
+                                        <option value="moderator" data-i18n="role.moderator">Модератор</option>
+                                        <option value="viewer" data-i18n="role.viewer">Наблюдатель</option>
+                                        <option value="admin" data-i18n="role.admin">Супер-админ</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" data-i18n="user.region">Регион</label>
+                                    <select class="form-select" id="userRegionId"></select>
+                                </div>
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-primary" data-i18n="user.create">Создать пользователя</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="admin-card">
+                        <div class="admin-card-header">
+                            <span data-i18n="user.list">Пользователи системы</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="usersRefreshBtn"><i class="bi bi-arrow-clockwise"></i></button>
+                        </div>
+                        <div class="admin-card-body">
+                            <div class="admin-filters">
+                                <input type="search" class="form-control form-control-sm" id="usersSearch" data-i18n-placeholder="common.search" placeholder="Поиск…" />
+                                <select class="form-select form-select-sm" id="usersRoleFilter">
+                                    <option value="" data-i18n="common.all">Все</option>
+                                    <option value="admin" data-i18n="role.admin">Супер-админ</option>
+                                    <option value="moderator" data-i18n="role.moderator">Модератор</option>
+                                    <option value="viewer" data-i18n="role.viewer">Наблюдатель</option>
+                                </select>
+                                <select class="form-select form-select-sm" id="usersStatusFilter">
+                                    <option value="" data-i18n="common.all">Все</option>
+                                    <option value="active" data-i18n="common.active">Активен</option>
+                                    <option value="inactive" data-i18n="common.inactive">Неактивен</option>
+                                </select>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0" id="usersTable">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th data-i18n="user.fullName">ФИО</th>
+                                            <th data-i18n="user.username">Логин</th>
+                                            <th data-i18n="user.role">Роль</th>
+                                            <th data-i18n="user.region">Регион</th>
+                                            <th data-i18n="user.lastLogin">Последний вход</th>
+                                            <th data-i18n="common.active">Активен</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <span class="small text-muted" id="usersPaginationInfo"></span>
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-outline-secondary" id="usersPrevBtn" data-i18n="common.back">Назад</button>
+                                    <button type="button" class="btn btn-outline-secondary" id="usersNextBtn" data-i18n="common.next">Вперёд</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Audit -->
+                <section id="tab-audit" class="d-none">
+                    <h2 class="admin-section-title" data-i18n="nav.audit">Аудит</h2>
+                    <div class="admin-card">
+                        <div class="admin-card-header">
+                            <span data-i18n="audit.title">Журнал аудита</span>
+                            <div class="admin-filters mb-0">
+                                <input type="search" class="form-control form-control-sm" id="auditSearch" data-i18n-placeholder="common.search" placeholder="Поиск…" style="max-width:180px;" />
+                                <select class="form-select form-select-sm" id="auditRegionFilter" style="max-width:200px;">
+                                    <option value="" data-i18n="audit.allRegions">Все регионы</option>
+                                </select>
+                                <div class="form-check form-check-inline mb-0">
+                                    <input class="form-check-input" type="checkbox" id="auditSecurityOnly" />
+                                    <label class="form-check-label small" for="auditSecurityOnly" data-i18n="audit.securityOnly">Только экспорт/скачивания</label>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="auditExportBtn"><i class="bi bi-download"></i> <span data-i18n="audit.exportCsv">Экспорт CSV</span></button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="auditRefreshBtn" data-i18n="common.refresh">Обновить</button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0" id="auditTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th data-i18n="audit.date">Дата</th>
+                                        <th data-i18n="audit.user">Пользователь</th>
+                                        <th data-i18n="audit.table">Таблица</th>
+                                        <th data-i18n="audit.operation">Операция</th>
+                                        <th data-i18n="audit.recordId">ID записи</th>
+                                        <th data-i18n="audit.ip">IP</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div class="admin-card-body border-top d-flex justify-content-between align-items-center py-2">
+                            <span class="small text-muted" id="auditPaginationInfo"></span>
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-secondary" id="auditPrevBtn" data-i18n="common.back">Назад</button>
+                                <button type="button" class="btn btn-outline-secondary" id="auditNextBtn" data-i18n="common.next">Вперёд</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- System -->
+                <section id="tab-system" class="d-none">
+                    <h2 class="admin-section-title" data-i18n="system.title">Состояние системы</h2>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="admin-card h-100">
+                                <div class="admin-card-header">
+                                    <span data-i18n="system.health">Проверка здоровья</span>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="healthCheckBtn" data-i18n="system.checkHealth">Проверить</button>
+                                </div>
+                                <div class="admin-card-body" id="healthStatus">
+                                    <span class="text-muted" data-i18n="common.loading">Загрузка…</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="admin-card h-100">
+                                <div class="admin-card-header" data-i18n="system.emailQueue">Очередь писем</div>
+                                <div class="admin-card-body" id="emailQueueStats"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="admin-card">
+                        <div class="admin-card-header">
+                            <span data-i18n="system.emailQueue">Очередь писем</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="emailQueueRefreshBtn" data-i18n="common.refresh">Обновить</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0" id="emailQueueTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Email</th>
+                                        <th>Тема</th>
+                                        <th>Статус</th>
+                                        <th>Создано</th>
+                                        <th>Отправлено</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </main>
         </div>
     </div>
 
+    <!-- Modals -->
     <div class="modal fade" id="bootstrapRegionModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
                 <form id="formBootstrapRegion">
                     <div class="modal-header">
-                        <h5 class="modal-title">Инициализация региона</h5>
+                        <h5 class="modal-title" data-i18n="region.bootstrap">Инициализация региона</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body row g-3">
                         <input type="hidden" id="bootstrapRegionId" />
-                        <div class="col-12">
-                            <p class="text-muted small mb-0" id="bootstrapRegionName"></p>
-                        </div>
+                        <div class="col-12"><p class="text-muted small mb-0" id="bootstrapRegionName"></p></div>
                         <div class="col-md-6">
-                            <label class="form-label">Базовый номер входящих</label>
+                            <label class="form-label" data-i18n="region.seqIncoming">Базовый № входящих</label>
                             <input type="number" class="form-control" id="bootstrapSeqIncoming" min="0" value="0" />
-                            <div class="form-text">Следующий номер будет на 1 больше</div>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Базовый номер исходящих</label>
+                            <label class="form-label" data-i18n="region.seqOutgoing">Базовый № исходящих</label>
                             <input type="number" class="form-control" id="bootstrapSeqOutgoing" min="0" value="0" />
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Шаблонный регион (комиссии)</label>
+                            <label class="form-label" data-i18n="region.template">Шаблонный регион</label>
                             <select class="form-select" id="bootstrapTemplateRegion"></select>
                         </div>
                         <div class="col-12 form-check">
                             <input type="checkbox" class="form-check-input" id="bootstrapCopyCommissions" checked />
-                            <label class="form-check-label" for="bootstrapCopyCommissions">Скопировать комиссии из шаблона</label>
+                            <label class="form-check-label" for="bootstrapCopyCommissions" data-i18n="region.copyCommissions">Скопировать комиссии из шаблона</label>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                        <button type="submit" class="btn btn-primary">Инициализировать</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.cancel">Отмена</button>
+                        <button type="submit" class="btn btn-primary" data-i18n="region.init">Инициализировать</button>
                     </div>
                 </form>
             </div>
@@ -211,40 +309,39 @@
             <div class="modal-content">
                 <form id="formEditRegion">
                     <div class="modal-header">
-                        <h5 class="modal-title">Редактировать регион</h5>
+                        <h5 class="modal-title" data-i18n="region.edit">Редактировать регион</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body row g-3">
                         <input type="hidden" id="editRegionId" />
                         <div class="col-12">
-                            <label class="form-label">Название (RU)</label>
+                            <label class="form-label" data-i18n="region.nameRu">Название (RU)</label>
                             <input type="text" class="form-control" id="editRegionNameRu" required />
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Название (KZ)</label>
+                            <label class="form-label" data-i18n="region.nameKz">Название (KZ)</label>
                             <input type="text" class="form-control" id="editRegionNameKz" required />
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Код</label>
+                            <label class="form-label" data-i18n="region.code">Код</label>
                             <input type="text" class="form-control" id="editRegionCode" required />
                         </div>
                         <div class="col-12 form-check">
                             <input type="checkbox" class="form-check-input" id="editRegionActive" />
-                            <label class="form-check-label" for="editRegionActive">Активен</label>
+                            <label class="form-check-label" for="editRegionActive" data-i18n="common.active">Активен</label>
                         </div>
-                        <div class="col-12"><hr class="my-1" /><div class="small text-muted mb-2">Настройки нумерации</div></div>
                         <div class="col-md-6">
-                            <label class="form-label">Базовый № входящих</label>
+                            <label class="form-label" data-i18n="region.seqIncoming">Базовый № входящих</label>
                             <input type="number" class="form-control" id="editRegionSeqIncoming" min="0" value="0" />
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Базовый № исходящих</label>
+                            <label class="form-label" data-i18n="region.seqOutgoing">Базовый № исходящих</label>
                             <input type="number" class="form-control" id="editRegionSeqOutgoing" min="0" value="0" />
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                        <button type="submit" class="btn btn-primary">Сохранить</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.cancel">Отмена</button>
+                        <button type="submit" class="btn btn-primary" data-i18n="common.save">Сохранить</button>
                     </div>
                 </form>
             </div>
@@ -256,47 +353,47 @@
             <div class="modal-content">
                 <form id="formEditUser">
                     <div class="modal-header">
-                        <h5 class="modal-title">Редактировать пользователя</h5>
+                        <h5 class="modal-title" data-i18n="user.edit">Редактировать пользователя</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body row g-3">
                         <input type="hidden" id="editUserId" />
                         <div class="col-md-6">
-                            <label class="form-label">Логин</label>
+                            <label class="form-label" data-i18n="user.username">Логин</label>
                             <input type="text" class="form-control" id="editUserUsername" required />
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Email</label>
+                            <label class="form-label" data-i18n="user.email">Email</label>
                             <input type="email" class="form-control" id="editUserEmail" required />
                         </div>
                         <div class="col-12">
-                            <label class="form-label">ФИО</label>
+                            <label class="form-label" data-i18n="user.fullName">ФИО</label>
                             <input type="text" class="form-control" id="editUserFullName" required />
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Роль</label>
+                            <label class="form-label" data-i18n="user.role">Роль</label>
                             <select class="form-select" id="editUserRole">
-                                <option value="moderator">Модератор</option>
-                                <option value="viewer">Наблюдатель</option>
-                                <option value="admin">Супер-админ</option>
+                                <option value="moderator" data-i18n="role.moderator">Модератор</option>
+                                <option value="viewer" data-i18n="role.viewer">Наблюдатель</option>
+                                <option value="admin" data-i18n="role.admin">Супер-админ</option>
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Регион</label>
+                            <label class="form-label" data-i18n="user.region">Регион</label>
                             <select class="form-select" id="editUserRegionId"></select>
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Новый пароль</label>
-                            <input type="password" class="form-control" id="editUserPassword" minlength="6" placeholder="Оставьте пустым, чтобы не менять" />
+                            <label class="form-label" data-i18n="user.newPassword">Новый пароль</label>
+                            <input type="password" class="form-control" id="editUserPassword" minlength="6" placeholder="—" />
                         </div>
                         <div class="col-12 form-check">
                             <input type="checkbox" class="form-check-input" id="editUserActive" checked />
-                            <label class="form-check-label" for="editUserActive">Активен</label>
+                            <label class="form-check-label" for="editUserActive" data-i18n="common.active">Активен</label>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                        <button type="submit" class="btn btn-primary">Сохранить</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.cancel">Отмена</button>
+                        <button type="submit" class="btn btn-primary" data-i18n="common.save">Сохранить</button>
                     </div>
                 </form>
             </div>
@@ -307,7 +404,7 @@
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Детали аудита</h5>
+                    <h5 class="modal-title" data-i18n="audit.details">Детали аудита</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="auditDetailBody"></div>
@@ -315,21 +412,24 @@
         </div>
     </div>
 
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 12000;"></div>
+    <div class="admin-loading-overlay" id="adminLoading"><div class="spinner-border text-primary" role="status"></div></div>
+
     <footer class="doc-footer mt-4">
         <div class="app-footer-links">
             <a href="/help/">Справка</a>
             <a href="/legal/privacy.html">Политика ПДн</a>
-            <a href="/api/">Журнал</a>
+            <a href="/api/" data-i18n="common.journal">Журнал</a>
         </div>
         <div>© <span data-site="year">2026</span> <span data-site="operatorName">ТОО «Журнал ОС»</span></div>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/csrf-handler.js?v=5"></script>
-    <script src="/api/js/utils.js?v=17"></script>
-    <script src="/api/js/session.js?v=17"></script>
-    <script src="admin.js?v=17"></script>
-    <script src="/js/site-config.js?v=17"></script>
-    <script src="/js/site-docs.js?v=17"></script>
+    <script src="/api/js/utils.js?v=18"></script>
+    <script src="/admin/admin-i18n.js?v=18"></script>
+    <script src="/admin/admin.js?v=18"></script>
+    <script src="/js/site-config.js?v=18"></script>
+    <script src="/js/site-docs.js?v=18"></script>
 </body>
 </html>
