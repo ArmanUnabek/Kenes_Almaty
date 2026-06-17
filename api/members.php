@@ -6,9 +6,11 @@ session_start();
 
 header('Content-Type: application/json; charset=utf-8');
 
+$JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+
 if (!isset($_SESSION['user_id'])) {
     http_response_code(401);
-    echo json_encode(['error' => 'Unauthorized'], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['error' => 'Unauthorized'], $JSON_FLAGS);
     exit;
 }
 
@@ -33,11 +35,11 @@ try {
 
             if (!$member) {
                 http_response_code(404);
-                echo json_encode(['error' => 'Member not found'], JSON_UNESCAPED_UNICODE);
+                echo json_encode(['error' => 'Member not found'], $JSON_FLAGS);
                 return;
             }
 
-            echo json_encode($member, JSON_UNESCAPED_UNICODE);
+            echo json_encode($member, $JSON_FLAGS);
         } else {
             // Получить всех членов
             $query = 'SELECT m.*, c.name as commission_name, c.color as commission_color FROM os_members m LEFT JOIN commissions c ON m.commission_id = c.id WHERE m.region_id = ?';
@@ -54,15 +56,15 @@ try {
             $stmt->execute($params);
             $members = $stmt->fetchAll();
 
-            echo json_encode($members, JSON_UNESCAPED_UNICODE);
+            echo json_encode($members, $JSON_FLAGS);
         }
     } else {
         http_response_code(405);
-        echo json_encode(['error' => 'Method not allowed'], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['error' => 'Method not allowed'], $JSON_FLAGS);
     }
 
 } catch (Exception $e) {
     http_response_code(500);
     error_log('members failed: ' . $e->getMessage());
-    echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['error' => 'Внутренняя ошибка сервера'], $JSON_FLAGS);
 }

@@ -11,6 +11,8 @@ if (session_status() === PHP_SESSION_NONE) {
 
 header('Content-Type: application/json; charset=utf-8');
 
+$JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+
 function ensureRecipientsSupport(PDO $db) {
     static $checked = false;
     if ($checked) {
@@ -246,10 +248,10 @@ switch ($method) {
                 $recipients = fetchLetterRecipients($db, $type, [$letter['id']]);
                 $letter['recipients'] = $recipients[$letter['id']] ?? [];
 
-                echo json_encode($letter);
+                echo json_encode($letter, $JSON_FLAGS);
             } else {
                 http_response_code(404);
-                echo json_encode(['error' => 'Письмо не найдено']);
+                echo json_encode(['error' => 'Письмо не найдено'], $JSON_FLAGS);
             }
         } else {
             // Получить все письма (с учетом региона пользователя, если он задан)
@@ -315,7 +317,7 @@ switch ($method) {
             }
             unset($letter);
 
-            echo json_encode($letters);
+            echo json_encode($letters, $JSON_FLAGS);
         }
         break;
 
@@ -435,7 +437,7 @@ switch ($method) {
             }
             http_response_code(500);
             error_log('letters create failed: ' . $e->getMessage());
-            echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['error' => 'Внутренняя ошибка сервера'], $JSON_FLAGS);
             break;
         }
 
@@ -445,7 +447,7 @@ switch ($method) {
             'id' => (int)$letter_id,
             'region_id' => (int)$regionId
         ]);
-        echo json_encode(['id' => $letter_id, 'message' => 'Письмо успешно добавлено']);
+        echo json_encode(['id' => $letter_id, 'message' => 'Письмо успешно добавлено'], $JSON_FLAGS);
         break;
 
     case 'PUT':
@@ -456,7 +458,7 @@ switch ($method) {
 
         if (!$id) {
             http_response_code(400);
-            echo json_encode(['error' => 'ID не указан']);
+            echo json_encode(['error' => 'ID не указан'], $JSON_FLAGS);
             break;
         }
 
@@ -468,7 +470,7 @@ switch ($method) {
         $existingRow = $stmtLetter->fetch();
         if (!$existingRow) {
             http_response_code(404);
-            echo json_encode(['error' => 'Письмо не найдено']);
+            echo json_encode(['error' => 'Письмо не найдено'], $JSON_FLAGS);
             break;
         }
         $existingRegionId = (int)$existingRow['region_id'];
@@ -593,7 +595,7 @@ switch ($method) {
             }
             http_response_code(500);
             error_log('letters update failed: ' . $e->getMessage());
-            echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['error' => 'Внутренняя ошибка сервера'], $JSON_FLAGS);
             break;
         }
 
@@ -603,7 +605,7 @@ switch ($method) {
             'id' => (int)$id,
             'region_id' => (int)$existingRegionId
         ]);
-        echo json_encode(['message' => 'Письмо успешно обновлено']);
+        echo json_encode(['message' => 'Письмо успешно обновлено'], $JSON_FLAGS);
         break;
 
     case 'DELETE':
@@ -613,7 +615,7 @@ switch ($method) {
 
         if (!$id) {
             http_response_code(400);
-            echo json_encode(['error' => 'ID не указан']);
+            echo json_encode(['error' => 'ID не указан'], $JSON_FLAGS);
             break;
         }
 
@@ -643,7 +645,7 @@ switch ($method) {
             }
             http_response_code(500);
             error_log('letters delete failed: ' . $e->getMessage());
-            echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['error' => 'Внутренняя ошибка сервера'], $JSON_FLAGS);
             break;
         }
 
@@ -652,10 +654,10 @@ switch ($method) {
             'type' => $type,
             'id' => (int)$id
         ]);
-        echo json_encode(['message' => 'Письмо успешно удалено']);
+        echo json_encode(['message' => 'Письмо успешно удалено'], $JSON_FLAGS);
         break;
 
     default:
         http_response_code(405);
-        echo json_encode(['error' => 'Метод не поддерживается']);
+        echo json_encode(['error' => 'Метод не поддерживается'], $JSON_FLAGS);
 }

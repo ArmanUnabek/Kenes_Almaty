@@ -9,6 +9,9 @@ session_start();
 
 header('Content-Type: application/json; charset=utf-8');
 
+$JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+const SESSION_IDLE_TIMEOUT_SECONDS = 1800;
+
 $action = $_GET['action'] ?? 'check';
 
 try {
@@ -37,10 +40,11 @@ try {
     error_log('auth failed: ' . $e->getMessage());
     echo json_encode([
         'error' => 'Внутренняя ошибка сервера'
-    ], JSON_UNESCAPED_UNICODE);
+    ], $JSON_FLAGS);
 }
 
 function handleLogin($db) {
+    global $JSON_FLAGS;
     $username = $_POST['username'] ?? '';
     $password = $_POST['password'] ?? '';
 
@@ -48,7 +52,7 @@ function handleLogin($db) {
         http_response_code(400);
         echo json_encode([
             'error' => 'Логин и пароль обязательны'
-        ], JSON_UNESCAPED_UNICODE);
+        ], $JSON_FLAGS);
         return;
     }
 
@@ -61,7 +65,7 @@ function handleLogin($db) {
         http_response_code(401);
         echo json_encode([
             'error' => 'Неверный логин или пароль'
-        ], JSON_UNESCAPED_UNICODE);
+        ], $JSON_FLAGS);
         return;
     }
 
@@ -73,6 +77,7 @@ function handleLogin($db) {
     $_SESSION['username'] = $user['username'];
     $_SESSION['role'] = $user['role'];
     $_SESSION['region_id'] = $user['region_id'];
+    $_SESSION['last_activity_at'] = time();
 
     // Обновить last_login
     $now = date('Y-m-d H:i:s');
@@ -91,36 +96,54 @@ function handleLogin($db) {
             'role' => $user['role'],
             'region_id' => $user['region_id']
         ]
-    ], JSON_UNESCAPED_UNICODE);
+    ], $JSON_FLAGS);
 }
 
 function handleLogout($db) {
+    global $JSON_FLAGS;
+
     if (isset($_SESSION['user_id'])) {
         $db->prepare('INSERT INTO activity_logs (user_id, action, entity_type, ip_address) VALUES (?, ?, ?, ?)')
             ->execute([$_SESSION['user_id'], 'logout', 'user', $_SERVER['REMOTE_ADDR'] ?? '']);
     }
 
+    $_SESSION = [];
     session_destroy();
 
     echo json_encode([
         'authenticated' => false,
         'message' => 'Вы вышли из системы'
-    ], JSON_UNESCAPED_UNICODE);
+    ], $JSON_FLAGS);
 }
 
 function handleCsrf($db) {
+    global $JSON_FLAGS;
+
     // Сессионный CSRF-токен, согласованный с CsrfMiddleware::requireVerification().
     echo json_encode([
         'csrf_token' => CsrfMiddleware::getToken()
-    ], JSON_UNESCAPED_UNICODE);
+    ], $JSON_FLAGS);
 }
 
 function handleCheck($db) {
+    global $JSON_FLAGS;
+
     if (!isset($_SESSION['user_id'])) {
         http_response_code(401);
         echo json_encode([
             'authenticated' => false
-        ], JSON_UNESCAPED_UNICODE);
+        ], $JSON_FLAGS);
+        return;
+    }
+
+    $lastActivity = (int)($_SESSION['last_activity_at'] ?? 0);
+    if ($lastActivity > 0 && (time() - $lastActivity) > SESSION_IDLE_TIMEOUT_SECONDS) {
+        $_SESSION = [];
+        session_destroy();
+        http_response_code(401);
+        echo json_encode([
+            'authenticated' => false
+        ], $JSON_FLAGS);
         return;
     }
 
@@ -129,16 +152,19 @@ function handleCheck($db) {
     $user = $stmt->fetch();
 
     if (!$user) {
+        $_SESSION = [];
         session_destroy();
         http_response_code(401);
         echo json_encode([
             'authenticated' => false
-        ], JSON_UNESCAPED_UNICODE);
+        ], $JSON_FLAGS);
         return;
     }
+
+    $_SESSION['last_activity_at'] = time();
 
     echo json_encode([
         'authenticated' => true,
         'user' => $user
-    ], JSON_UNESCAPED_UNICODE);
+    ], $JSON_FLAGS);
 }

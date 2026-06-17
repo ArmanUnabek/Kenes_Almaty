@@ -10,6 +10,8 @@ if (session_status() === PHP_SESSION_NONE) {
 
 header('Content-Type: application/json; charset=utf-8');
 
+$JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+
 checkAuth();
 
 $db = getDBConnection();
@@ -19,7 +21,7 @@ $cache = new FileCache();
 $cacheKey = 'kpi:stats:' . ($regionId ?: 'global');
 $cached = $cache->get($cacheKey);
 if ($cached) {
-    echo json_encode($cached);
+    echo json_encode($cached, $JSON_FLAGS);
     exit;
 }
 
@@ -285,11 +287,11 @@ try {
         ]
     ];
     $cache->set($cacheKey, $payload, 1800);
-    echo json_encode($payload);
+    echo json_encode($payload, $JSON_FLAGS);
 } catch (Throwable $e) {
     http_response_code(500);
     error_log('kpi failed: ' . $e->getMessage());
-    echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['error' => 'Внутренняя ошибка сервера'], $JSON_FLAGS);
 }
 
 

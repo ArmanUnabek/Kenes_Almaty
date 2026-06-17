@@ -4,6 +4,10 @@ require_once '../auth_middleware.php';
 
 use App\Middleware\CsrfMiddleware;
 
+header('Content-Type: application/json; charset=utf-8');
+
+$JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+
 $method = $_SERVER['REQUEST_METHOD'];
 $db = getDBConnection();
 
@@ -14,7 +18,7 @@ checkAuth();
 if ($method !== 'GET') {
     if (!isAdmin()) {
         http_response_code(403);
-        echo json_encode(['error' => 'Доступ запрещен']);
+        echo json_encode(['error' => 'Доступ запрещен'], $JSON_FLAGS);
         exit;
     }
     CsrfMiddleware::requireVerification();
@@ -57,16 +61,16 @@ switch ($method) {
                 $stats['outgoing_letters_count'] = $stmt5->fetch()['count'];
                 
                 $region['stats'] = $stats;
-                echo json_encode($region);
+                echo json_encode($region, $JSON_FLAGS);
             } else {
                 http_response_code(404);
-                echo json_encode(['error' => 'Регион не найден']);
+                echo json_encode(['error' => 'Регион не найден'], $JSON_FLAGS);
             }
         } elseif ($code) {
             $stmt = $db->prepare("SELECT * FROM regions WHERE code = ?");
             $stmt->execute([$code]);
             $region = $stmt->fetch();
-            echo json_encode($region ?: null);
+            echo json_encode($region ?: null, $JSON_FLAGS);
         } else {
             $sql = "SELECT * FROM regions";
             if ($activeOnly) {
@@ -76,7 +80,7 @@ switch ($method) {
             
             $stmt = $db->query($sql);
             $regions = $stmt->fetchAll();
-            echo json_encode($regions);
+            echo json_encode($regions, $JSON_FLAGS);
         }
         break;
         
@@ -97,7 +101,7 @@ switch ($method) {
         ]);
         
         $id = $db->lastInsertId();
-        echo json_encode(['id' => $id, 'message' => 'Регион успешно создан']);
+        echo json_encode(['id' => $id, 'message' => 'Регион успешно создан'], $JSON_FLAGS);
         break;
         
     case 'PUT':
@@ -106,7 +110,7 @@ switch ($method) {
         
         if (!$id) {
             http_response_code(400);
-            echo json_encode(['error' => 'ID не указан']);
+            echo json_encode(['error' => 'ID не указан'], $JSON_FLAGS);
             break;
         }
         
@@ -125,7 +129,7 @@ switch ($method) {
             $id
         ]);
         
-        echo json_encode(['message' => 'Регион успешно обновлен']);
+        echo json_encode(['message' => 'Регион успешно обновлен'], $JSON_FLAGS);
         break;
         
     case 'DELETE':
@@ -133,18 +137,18 @@ switch ($method) {
         
         if (!$id) {
             http_response_code(400);
-            echo json_encode(['error' => 'ID не указан']);
+            echo json_encode(['error' => 'ID не указан'], $JSON_FLAGS);
             break;
         }
         
         $stmt = $db->prepare("UPDATE regions SET is_active = FALSE WHERE id = ?");
         $stmt->execute([$id]);
         
-        echo json_encode(['message' => 'Регион успешно деактивирован']);
+        echo json_encode(['message' => 'Регион успешно деактивирован'], $JSON_FLAGS);
         break;
         
     default:
         http_response_code(405);
-        echo json_encode(['error' => 'Метод не поддерживается']);
+        echo json_encode(['error' => 'Метод не поддерживается'], $JSON_FLAGS);
 }
 

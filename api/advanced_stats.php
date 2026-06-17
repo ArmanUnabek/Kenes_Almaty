@@ -8,6 +8,8 @@ if (session_status() === PHP_SESSION_NONE) {
 
 header('Content-Type: application/json; charset=utf-8');
 
+$JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+
 checkAuth();
 
 $db = getDBConnection();
@@ -291,10 +293,10 @@ try {
         ? round(($timeStats['on_time'] / $timeStats['total']) * 100, 1) 
         : 0;
 
-    echo json_encode($stats);
+    echo json_encode($stats, $JSON_FLAGS);
 
 } catch (Throwable $e) {
     http_response_code(500);
     error_log('advanced_stats failed: ' . $e->getMessage());
-    echo json_encode(['error' => 'Внутренняя ошибка сервера'], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['error' => 'Внутренняя ошибка сервера'], $JSON_FLAGS);
 }

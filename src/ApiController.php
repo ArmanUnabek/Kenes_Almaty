@@ -3,11 +3,12 @@
 namespace App;
 
 use App\Middleware\CsrfMiddleware;
+use App\Services\AuditLogger;
 
 abstract class ApiController
 {
     protected \PDO $db;
-    protected array $JSON_FLAGS = [\JSON_UNESCAPED_UNICODE, \JSON_UNESCAPED_SLASHES];
+    protected int $JSON_FLAGS = \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES;
     protected ?array $currentUser = null;
 
     public function __construct()
@@ -26,7 +27,7 @@ abstract class ApiController
     protected function json($data, int $code = 200): void
     {
         http_response_code($code);
-        echo json_encode($data, ...$this->JSON_FLAGS);
+        echo json_encode($data, $this->JSON_FLAGS);
         exit;
     }
 
