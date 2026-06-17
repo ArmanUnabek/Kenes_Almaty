@@ -4,8 +4,11 @@ namespace App\Services;
 
 class LetterService
 {
-    public static function getSeqBaseline(string $table): int
+    public static function getSeqBaseline(string $table, ?\PDO $db = null, ?int $regionId = null): int
     {
+        if ($db && $regionId) {
+            return RegionService::getSeqBaseline($db, $regionId, $table);
+        }
         if ($table === 'incoming_letters') {
             return 1327;
         }
@@ -20,7 +23,7 @@ class LetterService
         $stmt = $db->prepare("SELECT COALESCE(MAX(seq), 0) AS max_seq FROM {$table} WHERE region_id = ?");
         $stmt->execute([$regionId]);
         $max = (int)$stmt->fetchColumn();
-        $baseline = self::getSeqBaseline($table);
+        $baseline = RegionService::getSeqBaseline($db, $regionId, $table);
         return max($max, $baseline) + 1;
     }
 

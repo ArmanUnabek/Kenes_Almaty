@@ -80,6 +80,13 @@ class CommissionRepository
         return $stmt->execute($params);
     }
 
+    public function countMembers(int $commissionId): int
+    {
+        $stmt = $this->db->prepare('SELECT COUNT(*) FROM os_members WHERE commission_id = ?');
+        $stmt->execute([$commissionId]);
+        return (int)$stmt->fetchColumn();
+    }
+
     public function delete(int $id, ?int $regionId = null): bool
     {
         $query = 'DELETE FROM commissions WHERE id = ?';

@@ -3,6 +3,9 @@ const API = '/api';
 let regions = [];
 let users = [];
 let editRegionModal;
+let bootstrapRegionModal;
+let auditPage = 1;
+const auditLimit = 50;
 
 async function apiFetch(url, options = {}) {
   const resp = await fetch(url, options);
@@ -30,6 +33,7 @@ function showTab(name) {
   document.getElementById('tab-regions').classList.toggle('d-none', name !== 'regions');
   document.getElementById('tab-users').classList.toggle('d-none', name !== 'users');
   document.getElementById('tab-overview').classList.toggle('d-none', name !== 'overview');
+  document.getElementById('tab-audit').classList.toggle('d-none', name !== 'audit');
 }
 
 async function loadRegionsWithStats() {
@@ -75,6 +79,7 @@ function renderRegionsGrid() {
           <div class="card-footer bg-white d-flex gap-2 flex-wrap">
             <button class="btn btn-sm btn-outline-primary" data-action="edit-region" data-id="${r.id}">Изменить</button>
             <button class="btn btn-sm btn-outline-success" data-action="open-region" data-id="${r.id}">Открыть журнал</button>
+            <button class="btn btn-sm btn-outline-warning" data-action="bootstrap-region" data-id="${r.id}">Инициализировать</button>
             ${active ? '' : `<button class="btn btn-sm btn-outline-secondary" data-action="activate-region" data-id="${r.id}">Активировать</button>`}
           </div>
         </div>
@@ -89,6 +94,9 @@ function renderRegionsGrid() {
   });
   grid.querySelectorAll('[data-action="activate-region"]').forEach((btn) => {
     btn.addEventListener('click', () => activateRegion(Number(btn.dataset.id)));
+  });
+  grid.querySelectorAll('[data-action="bootstrap-region"]').forEach((btn) => {
+    btn.addEventListener('click', () => openBootstrapRegion(Number(btn.dataset.id)));
   });
 }
 
@@ -113,10 +121,17 @@ function renderOverview() {
 
 function populateRegionSelects() {
   const select = document.getElementById('userRegionId');
-  if (!select) return;
-  select.innerHTML = '<option value="">— без региона (админ) —</option>' +
-    regions.filter((r) => r.is_active == 1 || r.is_active === true)
+  if (select) {
+    select.innerHTML = '<option value="">— без региона (админ) —</option>' +
+      regions.filter((r) => r.is_active == 1 || r.is_active === true)
+        .map((r) => `<option value="${r.id}">${escapeHtml(r.name_ru)}</option>`).join('');
+  }
+
+  const tpl = document.getElementById('bootstrapTemplateRegion');
+  if (tpl) {
+    tpl.innerHTML = regions
       .map((r) => `<option value="${r.id}">${escapeHtml(r.name_ru)}</option>`).join('');
+  }
 }
 
 async function loadUsers() {
@@ -177,6 +192,62 @@ async function activateRegion(id) {
   await loadRegionsWithStats();
 }
 
+function openBootstrapRegion(id) {
+  const r = regions.find((x) => Number(x.id) === id);
+  if (!r) return;
+  document.getElementById('bootstrapRegionId').value = r.id;
+  document.getElementById('bootstrapRegionName').textContent = `Регион: ${r.name_ru}`;
+  let settings = r.settings;
+  if (typeof settings === 'string') {
+    try { settings = JSON.parse(settings); } catch { settings = {}; }
+  }
+  settings = settings || {};
+  document.getElementById('bootstrapSeqIncoming').value = settings.seq_baseline_incoming ?? 0;
+  document.getElementById('bootstrapSeqOutgoing').value = settings.seq_baseline_outgoing ?? 0;
+  document.getElementById('bootstrapCopyCommissions').checked = true;
+  const tpl = document.getElementById('bootstrapTemplateRegion');
+  if (tpl) {
+    const defaultTpl = regions.find((x) => Number(x.id) === 1)
+      ? '1'
+      : String(regions.find((x) => Number(x.id) !== id)?.id || regions[0]?.id || 1);
+    tpl.value = defaultTpl;
+  }
+  bootstrapRegionModal.show();
+}
+
+async function loadAuditLogs(page = auditPage) {
+  auditPage = page;
+  const data = await apiFetch(`${API}/audit_logs.php?page=${page}&limit=${auditLimit}`);
+  const tbody = document.querySelector('#auditTable tbody');
+  const items = data.items || [];
+  tbody.innerHTML = items.length
+    ? items.map((row) => `
+      <tr>
+        <td class="text-nowrap small">${escapeHtml(formatAuditDate(row.created_at))}</td>
+        <td>${escapeHtml(row.user_name || row.user_login || '—')}</td>
+        <td><code>${escapeHtml(row.table_name || '')}</code></td>
+        <td><span class="badge bg-light text-dark border">${escapeHtml(row.operation || '')}</span></td>
+        <td>${row.record_id ?? '—'}</td>
+        <td class="small text-muted">${escapeHtml(row.ip_address || '')}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" class="text-center text-muted py-4">Записей нет</td></tr>';
+
+  const pagination = data.pagination || {};
+  const total = pagination.total ?? 0;
+  const pages = pagination.pages ?? 1;
+  document.getElementById('auditPaginationInfo').textContent =
+    `Страница ${auditPage} из ${pages} · всего ${total}`;
+  document.getElementById('auditPrevBtn').disabled = auditPage <= 1;
+  document.getElementById('auditNextBtn').disabled = auditPage >= pages;
+}
+
+function formatAuditDate(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString('ru-RU');
+}
+
 async function deactivateUser(id) {
   if (!confirm('Деактивировать пользователя?')) return;
   await apiFetch(`${API}/users.php?id=${id}`, { method: 'DELETE' });
@@ -188,6 +259,7 @@ document.getElementById('adminTabs').addEventListener('click', (e) => {
   if (!btn) return;
   showTab(btn.dataset.tab);
   if (btn.dataset.tab === 'users') loadUsers();
+  if (btn.dataset.tab === 'audit') loadAuditLogs(1);
 });
 
 document.getElementById('formRegion').addEventListener('submit', async (e) => {
@@ -236,6 +308,37 @@ document.getElementById('formUser').addEventListener('submit', async (e) => {
   }
 });
 
+document.getElementById('formBootstrapRegion').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const regionId = Number(document.getElementById('bootstrapRegionId').value);
+  try {
+    const result = await apiFetch(`${API}/regions.php?action=bootstrap`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        region_id: regionId,
+        template_region_id: Number(document.getElementById('bootstrapTemplateRegion').value) || 1,
+        seq_baseline_incoming: Number(document.getElementById('bootstrapSeqIncoming').value) || 0,
+        seq_baseline_outgoing: Number(document.getElementById('bootstrapSeqOutgoing').value) || 0,
+        copy_commissions: document.getElementById('bootstrapCopyCommissions').checked,
+      }),
+    });
+    bootstrapRegionModal.hide();
+    await loadRegionsWithStats();
+    alert(`Регион инициализирован. Скопировано комиссий: ${result.commissions_copied ?? 0}`);
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+document.getElementById('auditRefreshBtn')?.addEventListener('click', () => loadAuditLogs(auditPage));
+document.getElementById('auditPrevBtn')?.addEventListener('click', () => {
+  if (auditPage > 1) loadAuditLogs(auditPage - 1);
+});
+document.getElementById('auditNextBtn')?.addEventListener('click', () => {
+  loadAuditLogs(auditPage + 1);
+});
+
 document.getElementById('formEditRegion').addEventListener('submit', async (e) => {
   e.preventDefault();
   const id = Number(document.getElementById('editRegionId').value);
@@ -271,6 +374,7 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
 
 document.addEventListener('DOMContentLoaded', async () => {
   editRegionModal = new bootstrap.Modal(document.getElementById('editRegionModal'));
+  bootstrapRegionModal = new bootstrap.Modal(document.getElementById('bootstrapRegionModal'));
   const user = await ensureAdmin();
   if (!user) return;
   await loadRegionsWithStats();

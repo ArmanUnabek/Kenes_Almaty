@@ -19,6 +19,7 @@ require_once __DIR__ . '/src/Services/FileCache.php';
 require_once __DIR__ . '/src/Services/FileStorage.php';
 require_once __DIR__ . '/src/Services/EmailService.php';
 require_once __DIR__ . '/src/Services/LetterService.php';
+require_once __DIR__ . '/src/Services/RegionService.php';
 
 use App\Logger;
 use App\ErrorHandler;

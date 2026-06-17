@@ -21,6 +21,7 @@ class PhotoUploadController extends ApiController
     {
         try {
             $this->requireAuth();
+            $this->requireWriteAccess();
             $this->requireCsrf();
 
             if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

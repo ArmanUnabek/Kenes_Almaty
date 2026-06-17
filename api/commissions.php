@@ -130,6 +130,11 @@ class CommissionsController extends ApiController
             $this->error('Комиссия не найдена', 404);
         }
 
+        $memberCount = $this->repo->countMembers($id);
+        if ($memberCount > 0) {
+            $this->error('Нельзя удалить комиссию с назначенными членами ОС', 409);
+        }
+
         $this->repo->delete($id, $regionId);
         $this->logAction('commissions', $id, 'DELETE', $existing, null);
         $this->json(['message' => 'Комиссия успешно удалена']);

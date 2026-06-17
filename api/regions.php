@@ -3,12 +3,14 @@ require_once '../config.php';
 require_once '../auth_middleware.php';
 
 use App\Middleware\CsrfMiddleware;
+use App\Services\RegionService;
 
 header('Content-Type: application/json; charset=utf-8');
 
 $JSON_FLAGS = JSON_ENCODE_FLAGS;
 
 $method = $_SERVER['REQUEST_METHOD'];
+$action = $_GET['action'] ?? null;
 $db = getDBConnection();
 
 // Доступ к регионам только для авторизованных пользователей
@@ -85,8 +87,42 @@ switch ($method) {
         break;
         
     case 'POST':
+        if ($action === 'bootstrap') {
+            $data = json_decode(file_get_contents('php://input'), true) ?: [];
+            $regionId = (int)($data['region_id'] ?? 0);
+            if ($regionId <= 0) {
+                http_response_code(400);
+                echo json_encode(['error' => 'region_id обязателен'], $JSON_FLAGS);
+                break;
+            }
+            try {
+                $result = RegionService::bootstrap(
+                    $db,
+                    $regionId,
+                    isset($data['template_region_id']) ? (int)$data['template_region_id'] : 1,
+                    [
+                        'seq_baseline_incoming' => (int)($data['seq_baseline_incoming'] ?? 0),
+                        'seq_baseline_outgoing' => (int)($data['seq_baseline_outgoing'] ?? 0),
+                        'copy_commissions' => $data['copy_commissions'] ?? true,
+                    ]
+                );
+                echo json_encode([
+                    'message' => 'Регион инициализирован',
+                    'commissions_copied' => $result['commissions_copied'],
+                    'settings' => $result['settings'],
+                ], $JSON_FLAGS);
+            } catch (\Throwable $e) {
+                http_response_code(400);
+                echo json_encode(['error' => $e->getMessage()], $JSON_FLAGS);
+            }
+            break;
+        }
+
         $data = json_decode(file_get_contents('php://input'), true);
-        
+        $defaultSettings = [
+            'seq_baseline_incoming' => (int)($data['settings']['seq_baseline_incoming'] ?? 0),
+            'seq_baseline_outgoing' => (int)($data['settings']['seq_baseline_outgoing'] ?? 0),
+        ];
         $stmt = $db->prepare("
             INSERT INTO regions (name_kz, name_ru, code, is_active, settings)
             VALUES (?, ?, ?, ?, ?)
@@ -97,7 +133,7 @@ switch ($method) {
             $data['name_ru'] ?? '',
             $data['code'] ?? '',
             $data['is_active'] ?? TRUE,
-            json_encode($data['settings'] ?? [])
+            json_encode($data['settings'] ?? $defaultSettings)
         ]);
         
         $id = $db->lastInsertId();

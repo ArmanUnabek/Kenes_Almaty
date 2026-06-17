@@ -21,6 +21,30 @@ function applyPermissionsUI(user) {
   document.getElementById('commissionFormCard')?.classList.toggle('d-none', !show);
 }
 
+async function uploadMemberPhoto(memberId, file) {
+  if (!canWrite() || !file) return;
+  const formData = new FormData();
+  formData.append('member_id', String(memberId));
+  formData.append('photo', file);
+  const resp = await fetch(`${API_BASE}/upload_photo.php`, {
+    method: 'POST',
+    body: formData,
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(data.error || data.message || 'Не удалось загрузить фото');
+  }
+  const photoUrl = data.data?.photo_url || data.photo_url;
+  if (photoUrl) {
+    const member = membersCatalog.find((m) => String(m.id) === String(memberId));
+    if (member) {
+      member.photo_url = photoUrl;
+      member.photo_path = photoUrl.replace(/^\//, '');
+    }
+  }
+  return photoUrl;
+}
+
 async function saveMember(payload, isEdit) {
   const url = `${API_BASE}/members.php`;
   const resp = await fetch(url, {
@@ -1422,17 +1446,27 @@ function renderMembersGrid() {
     const commissionBadge = member.commission_name
       ? `<span class="badge commission-badge" style="background:${color}20;color:${color}">${escapeHtml(member.commission_name)}</span>`
       : '';
+    const avatarContent = member.photo_url
+      ? `<img src="${escapeHtml(member.photo_url)}" alt="" class="member-avatar-img">`
+      : getInitials(member.full_name);
     return `
       <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
         <div class="member-card card h-100">
           <div class="card-body text-center">
-            <div class="member-avatar">${getInitials(member.full_name)}</div>
+            <div class="member-avatar">${avatarContent}</div>
             <h6 class="member-name mt-3 mb-1">${escapeHtml(member.full_name || '')}</h6>
             <p class="member-role text-muted small mb-2">${escapeHtml(member.position || 'Член совета')}</p>
             ${commissionBadge}
             ${member.organization ? `<p class="small text-muted mt-2 mb-0">${escapeHtml(member.organization)}</p>` : ''}
             ${member.phone ? `<p class="small text-muted mb-0">${escapeHtml(member.phone)}</p>` : ''}
-            ${canWrite() ? `<div class="mt-3"><button type="button" class="btn btn-sm btn-outline-primary" data-edit-member="${member.id}"><i class="bi bi-pencil"></i> Изменить</button></div>` : ''}
+            ${canWrite() ? `
+              <div class="mt-3 d-flex justify-content-center gap-2 flex-wrap">
+                <button type="button" class="btn btn-sm btn-outline-primary" data-edit-member="${member.id}"><i class="bi bi-pencil"></i> Изменить</button>
+                <label class="btn btn-sm btn-outline-secondary mb-0">
+                  <i class="bi bi-camera"></i> Фото
+                  <input type="file" accept="image/jpeg,image/png" class="d-none" data-photo-upload="${member.id}">
+                </label>
+              </div>` : ''}
           </div>
         </div>
       </div>
@@ -1444,6 +1478,22 @@ function renderMembersGrid() {
       btn.addEventListener('click', () => {
         const member = membersCatalog.find((m) => String(m.id) === btn.dataset.editMember);
         if (member) editMember(member);
+      });
+    });
+    grid.querySelectorAll('[data-photo-upload]').forEach((input) => {
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        try {
+          await uploadMemberPhoto(input.dataset.photoUpload, file);
+          renderMembersGrid();
+          if (window.showSuccess) showSuccess('Фото успешно загружено');
+        } catch (err) {
+          if (window.showError) showError(err.message);
+          else alert(err.message);
+        } finally {
+          input.value = '';
+        }
       });
     });
   }
@@ -2614,9 +2664,9 @@ function renderEvents() {
             <button class="btn btn-sm btn-outline-primary" title="Изменить" data-action="edit-event" data-id="${ev.id}">
               <i class="bi bi-pencil"></i>
             </button>
-            <button class="btn btn-sm btn-outline-danger" title="Удалить" data-action="del-event" data-id="${ev.id}">
+            ${canDelete() ? `<button class="btn btn-sm btn-outline-danger" title="Удалить" data-action="del-event" data-id="${ev.id}">
               <i class="bi bi-trash"></i>
-            </button>
+            </button>` : ''}
           </td>
         </tr>
       `;
@@ -2839,7 +2889,7 @@ function renderIncoming() {
           <td>${linkHtml}</td>
           <td class="text-end table-actions">
             <button class="btn btn-sm btn-outline-primary" data-action="edit-incoming" data-id="${i.id}" title="Изменить"><i class="bi bi-pencil"></i></button>
-            <button class="btn btn-sm btn-outline-danger" data-action="del-incoming" data-id="${i.id}" title="Удалить"><i class="bi bi-trash"></i></button>
+            ${canDelete() ? `<button class="btn btn-sm btn-outline-danger" data-action="del-incoming" data-id="${i.id}" title="Удалить"><i class="bi bi-trash"></i></button>` : ''}
           </td>
         </tr>`;
     });
@@ -3115,9 +3165,9 @@ function renderOutgoing() {
             <button class="btn btn-sm btn-outline-primary" title="Изменить" data-action="edit-outgoing" data-id="${i.id}">
               <i class="bi bi-pencil"></i>
             </button>
-            <button class="btn btn-sm btn-outline-danger" title="Удалить" data-action="del-outgoing" data-id="${i.id}">
+            ${canDelete() ? `<button class="btn btn-sm btn-outline-danger" title="Удалить" data-action="del-outgoing" data-id="${i.id}">
               <i class="bi bi-trash"></i>
-            </button>
+            </button>` : ''}
           </td>
         </tr>`;
     });

@@ -33,6 +33,7 @@
             <li class="nav-item"><button class="nav-link active" data-tab="regions">Регионы</button></li>
             <li class="nav-item"><button class="nav-link" data-tab="users">Пользователи</button></li>
             <li class="nav-item"><button class="nav-link" data-tab="overview">Сводка</button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="audit">Аудит</button></li>
         </ul>
 
         <div id="tab-regions">
@@ -123,6 +124,77 @@
         <div id="tab-overview" class="d-none">
             <div class="row g-3" id="overviewGrid"></div>
         </div>
+
+        <div id="tab-audit" class="d-none">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Журнал аудита</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="auditRefreshBtn">Обновить</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0" id="auditTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Дата</th>
+                                <th>Пользователь</th>
+                                <th>Таблица</th>
+                                <th>Операция</th>
+                                <th>ID записи</th>
+                                <th>IP</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <span class="small text-muted" id="auditPaginationInfo"></span>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-secondary" id="auditPrevBtn">Назад</button>
+                        <button type="button" class="btn btn-outline-secondary" id="auditNextBtn">Вперёд</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="bootstrapRegionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="formBootstrapRegion">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Инициализация региона</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body row g-3">
+                        <input type="hidden" id="bootstrapRegionId" />
+                        <div class="col-12">
+                            <p class="text-muted small mb-0" id="bootstrapRegionName"></p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Базовый номер входящих</label>
+                            <input type="number" class="form-control" id="bootstrapSeqIncoming" min="0" value="0" />
+                            <div class="form-text">Следующий номер будет на 1 больше</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Базовый номер исходящих</label>
+                            <input type="number" class="form-control" id="bootstrapSeqOutgoing" min="0" value="0" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Шаблонный регион (комиссии)</label>
+                            <select class="form-select" id="bootstrapTemplateRegion"></select>
+                        </div>
+                        <div class="col-12 form-check">
+                            <input type="checkbox" class="form-check-input" id="bootstrapCopyCommissions" checked />
+                            <label class="form-check-label" for="bootstrapCopyCommissions">Скопировать комиссии из шаблона</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-primary">Инициализировать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <div class="modal fade" id="editRegionModal" tabindex="-1">
@@ -165,6 +237,6 @@
     <script src="/csrf-handler.js?v=4"></script>
     <script src="/api/js/utils.js?v=1"></script>
     <script src="/api/js/session.js?v=1"></script>
-    <script src="admin.js?v=1"></script>
+    <script src="admin.js?v=2"></script>
 </body>
 </html>

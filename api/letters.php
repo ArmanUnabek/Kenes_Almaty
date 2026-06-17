@@ -196,25 +196,6 @@ function fetchLetterRecipients(PDO $db, string $type, array $letterIds) {
     return $grouped;
 }
 
-function getSeqBaseline(string $table): int {
-    if ($table === 'incoming_letters') {
-        return 1327; // первый номер будет 1328
-    }
-    if ($table === 'outgoing_letters') {
-        return 1399; // первый номер будет 1400
-    }
-    return 0;
-}
-
-function computeNextSeq(PDO $db, string $table, int $regionId) {
-    $stmt = $db->prepare("SELECT COALESCE(MAX(seq), 0) AS max_seq FROM {$table} WHERE region_id = ?");
-    $stmt->execute([$regionId]);
-    $max = (int)$stmt->fetchColumn();
-    $baseline = getSeqBaseline($table);
-    $current = max($max, $baseline);
-    return $current + 1;
-}
-
 // Доступ к письмам только для авторизованных пользователей (для всех методов).
 checkAuth();
 
@@ -360,7 +341,7 @@ switch ($method) {
             if ($type === 'incoming') {
                 $seq = $data['seq'] ?? null;
                 if (!$seq) {
-                    $seq = computeNextSeq($db, $table, $regionId);
+                    $seq = LetterService::computeNextSeq($db, $table, $regionId);
                 }
                 $kkNumber = $data['kk_number'] ?? '';
                 if ($respondsToOutgoingId && !$kkNumber) {
@@ -389,7 +370,7 @@ switch ($method) {
             } else {
                 $seq = $data['seq'] ?? null;
                 if (!$seq) {
-                    $seq = computeNextSeq($db, $table, $regionId);
+                    $seq = LetterService::computeNextSeq($db, $table, $regionId);
                 }
                 $outgoingNumber = $data['outgoing_number'] ?? '';
                 $outgoingType = normalizeOutgoingType($data['outgoing_type'] ?? null);
