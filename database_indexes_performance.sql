@@ -33,7 +33,9 @@ ALTER TABLE regions ADD INDEX idx_name (name);
 ALTER TABLE users ADD INDEX idx_email (email);
 ALTER TABLE users ADD INDEX idx_region_id (region_id);
 
--- Audit logs table indexes
+ALTER TABLE incoming_letters ADD INDEX idx_linked_outgoing (linked_outgoing_id);
+ALTER TABLE outgoing_letters ADD INDEX idx_incoming_ref (incoming_ref_id);
+
 ALTER TABLE audit_logs ADD INDEX idx_table_name (table_name);
 ALTER TABLE audit_logs ADD INDEX idx_user_id (user_id);
 ALTER TABLE audit_logs ADD INDEX idx_created_at (created_at);

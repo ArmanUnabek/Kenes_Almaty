@@ -441,6 +441,32 @@ let linkOutgoingModalInstance = null;
 let lastAutoIncomingNumber = '';
 let linkModalContext = { type: 'incoming-table', incomingId: null };
 let selectedOutgoingForIncoming = null;
+const LETTERS_PAGE_SIZE = 50;
+let incomingPage = 1;
+let outgoingPage = 1;
+
+function buildPaginationHtml(type, page, totalPages) {
+  if (totalPages <= 1) return '';
+  const prev = Math.max(1, page - 1);
+  const next = Math.min(totalPages, page + 1);
+  return ` <div class="btn-group btn-group-sm ms-2" role="group">
+    <button type="button" class="btn btn-outline-secondary" data-letter-page="${type}" data-page="${prev}" ${page <= 1 ? 'disabled' : ''}>‹</button>
+    <span class="btn btn-outline-secondary disabled">${page}/${totalPages}</span>
+    <button type="button" class="btn btn-outline-secondary" data-letter-page="${type}" data-page="${next}" ${page >= totalPages ? 'disabled' : ''}>›</button>
+  </div>`;
+}
+
+function bindPaginationHandlers(type) {
+  const footerId = type === 'incoming' ? 'incomingTableFooter' : 'outgoingTableFooter';
+  document.getElementById(footerId)?.querySelectorAll('[data-letter-page]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const p = Number(btn.dataset.page);
+      if (type === 'incoming') { incomingPage = p; renderIncoming(); }
+      else { outgoingPage = p; renderOutgoing(); }
+    });
+  });
+}
+
 const incRecipientInput = document.getElementById('incRecipientInput');
 const incRecipientAdd = document.getElementById('incRecipientAdd');
 const incRecipientsList = document.getElementById('incRecipientsList');
@@ -1087,7 +1113,12 @@ function renderIncoming() {
     })
     .filter((i) => recipientFilter === 'all' || (i.recipients || []).includes(recipientFilter));
 
-  const rowsData = filteredIncoming.map((i) => {
+  const totalFiltered = filteredIncoming.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / LETTERS_PAGE_SIZE));
+  if (incomingPage > totalPages) incomingPage = totalPages;
+  const pageItems = filteredIncoming.slice((incomingPage - 1) * LETTERS_PAGE_SIZE, incomingPage * LETTERS_PAGE_SIZE);
+
+  const rowsData = pageItems.map((i) => {
       const linked = i.linkedOutgoingId ? store.outgoing.find(o => o.id === i.linkedOutgoingId) : null;
       const linkHtml = linked
         ? `<span class="badge badge-outgoing rounded-pill">Ответ: ${linked.outgoingNumber || 'Исх.' + linked.seq}</span>`
@@ -1136,7 +1167,7 @@ function renderIncoming() {
     : '<tr><td colspan="12" class="text-center text-muted py-4">По выбранным фильтрам писем не найдено</td></tr>';
   
   // Рендерим дополнительные ячейки после создания строк
-  filteredIncoming.forEach((i) => {
+  pageItems.forEach((i) => {
     const scansCell = document.getElementById(`scans-incoming-${i.id}`);
     if (scansCell) {
       renderLetterScans(i, 'incoming', scansCell);
@@ -1166,7 +1197,14 @@ function renderIncoming() {
   });
 
   if (typeof window.renderTableFooter === 'function') {
-    window.renderTableFooter('incomingTableFooter', filteredIncoming.length, store.incoming.length, 'писем');
+    window.renderTableFooter(
+      'incomingTableFooter',
+      pageItems.length,
+      totalFiltered,
+      'писем',
+      buildPaginationHtml('incoming', incomingPage, totalPages)
+    );
+    bindPaginationHandlers('incoming');
   }
   if (typeof window.updateNotifyBadge === 'function') window.updateNotifyBadge();
   if (typeof window.updatePageHeader === 'function') {
@@ -1388,7 +1426,12 @@ function renderOutgoing() {
     })
     .filter((i) => recipientFilter === 'all' || (i.recipients || []).includes(recipientFilter));
 
-  const rows = filteredOutgoing.map((i) => {
+  const totalFilteredOut = filteredOutgoing.length;
+  const totalPagesOut = Math.max(1, Math.ceil(totalFilteredOut / LETTERS_PAGE_SIZE));
+  if (outgoingPage > totalPagesOut) outgoingPage = totalPagesOut;
+  const pageItemsOut = filteredOutgoing.slice((outgoingPage - 1) * LETTERS_PAGE_SIZE, outgoingPage * LETTERS_PAGE_SIZE);
+
+  const rows = pageItemsOut.map((i) => {
       const incoming = store.incoming.find((inc) => inc.id === i.incomingRefId);
       const cat = incoming?.category || mapOutgoingTypeToCategory(i.outgoingType || 'gov');
       const catClass = categoryBadgeClass(cat);
@@ -1424,7 +1467,7 @@ function renderOutgoing() {
   tableOutgoingBody.innerHTML = rows.join("");
   
   // Рендерим сканы и ответственных после создания строк
-  filteredOutgoing.forEach((i) => {
+  pageItemsOut.forEach((i) => {
     const scansCell = document.getElementById(`scans-outgoing-${i.id}`);
     if (scansCell) {
       renderLetterScans(i, 'outgoing', scansCell);
@@ -1447,7 +1490,14 @@ function renderOutgoing() {
   });
 
   if (typeof window.renderTableFooter === 'function') {
-    window.renderTableFooter('outgoingTableFooter', filteredOutgoing.length, store.outgoing.length, 'писем');
+    window.renderTableFooter(
+      'outgoingTableFooter',
+      pageItemsOut.length,
+      totalFilteredOut,
+      'писем',
+      buildPaginationHtml('outgoing', outgoingPage, totalPagesOut)
+    );
+    bindPaginationHandlers('outgoing');
   }
 }
 
@@ -1745,17 +1795,19 @@ async function deleteOutgoing(id) {
   }
 
   function bindLettersFilters() {
-    if (searchIncoming) searchIncoming.addEventListener('input', debounce(() => renderIncoming(), 300));
-    if (searchOutgoing) searchOutgoing.addEventListener('input', debounce(() => renderOutgoing(), 300));
-    if (filterYearIncoming) filterYearIncoming.addEventListener('change', () => renderIncoming());
-    if (filterYearOutgoing) filterYearOutgoing.addEventListener('change', () => renderOutgoing());
-    if (filterMonthIncoming) filterMonthIncoming.addEventListener('change', () => renderIncoming());
-    if (filterMonthOutgoing) filterMonthOutgoing.addEventListener('change', () => renderOutgoing());
-    if (filterStatusIncoming) filterStatusIncoming.addEventListener('change', () => renderIncoming());
-    if (filterScansIncoming) filterScansIncoming.addEventListener('change', () => renderIncoming());
-    if (filterScansOutgoing) filterScansOutgoing.addEventListener('change', () => renderOutgoing());
-    if (filterRecipientIncoming) filterRecipientIncoming.addEventListener('change', () => renderIncoming());
-    if (filterRecipientOutgoing) filterRecipientOutgoing.addEventListener('change', () => renderOutgoing());
+    const resetIncoming = () => { incomingPage = 1; renderIncoming(); };
+    const resetOutgoing = () => { outgoingPage = 1; renderOutgoing(); };
+    if (searchIncoming) searchIncoming.addEventListener('input', debounce(resetIncoming, 300));
+    if (searchOutgoing) searchOutgoing.addEventListener('input', debounce(resetOutgoing, 300));
+    if (filterYearIncoming) filterYearIncoming.addEventListener('change', resetIncoming);
+    if (filterYearOutgoing) filterYearOutgoing.addEventListener('change', resetOutgoing);
+    if (filterMonthIncoming) filterMonthIncoming.addEventListener('change', resetIncoming);
+    if (filterMonthOutgoing) filterMonthOutgoing.addEventListener('change', resetOutgoing);
+    if (filterStatusIncoming) filterStatusIncoming.addEventListener('change', resetIncoming);
+    if (filterScansIncoming) filterScansIncoming.addEventListener('change', resetIncoming);
+    if (filterScansOutgoing) filterScansOutgoing.addEventListener('change', resetOutgoing);
+    if (filterRecipientIncoming) filterRecipientIncoming.addEventListener('change', resetIncoming);
+    if (filterRecipientOutgoing) filterRecipientOutgoing.addEventListener('change', resetOutgoing);
   }
 
   function initLettersUI() {
