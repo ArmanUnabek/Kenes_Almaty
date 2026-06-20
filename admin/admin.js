@@ -151,15 +151,49 @@ async function switchHeaderRegion(regionId) {
 
 /* ── Dashboard ── */
 
+let _regionsChart = null;
+
 async function loadDashboard() {
   try {
     const data = await apiFetch(`${API}/admin_stats.php`);
     adminStats = data;
     renderDashboardKpi(data.stats || {});
     renderDashboardRegions();
+    renderRegionsComparisonChart(data.regions_comparison || []);
   } catch (err) {
     showError(err.message);
   }
+}
+
+function renderRegionsComparisonChart(comparison) {
+  const canvas = document.getElementById('regionsComparisonChart');
+  if (!canvas || !window.Chart) return;
+  if (_regionsChart) { _regionsChart.destroy(); _regionsChart = null; }
+  if (!comparison.length) return;
+  const labels = comparison.map((r) => r.name_ru || r.code || `Регион ${r.id}`);
+  _regionsChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Входящие',
+          data: comparison.map((r) => Number(r.incoming || 0)),
+          backgroundColor: 'rgba(13, 110, 253, 0.7)',
+        },
+        {
+          label: 'Исходящие',
+          data: comparison.map((r) => Number(r.outgoing || 0)),
+          backgroundColor: 'rgba(25, 135, 84, 0.7)',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'top' } },
+      scales: { x: { stacked: false }, y: { beginAtZero: true } },
+    },
+  });
 }
 
 function renderDashboardKpi(stats) {
@@ -469,6 +503,8 @@ function openEditUser(id) {
   document.getElementById('editUserRegionId').disabled = user.role === 'admin';
   document.getElementById('editUserPassword').value = '';
   document.getElementById('editUserActive').checked = !!(user.is_active == 1 || user.is_active === true);
+  const tgEl = document.getElementById('editUserTelegramChatId');
+  if (tgEl) tgEl.value = user.telegram_chat_id || '';
   editUserModal.show();
 }
 
@@ -905,6 +941,7 @@ document.getElementById('formEditUser')?.addEventListener('submit', async (e) =>
     role,
     region_id: role === 'admin' ? null : (regionId || null),
     is_active: document.getElementById('editUserActive').checked,
+    telegram_chat_id: (document.getElementById('editUserTelegramChatId')?.value.trim() || null),
   };
   const password = document.getElementById('editUserPassword').value;
   if (password) payload.password = password;

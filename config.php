@@ -25,6 +25,7 @@ require_once __DIR__ . '/src/Services/SecurityAuditService.php';
 require_once __DIR__ . '/src/Services/AuditSanitizer.php';
 require_once __DIR__ . '/src/Services/NotificationRecipientPolicy.php';
 require_once __DIR__ . '/src/Services/TotpService.php';
+require_once __DIR__ . '/src/Services/TelegramService.php';
 
 use App\Logger;
 use App\ErrorHandler;
@@ -50,6 +51,9 @@ define('SMTP_USER',      getenv('SMTP_USER')      ?: '');
 define('SMTP_PASS',      getenv('SMTP_PASS')      ?: '');
 define('SMTP_FROM',      getenv('SMTP_FROM')      ?: 'noreply@example.com');
 define('SMTP_FROM_NAME', getenv('SMTP_FROM_NAME') ?: 'Журнал ОС');
+
+// Telegram Bot (опционально — для уведомлений о дедлайнах)
+define('TELEGRAM_BOT_TOKEN', getenv('TELEGRAM_BOT_TOKEN') ?: '');
 
 // Настройки для загрузки фото
 define('UPLOAD_DIR', APP_ROOT . '/uploads/photos/');

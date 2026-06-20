@@ -471,3 +471,35 @@ CREATE TABLE IF NOT EXISTS email_queue (
     INDEX idx_status (status),
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Комментарии к письмам
+CREATE TABLE IF NOT EXISTS letter_comments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    letter_type ENUM('incoming','outgoing') NOT NULL COMMENT 'Тип письма',
+    letter_id INT NOT NULL COMMENT 'ID письма',
+    user_id INT NOT NULL COMMENT 'ID пользователя',
+    comment TEXT NOT NULL COMMENT 'Текст комментария',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_letter (letter_type, letter_id),
+    INDEX idx_user (user_id),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Шаблоны писем
+CREATE TABLE IF NOT EXISTS letter_templates (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    region_id INT NOT NULL COMMENT 'ID региона',
+    name VARCHAR(255) NOT NULL COMMENT 'Название шаблона',
+    letter_type ENUM('incoming','outgoing') NOT NULL COMMENT 'Тип письма',
+    organization VARCHAR(255) COMMENT 'Организация по умолчанию',
+    subject TEXT COMMENT 'Тема по умолчанию',
+    note TEXT COMMENT 'Примечание по умолчанию',
+    category ENUM('KK','N','JT','ZT') DEFAULT 'KK' COMMENT 'Категория',
+    created_by INT COMMENT 'ID пользователя, создавшего шаблон',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_region_type (region_id, letter_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

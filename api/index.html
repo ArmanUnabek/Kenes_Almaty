@@ -54,6 +54,15 @@
             <button class="nav-link" id="tab-events" data-bs-toggle="tab" data-bs-target="#pane-events" type="button" role="tab">
                 <i class="bi bi-calendar-event"></i> <span class="sidebar-label" data-i18n="nav.events">Мероприятия</span>
             </button>
+            <button class="nav-link" id="tab-calendar" data-bs-toggle="tab" data-bs-target="#pane-calendar" type="button" role="tab">
+                <i class="bi bi-calendar3"></i> <span class="sidebar-label">Календарь</span>
+            </button>
+            <button class="nav-link" id="tab-my-letters" data-bs-toggle="tab" data-bs-target="#pane-my-letters" type="button" role="tab">
+                <i class="bi bi-person-lines-fill"></i> <span class="sidebar-label">Мои письма</span>
+            </button>
+            <button class="nav-link" id="tab-archive" data-bs-toggle="tab" data-bs-target="#pane-archive" type="button" role="tab">
+                <i class="bi bi-archive"></i> <span class="sidebar-label">Архив</span>
+            </button>
             <button class="nav-link" id="tab-updates" data-bs-toggle="tab" data-bs-target="#pane-updates" type="button" role="tab">
                 <i class="bi bi-stars"></i> <span class="sidebar-label">Что нового</span>
                 <span class="badge bg-danger ms-auto" id="updatesBadge" style="font-size:0.65rem">NEW</span>
@@ -383,6 +392,57 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Модалка: детали письма с вкладками (комментарии, история) -->
+            <div class="modal fade" id="letterDetailTabsModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="letterDetailTabsTitle">Письмо</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                        </div>
+                        <div class="modal-body p-0">
+                            <ul class="nav nav-tabs px-3 pt-2" id="letterDetailTabList" role="tablist">
+                                <li class="nav-item"><button class="nav-link active" id="ldtab-info" data-bs-toggle="tab" data-bs-target="#ldpane-info" type="button">Сведения</button></li>
+                                <li class="nav-item"><button class="nav-link" id="ldtab-comments" data-bs-toggle="tab" data-bs-target="#ldpane-comments" type="button">Комментарии <span class="badge bg-secondary ms-1" id="ldCommentsBadge">0</span></button></li>
+                                <li class="nav-item"><button class="nav-link" id="ldtab-history" data-bs-toggle="tab" data-bs-target="#ldpane-history" type="button">История</button></li>
+                            </ul>
+                            <div class="tab-content px-3 py-2">
+                                <div class="tab-pane fade show active" id="ldpane-info">
+                                    <div id="ldInfoBody" class="py-2"></div>
+                                </div>
+                                <div class="tab-pane fade" id="ldpane-comments">
+                                    <div id="ldCommentsList" class="py-2" style="max-height:320px;overflow-y:auto"></div>
+                                    <div class="border-top pt-2 mt-2 write-admin-only">
+                                        <textarea id="ldCommentInput" class="form-control form-control-sm mb-2" rows="2" placeholder="Добавить комментарий..."></textarea>
+                                        <button class="btn btn-sm btn-primary" id="ldCommentSubmit"><i class="bi bi-send"></i> Отправить</button>
+                                    </div>
+                                </div>
+                                <div class="tab-pane fade" id="ldpane-history">
+                                    <div id="ldHistoryBody" class="py-2" style="max-height:380px;overflow-y:auto"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модалка: выбор шаблона -->
+            <div class="modal fade" id="templatePickerModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-md modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Выбрать шаблон</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="templatePickerList" class="list-group">
+                                <div class="text-muted text-center py-3">Загрузка шаблонов...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="tab-pane fade" id="pane-incoming" role="tabpanel">
                 <div class="card form-card mb-3 write-admin-only">
                     <div class="card-header form-card-header" data-bs-toggle="collapse" data-bs-target="#collapseIncomingForm" aria-expanded="true">
@@ -455,9 +515,15 @@
                                 <small class="text-muted">Поддерживаются изображения, PDF, документы, видео и другие файлы.</small>
                                 <div id="incScansPreview" class="mt-2 d-flex flex-wrap gap-2"></div>
                             </div>
-                            <div class="col-12 d-flex gap-2">
+                            <div class="col-12 d-flex gap-2 flex-wrap">
                                 <button class="btn btn-primary" type="submit">Добавить</button>
                                 <button class="btn btn-outline-secondary" type="reset">Очистить</button>
+                                <button class="btn btn-outline-secondary" type="button" onclick="openTemplatePicker('incoming')">
+                                    <i class="bi bi-file-earmark-text"></i> Шаблон
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" onclick="saveCurrentFormAsTemplate('incoming')" title="Сохранить как шаблон">
+                                    <i class="bi bi-bookmark-plus"></i>
+                                </button>
                                 <button class="btn btn-outline-primary ms-auto" type="button" id="btnOpenOutgoingFromIncoming">
                                     Создать ответ ОС
                                 </button>
@@ -595,9 +661,15 @@
                                 <small class="text-muted">Поддерживаются изображения, PDF, документы, видео и другие файлы.</small>
                                 <div id="outScansPreview" class="mt-2 d-flex flex-wrap gap-2"></div>
                             </div>
-                            <div class="col-12 d-flex gap-2">
+                            <div class="col-12 d-flex gap-2 flex-wrap">
                                 <button class="btn btn-primary" type="submit">Добавить</button>
                                 <button class="btn btn-outline-secondary" type="reset">Очистить</button>
+                                <button class="btn btn-outline-secondary" type="button" onclick="openTemplatePicker('outgoing')">
+                                    <i class="bi bi-file-earmark-text"></i> Шаблон
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" onclick="saveCurrentFormAsTemplate('outgoing')" title="Сохранить как шаблон">
+                                    <i class="bi bi-bookmark-plus"></i>
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -993,6 +1065,74 @@
             </div>
         </div>
 
+            <!-- Вкладка «Календарь» -->
+            <div class="tab-pane fade" id="pane-calendar" role="tabpanel">
+                <div id="calendarPane"></div>
+            </div>
+
+            <!-- Вкладка «Мои письма» -->
+            <div class="tab-pane fade" id="pane-my-letters" role="tabpanel">
+                <div class="card mb-3">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-person-lines-fill"></i>
+                        <h5 class="mb-0">Мои письма</h5>
+                        <span class="badge bg-secondary ms-auto" id="myLettersBadge">0</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-sm align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Тип</th>
+                                        <th>№</th>
+                                        <th>Дата</th>
+                                        <th>Организация</th>
+                                        <th>Тема</th>
+                                        <th>Статус</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="myLettersBody">
+                                    <tr><td colspan="6" class="text-center text-muted py-3">Загрузка...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Вкладка «Архив» -->
+            <div class="tab-pane fade" id="pane-archive" role="tabpanel">
+                <div class="card mb-3">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-archive"></i>
+                        <h5 class="mb-0">Архив писем</h5>
+                        <span class="text-muted small ms-2">Удалённые письма. Только администратор может восстановить.</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="btn-group m-2">
+                            <button class="btn btn-sm btn-outline-primary active" id="archiveTypeIncoming" data-archive-type="incoming">Входящие</button>
+                            <button class="btn btn-sm btn-outline-success" id="archiveTypeOutgoing" data-archive-type="outgoing">Исходящие</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover table-sm align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>№</th>
+                                        <th>Дата</th>
+                                        <th>Организация</th>
+                                        <th>Тема</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="archiveBody">
+                                    <tr><td colspan="5" class="text-center text-muted py-3">Загрузка...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Вкладка «Что нового» -->
             <div class="tab-pane fade" id="pane-updates" role="tabpanel">
                 <div class="updates-page">
@@ -1203,6 +1343,7 @@
     <script src="js/search.js?v=21"></script>
     <script src="js/dashboard-enhanced.js?v=21"></script>
     <script src="js/notifications-ui.js?v=21"></script>
+    <script src="js/calendar.js?v=1"></script>
     <script src="js/mobile-ui.js?v=21"></script>
     <script src="/js/site-config.js?v=21"></script>
     <script src="/js/site-docs.js?v=21"></script>

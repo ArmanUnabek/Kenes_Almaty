@@ -13,6 +13,7 @@
 require_once __DIR__ . '/config.php';
 
 use App\Services\EmailService;
+use App\Services\TelegramService;
 
 $isCli = php_sapi_name() === 'cli';
 
@@ -93,7 +94,9 @@ try {
     $now           = new DateTime('now');
     $notifications = [];
     $emailsQueued  = 0;
-    $smtpEnabled   = defined('SMTP_HOST') && SMTP_HOST !== '';
+    $smtpEnabled     = defined('SMTP_HOST') && SMTP_HOST !== '';
+    $telegramEnabled = TelegramService::isConfigured();
+    $telegramSent    = 0;
 
     foreach ($letters as $letter) {
         if (empty($letter['date'])) {
@@ -171,6 +174,34 @@ try {
                 $emailsQueued++;
             }
         }
+
+        // Telegram: уведомляем пользователей с telegram_chat_id, привязанных к письму через member_id
+        if ($telegramEnabled) {
+            try {
+                $stmtTg = $db->prepare("
+                    SELECT DISTINCT u.telegram_chat_id
+                    FROM letter_members lm
+                    JOIN os_members m ON lm.member_id = m.id
+                    JOIN users u ON u.member_id = m.id
+                    WHERE lm.letter_type = 'incoming'
+                      AND lm.letter_id = ?
+                      AND u.telegram_chat_id IS NOT NULL
+                      AND u.telegram_chat_id != ''
+                ");
+                $stmtTg->execute([(int)$letter['id']]);
+                $tgRecipients = $stmtTg->fetchAll(\PDO::FETCH_COLUMN);
+                $statusEmoji  = $status === 'overdue' ? '🔴' : '🟡';
+                $tgText       = "{$statusEmoji} <b>Журнал ОС</b>: входящее письмо Вх.{$letter['seq']} ({$letter['organization']})\n"
+                              . "Срок ответа: {$due->format('d.m.Y')}\n"
+                              . ($status === 'overdue' ? 'Письмо ПРОСРОЧЕНО' : 'Срок истекает через ' . $daysLeft . ' дн.');
+                foreach ($tgRecipients as $chatId) {
+                    TelegramService::sendMessage((string)$chatId, $tgText);
+                    $telegramSent++;
+                }
+            } catch (\Throwable $tgEx) {
+                error_log('Telegram notification failed: ' . $tgEx->getMessage());
+            }
+        }
     }
 
     foreach ($notifications as $p) {
@@ -181,6 +212,7 @@ try {
         'total_checked'      => count($letters),
         'notifications_sent' => count($notifications),
         'emails_queued'      => $emailsQueued,
+        'telegram_sent'      => $telegramSent ?? 0,
         'timestamp'          => $now->format(DATE_ATOM),
     ];
 
