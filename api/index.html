@@ -895,6 +895,31 @@
         </div>
     </div>
 
+    <!-- Модальное окно статистики члена ОС -->
+    <div class="modal fade" id="memberStatsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="member-avatar member-avatar-sm" id="memberStatsAvatar"></div>
+                        <div>
+                            <h5 class="modal-title mb-0" id="memberStatsName">—</h5>
+                            <small class="text-muted" id="memberStatsCommission"></small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="memberStatsContent">
+                        <div class="text-center py-4">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Индикатор загрузки -->
     <div class="loading-overlay" id="loadingOverlay" style="display: none;">
         <div class="loading-spinner">

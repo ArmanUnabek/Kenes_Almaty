@@ -51,7 +51,7 @@ define('SMTP_FROM',      getenv('SMTP_FROM')      ?: 'noreply@example.com');
 define('SMTP_FROM_NAME', getenv('SMTP_FROM_NAME') ?: 'Журнал ОС');
 
 // Настройки для загрузки фото
-define('UPLOAD_DIR', 'uploads/photos/');
+define('UPLOAD_DIR', APP_ROOT . '/uploads/photos/');
 define('MAX_FILE_SIZE', 5 * 1024 * 1024); // 5 МБ
 define('ALLOWED_IMAGE_TYPES', ['image/jpeg', 'image/png', 'image/jpg']);
 
