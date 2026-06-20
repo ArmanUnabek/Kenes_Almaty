@@ -140,7 +140,7 @@ function populateHeaderRegionSelect() {
 }
 
 async function switchHeaderRegion(regionId) {
-  await apiFetch(`${API}/auth.php?action=switch_region`, {
+  await apiFetch(`${API}/auth.php`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ action: 'switch_region', region_id: String(regionId) }),
@@ -369,25 +369,33 @@ async function switchToRegion(regionId) {
 async function activateRegion(id) {
   const r = regions.find((x) => Number(x.id) === id);
   if (!r) return;
-  await apiFetch(`${API}/regions.php`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...r, id, is_active: true }),
-  });
-  showSuccess(t('region.updated'));
-  await loadRegionsWithStats();
+  try {
+    await apiFetch(`${API}/regions.php`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...r, id, is_active: true }),
+    });
+    showSuccess(t('region.updated'));
+    await loadRegionsWithStats();
+  } catch (err) {
+    showError(err.message);
+  }
 }
 
 async function deactivateRegion(id) {
   const r = regions.find((x) => Number(x.id) === id);
   if (!r || !confirm(`${t('region.deactivateConfirm')} «${AdminI18n.regionName(r)}»?`)) return;
-  await apiFetch(`${API}/regions.php`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...r, id, is_active: false }),
-  });
-  showSuccess(t('region.updated'));
-  await loadRegionsWithStats();
+  try {
+    await apiFetch(`${API}/regions.php`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...r, id, is_active: false }),
+    });
+    showSuccess(t('region.updated'));
+    await loadRegionsWithStats();
+  } catch (err) {
+    showError(err.message);
+  }
 }
 
 /* ── Users ── */
@@ -466,19 +474,27 @@ function openEditUser(id) {
 
 async function deactivateUser(id) {
   if (!confirm(t('user.deactivateConfirm'))) return;
-  await apiFetch(`${API}/users.php?id=${id}`, { method: 'DELETE' });
-  showSuccess(t('user.deactivated'));
-  await loadUsers(usersPage);
+  try {
+    await apiFetch(`${API}/users.php?id=${id}`, { method: 'DELETE' });
+    showSuccess(t('user.deactivated'));
+    await loadUsers(usersPage);
+  } catch (err) {
+    showError(err.message);
+  }
 }
 
 async function reactivateUser(id) {
-  await apiFetch(`${API}/users.php`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, is_active: true }),
-  });
-  showSuccess(t('user.reactivated'));
-  await loadUsers(usersPage);
+  try {
+    await apiFetch(`${API}/users.php`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, is_active: true }),
+    });
+    showSuccess(t('user.reactivated'));
+    await loadUsers(usersPage);
+  } catch (err) {
+    showError(err.message);
+  }
 }
 
 /* ── Audit ── */
@@ -612,10 +628,29 @@ async function loadEmailQueue() {
         <td><span class="badge ${row.status === 'sent' ? 'bg-success' : row.status === 'failed' ? 'bg-danger' : 'bg-secondary'}">${escapeHtml(row.status || '')}</span></td>
         <td class="small text-muted">${formatDate(row.created_at)}</td>
         <td class="small text-muted">${formatDate(row.sent_at)}</td>
-      </tr>`).join('') : `<tr><td colspan="6" class="text-center text-muted py-3">${t('common.noData')}</td></tr>`;
+        <td>${row.status === 'failed' ? `<button class="btn btn-sm btn-outline-warning" data-retry-email="${row.id}">${t('system.retry')}</button>` : ''}</td>
+      </tr>`).join('') : `<tr><td colspan="7" class="text-center text-muted py-3">${t('common.noData')}</td></tr>`;
+
+    tbody.querySelectorAll('[data-retry-email]').forEach((btn) => {
+      btn.addEventListener('click', () => retryEmail(Number(btn.dataset.retryEmail)));
+    });
   } catch (err) {
-    if (statsEl) statsEl.innerHTML = `<span class="text-muted">${t('common.noData')}</span>`;
-    if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">${t('common.noData')}</td></tr>`;
+    if (statsEl) statsEl.innerHTML = `<span class="text-danger">${escapeHtml(err.message)}</span>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-3">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+async function retryEmail(id) {
+  try {
+    await apiFetch(`${API}/notifications.php`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, action: 'retry' }),
+    });
+    showSuccess(t('system.retryQueued'));
+    await loadEmailQueue();
+  } catch (err) {
+    showError(err.message);
   }
 }
 
