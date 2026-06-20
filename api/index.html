@@ -101,9 +101,13 @@
                     <button class="btn btn-primary btn-sm" id="exportJsonBtn">
                         <i class="bi bi-download"></i> <span class="btn-label">JSON</span>
                     </button>
-                    <label class="btn btn-outline-secondary btn-sm mb-0">
+                    <label class="btn btn-outline-secondary btn-sm mb-0" title="Импорт JSON">
                         <i class="bi bi-upload"></i> <span class="btn-label">Импорт</span>
                         <input type="file" id="importJsonInput" hidden accept="application/json" />
+                    </label>
+                    <label class="btn btn-outline-secondary btn-sm mb-0" title="Импорт CSV (входящие/исходящие)">
+                        <i class="bi bi-filetype-csv"></i> <span class="btn-label">CSV</span>
+                        <input type="file" id="importCsvInput" hidden accept=".csv,text/csv,text/plain" />
                     </label>
                 </div>
                 <div class="dropdown d-lg-none">
@@ -114,7 +118,8 @@
                         <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportCsvBtn"><i class="bi bi-file-earmark-spreadsheet me-2"></i>CSV</button></li>
                         <li class="export-admin-only"><a class="dropdown-item" href="/api/export_pdf.php?type=summary" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-2"></i>PDF</a></li>
                         <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportJsonBtn"><i class="bi bi-download me-2"></i>JSON</button></li>
-                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="importJson"><i class="bi bi-upload me-2"></i>Импорт</button></li>
+                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="importJson"><i class="bi bi-upload me-2"></i>Импорт JSON</button></li>
+                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="importCsv"><i class="bi bi-filetype-csv me-2"></i>Импорт CSV</button></li>
                     </ul>
                 </div>
             </div>

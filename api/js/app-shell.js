@@ -238,10 +238,80 @@
     document.addEventListener('click', (e) => closeAllLists(e.target));
   }
 
+  async function importCsv(ev) {
+    const file = ev?.target?.files?.[0];
+    if (!file) return;
+    if (!window.canExport?.() && !window.AppCore?.canExport?.()) {
+      showError('Импорт CSV доступен только администратору или модератору');
+      if (ev?.target) ev.target.value = '';
+      return;
+    }
+
+    const typeChoice = window.prompt(
+      'Тип писем для импорта:\n  incoming — входящие\n  outgoing — исходящие\n\nВведите incoming или outgoing:',
+      'incoming'
+    );
+    if (!typeChoice || !['incoming', 'outgoing'].includes(typeChoice.trim().toLowerCase())) {
+      if (ev?.target) ev.target.value = '';
+      return;
+    }
+    const letterType = typeChoice.trim().toLowerCase();
+
+    if (!window.confirm(
+      `Импорт ${letterType === 'incoming' ? 'входящих' : 'исходящих'} писем из CSV?\n\n` +
+      'Формат (разделитель — точка с запятой):\n' +
+      (letterType === 'incoming'
+        ? 'дата;организация;рег.номер;категория;тема;примечание'
+        : 'дата;исх.номер;организация;тема;примечание;тип') +
+      '\n\nПервая строка — заголовок (пропускается).'
+    )) {
+      if (ev?.target) ev.target.value = '';
+      return;
+    }
+
+    try {
+      showLoading('Импорт CSV...');
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', letterType);
+
+      const resp = await fetch('/api/import.php', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        throw new Error(data.error || `Ошибка сервера (${resp.status})`);
+      }
+      const errSummary = data.errors?.length
+        ? `\nОшибки (первые ${data.errors.length}):\n` +
+          data.errors.slice(0, 5).map((e) => `  Строка ${e.row}: ${e.message}`).join('\n')
+        : '';
+      showSuccess(
+        `CSV импорт завершён: импортировано ${data.imported}, пропущено ${data.skipped}.${errSummary ? ' Подробности в консоли.' : ''}`
+      );
+      if (errSummary) console.warn('CSV import errors:', data.errors);
+      if (typeof window.refreshLetters === 'function') await window.refreshLetters();
+      if (typeof window.renderAll === 'function') window.renderAll();
+    } catch (err) {
+      console.error(err);
+      showError(err.message || 'Не удалось импортировать CSV');
+    } finally {
+      hideLoading();
+      if (ev?.target) ev.target.value = '';
+    }
+  }
+
   function bindExportImport() {
     document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
     document.getElementById('exportCsvBtn')?.addEventListener('click', exportCsv);
     document.getElementById('importJsonInput')?.addEventListener('change', importJson);
+    document.getElementById('importCsvInput')?.addEventListener('change', importCsv);
+
+    // Wire mobile dropdown triggers
+    document.querySelectorAll('[data-trigger="importCsv"]').forEach((btn) => {
+      btn.addEventListener('click', () => document.getElementById('importCsvInput')?.click());
+    });
   }
 
   window.showLoading = showLoading;
@@ -254,6 +324,7 @@
   window.exportJson = exportJson;
   window.exportCsv = exportCsv;
   window.importJson = importJson;
+  window.importCsv = importCsv;
   window.sanitizeCsv = sanitizeCsv;
 
   document.addEventListener('DOMContentLoaded', bindExportImport);
