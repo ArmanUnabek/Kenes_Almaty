@@ -302,9 +302,19 @@
     }
   }
 
+  function exportXlsx() {
+    const allowed = window.canExport?.() || window.AppCore?.canExport?.();
+    if (!allowed) {
+      showError('Экспорт данных доступен только администратору');
+      return;
+    }
+    exportData('xlsx');
+  }
+
   function bindExportImport() {
     document.getElementById('exportJsonBtn')?.addEventListener('click', exportJson);
     document.getElementById('exportCsvBtn')?.addEventListener('click', exportCsv);
+    document.getElementById('exportXlsxBtn')?.addEventListener('click', exportXlsx);
     document.getElementById('importJsonInput')?.addEventListener('change', importJson);
     document.getElementById('importCsvInput')?.addEventListener('change', importCsv);
 
@@ -312,6 +322,32 @@
     document.querySelectorAll('[data-trigger="importCsv"]').forEach((btn) => {
       btn.addEventListener('click', () => document.getElementById('importCsvInput')?.click());
     });
+    document.querySelectorAll('[data-trigger="exportXlsxBtn"]').forEach((btn) => {
+      btn.addEventListener('click', exportXlsx);
+    });
+  }
+
+  // Dark mode
+  function updateDarkModeIcon(isDark) {
+    const icon = document.getElementById('darkModeIcon');
+    if (icon) icon.className = isDark ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
+    const btn = document.getElementById('darkModeToggle');
+    if (btn) btn.title = isDark ? 'Светлая тема' : 'Тёмная тема';
+  }
+
+  function toggleDarkMode() {
+    const isDark = document.body.classList.toggle('dark-mode');
+    localStorage.setItem('darkMode', String(isDark));
+    updateDarkModeIcon(isDark);
+  }
+
+  function initDarkMode() {
+    const saved = localStorage.getItem('darkMode');
+    if (saved === 'true') {
+      document.body.classList.add('dark-mode');
+      updateDarkModeIcon(true);
+    }
+    document.getElementById('darkModeToggle')?.addEventListener('click', toggleDarkMode);
   }
 
   window.showLoading = showLoading;
@@ -323,9 +359,14 @@
   window.setupAutocomplete = setupAutocomplete;
   window.exportJson = exportJson;
   window.exportCsv = exportCsv;
+  window.exportXlsx = exportXlsx;
   window.importJson = importJson;
   window.importCsv = importCsv;
   window.sanitizeCsv = sanitizeCsv;
+  window.toggleDarkMode = toggleDarkMode;
 
-  document.addEventListener('DOMContentLoaded', bindExportImport);
+  document.addEventListener('DOMContentLoaded', () => {
+    bindExportImport();
+    initDarkMode();
+  });
 })(window);

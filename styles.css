@@ -1853,3 +1853,188 @@ body,
     color: var(--text-primary);
 }
 
+/* ===== Dark Mode ===== */
+body.dark-mode {
+    --bg-page: #111827;
+    --bg-surface: #1F2937;
+    --bg-subtle: #263043;
+    --text-primary: #F9FAFB;
+    --text-secondary: #9CA3AF;
+    --text-tertiary: #6B7280;
+    --border-default: #374151;
+    --border-strong: #4B5563;
+    --status-success-soft: #052e16;
+    --status-warning-soft: #422006;
+    --status-danger-soft: #450a0a;
+    --status-info-soft: #0c2340;
+    --brand-primary-soft: #1e3a5f;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+body.dark-mode .app-topbar,
+body.dark-mode .content,
+body.dark-mode .card,
+body.dark-mode .modal-content,
+body.dark-mode .form-control,
+body.dark-mode .form-select,
+body.dark-mode .input-group-text,
+body.dark-mode .dropdown-menu {
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+    border-color: var(--border-default);
+}
+
+body.dark-mode .table {
+    --bs-table-bg: var(--bg-surface);
+    --bs-table-color: var(--text-primary);
+    --bs-table-hover-bg: var(--bg-subtle);
+    --bs-table-border-color: var(--border-default);
+    --bs-table-striped-bg: var(--bg-subtle);
+}
+
+body.dark-mode .table-light {
+    --bs-table-bg: var(--bg-subtle);
+    --bs-table-color: var(--text-primary);
+}
+
+body.dark-mode .btn-outline-secondary {
+    color: var(--text-secondary);
+    border-color: var(--border-strong);
+}
+
+body.dark-mode .btn-outline-secondary:hover {
+    background-color: var(--bg-subtle);
+    color: var(--text-primary);
+}
+
+body.dark-mode .form-control,
+body.dark-mode .form-select {
+    color: var(--text-primary);
+    background-color: var(--bg-subtle);
+}
+
+body.dark-mode .form-control::placeholder {
+    color: var(--text-tertiary);
+}
+
+body.dark-mode .page-heading h1,
+body.dark-mode .page-heading p,
+body.dark-mode .card-header {
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+    border-color: var(--border-default);
+}
+
+body.dark-mode .modal-header,
+body.dark-mode .modal-footer {
+    border-color: var(--border-default);
+    background-color: var(--bg-surface);
+}
+
+body.dark-mode .badge.bg-light {
+    background-color: var(--bg-subtle) !important;
+    color: var(--text-primary) !important;
+}
+
+body.dark-mode .dropdown-item {
+    color: var(--text-primary);
+}
+
+body.dark-mode .dropdown-item:hover {
+    background-color: var(--bg-subtle);
+}
+
+body.dark-mode .list-group-item {
+    background-color: var(--bg-surface);
+    border-color: var(--border-default);
+    color: var(--text-primary);
+}
+
+body.dark-mode .nav-tabs .nav-link {
+    color: var(--text-secondary);
+}
+
+body.dark-mode .nav-tabs .nav-link.active {
+    background-color: var(--bg-surface);
+    border-color: var(--border-default);
+    color: var(--text-primary);
+}
+
+body.dark-mode .text-muted {
+    color: var(--text-secondary) !important;
+}
+
+body, .app-body, .app-topbar, .card, .form-control, .form-select,
+.modal-content, .table, .dropdown-menu {
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+/* ===== Batch action bar ===== */
+.batch-action-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--brand-primary-soft);
+    border: 1px solid var(--brand-primary);
+    border-radius: var(--radius-md);
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.batch-count {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--brand-primary);
+}
+
+.batch-checkbox-col {
+    width: 36px;
+    text-align: center;
+}
+
+/* ===== Print styles ===== */
+@media print {
+    .sidebar,
+    .app-topbar,
+    .sidebar-toggle,
+    .sidebar-backdrop,
+    .mobile-bottom-nav,
+    .toast-container,
+    .loading-overlay,
+    .batch-action-bar,
+    .toolbar-panel,
+    .form-card,
+    .table-footer,
+    button,
+    .btn,
+    .no-print {
+        display: none !important;
+    }
+
+    .app-shell {
+        margin-left: 0 !important;
+        padding: 0 !important;
+    }
+
+    .content {
+        padding: 0 !important;
+    }
+
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    body {
+        background: white !important;
+        color: black !important;
+        font-size: 10pt;
+    }
+
+    .table {
+        font-size: 9pt;
+    }
+}
+

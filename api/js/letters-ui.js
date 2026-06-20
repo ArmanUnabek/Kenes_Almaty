@@ -1185,6 +1185,7 @@ function renderIncoming() {
 
       return `
         <tr>
+          <td class="batch-checkbox-col"><input type="checkbox" class="form-check-input batch-check-incoming" data-id="${i.id}"></td>
           <td class="text-nowrap" data-label="Рег. №">Вх.${i.seq}</td>
           <td data-label="Дата">${formatDateISOtoRus(i.date)}</td>
           <td data-label="Организация">${escapeHtml(i.organization)}</td>
@@ -1197,6 +1198,7 @@ function renderIncoming() {
           <td data-label="Сканы" id="${scansCellId}"></td>
           <td data-label="Ответ">${linkHtml}</td>
           <td class="text-end table-actions" data-label="">
+            <button class="btn btn-sm btn-outline-secondary" data-action="print-incoming" data-id="${i.id}" title="Печать"><i class="bi bi-printer"></i></button>
             <button class="btn btn-sm btn-outline-primary" data-action="edit-incoming" data-id="${i.id}" title="Изменить"><i class="bi bi-pencil"></i></button>
             ${canDelete() ? `<button class="btn btn-sm btn-outline-danger" data-action="del-incoming" data-id="${i.id}" title="Удалить"><i class="bi bi-trash"></i></button>` : ''}
           </td>
@@ -1204,7 +1206,7 @@ function renderIncoming() {
     });
   tableIncomingBody.innerHTML = rowsData.length
     ? rowsData.join("")
-    : '<tr><td colspan="12" class="text-center text-muted py-4">По выбранным фильтрам писем не найдено</td></tr>';
+    : '<tr><td colspan="13" class="text-center text-muted py-4">По выбранным фильтрам писем не найдено</td></tr>';
   
   // Рендерим дополнительные ячейки после создания строк
   pageItems.forEach((i) => {
@@ -1225,15 +1227,25 @@ function renderIncoming() {
   tableIncomingBody.querySelectorAll("[data-action='del-incoming']").forEach((btn) => {
     btn.addEventListener("click", () => deleteIncoming(btn.dataset.id));
   });
-  // обработчики редактирования
   tableIncomingBody.querySelectorAll("[data-action='edit-incoming']").forEach((btn) => {
     btn.addEventListener("click", () => editIncoming(btn.dataset.id));
+  });
+  tableIncomingBody.querySelectorAll("[data-action='print-incoming']").forEach((btn) => {
+    btn.addEventListener("click", () => window.open(`/api/letter_print.php?type=incoming&id=${btn.dataset.id}`, '_blank'));
   });
   tableIncomingBody.querySelectorAll("[data-action='respond-incoming']").forEach((btn) => {
     btn.addEventListener("click", () => startOutgoingResponse(btn.dataset.id));
   });
   tableIncomingBody.querySelectorAll("[data-action='attach-outgoing']").forEach((btn) => {
     btn.addEventListener("click", () => openLinkOutgoingModal({ type: 'incoming-table', incomingId: btn.dataset.id }));
+  });
+  // Batch checkboxes
+  tableIncomingBody.querySelectorAll('.batch-check-incoming').forEach((cb) => {
+    cb.addEventListener('change', () => updateBatchBar('incoming'));
+  });
+  document.getElementById('selectAllIncoming')?.addEventListener('change', (e) => {
+    tableIncomingBody.querySelectorAll('.batch-check-incoming').forEach((cb) => { cb.checked = e.target.checked; });
+    updateBatchBar('incoming');
   });
 
   if (typeof window.renderTableFooter === 'function') {
@@ -1484,6 +1496,7 @@ function renderOutgoing() {
       const recipientsCellId = `recipients-outgoing-${i.id}`;
       return `
         <tr>
+          <td class="batch-checkbox-col"><input type="checkbox" class="form-check-input batch-check-outgoing" data-id="${i.id}"></td>
           <td class="text-nowrap" data-label="Порядк. №">Исх.${i.seq}</td>
           <td data-label="Дата">${formatDateISOtoRus(i.date)}</td>
           <td class="text-nowrap" data-label="Исходящий №"><span class="badge badge-outgoing">${numberLabel}</span></td>
@@ -1495,6 +1508,9 @@ function renderOutgoing() {
           <td data-label="Ответственные" id="${membersCellId}"></td>
           <td data-label="Сканы" id="${scansCellId}"></td>
           <td class="text-end table-actions" data-label="">
+            <button class="btn btn-sm btn-outline-secondary" title="Печать" data-action="print-outgoing" data-id="${i.id}">
+              <i class="bi bi-printer"></i>
+            </button>
             <button class="btn btn-sm btn-outline-primary" title="Изменить" data-action="edit-outgoing" data-id="${i.id}">
               <i class="bi bi-pencil"></i>
             </button>
@@ -1527,6 +1543,17 @@ function renderOutgoing() {
   });
   tableOutgoingBody.querySelectorAll("[data-action='edit-outgoing']").forEach((btn) => {
     btn.addEventListener("click", () => editOutgoing(btn.dataset.id));
+  });
+  tableOutgoingBody.querySelectorAll("[data-action='print-outgoing']").forEach((btn) => {
+    btn.addEventListener("click", () => window.open(`/api/letter_print.php?type=outgoing&id=${btn.dataset.id}`, '_blank'));
+  });
+  // Batch checkboxes
+  tableOutgoingBody.querySelectorAll('.batch-check-outgoing').forEach((cb) => {
+    cb.addEventListener('change', () => updateBatchBar('outgoing'));
+  });
+  document.getElementById('selectAllOutgoing')?.addEventListener('change', (e) => {
+    tableOutgoingBody.querySelectorAll('.batch-check-outgoing').forEach((cb) => { cb.checked = e.target.checked; });
+    updateBatchBar('outgoing');
   });
 
   if (typeof window.renderTableFooter === 'function') {
@@ -1857,6 +1884,57 @@ async function deleteOutgoing(id) {
     if (filterRecipientOutgoing) filterRecipientOutgoing.addEventListener('change', resetOutgoing);
   }
 
+  // ── Batch operations ──────────────────────────────────────────────────────
+
+  function getSelectedIds(type) {
+    const sel = type === 'incoming' ? '.batch-check-incoming' : '.batch-check-outgoing';
+    return Array.from(document.querySelectorAll(sel + ':checked')).map((cb) => Number(cb.dataset.id));
+  }
+
+  function updateBatchBar(type) {
+    const ids = getSelectedIds(type);
+    const bar = document.getElementById(type === 'incoming' ? 'batchBarIncoming' : 'batchBarOutgoing');
+    const count = document.getElementById(type === 'incoming' ? 'batchCountIncoming' : 'batchCountOutgoing');
+    if (!bar) return;
+    bar.classList.toggle('d-none', ids.length === 0);
+    if (count) count.textContent = `${ids.length} выбрано`;
+  }
+
+  function batchExportSelected(type) {
+    const ids = getSelectedIds(type);
+    if (!ids.length) return;
+    const items = type === 'incoming'
+      ? store.incoming.filter((i) => ids.includes(Number(i.id)))
+      : store.outgoing.filter((i) => ids.includes(Number(i.id)));
+    const payload = type === 'incoming'
+      ? { incoming: items, outgoing: [] }
+      : { incoming: [], outgoing: items };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${type}_selected_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function bindBatchActions() {
+    document.getElementById('batchExportIncoming')?.addEventListener('click', () => batchExportSelected('incoming'));
+    document.getElementById('batchExportOutgoing')?.addEventListener('click', () => batchExportSelected('outgoing'));
+    document.getElementById('batchClearIncoming')?.addEventListener('click', () => {
+      document.querySelectorAll('.batch-check-incoming').forEach((cb) => { cb.checked = false; });
+      const all = document.getElementById('selectAllIncoming');
+      if (all) all.checked = false;
+      updateBatchBar('incoming');
+    });
+    document.getElementById('batchClearOutgoing')?.addEventListener('click', () => {
+      document.querySelectorAll('.batch-check-outgoing').forEach((cb) => { cb.checked = false; });
+      const all = document.getElementById('selectAllOutgoing');
+      if (all) all.checked = false;
+      updateBatchBar('outgoing');
+    });
+  }
+
   function initLettersUI() {
     if (incDate) incDate.value = todayISO;
     if (outDate) outDate.value = todayISO;
@@ -1864,6 +1942,7 @@ async function deleteOutgoing(id) {
     updateIncomingSeqPlaceholder();
     bindLettersEventListeners();
     bindLettersFilters();
+    bindBatchActions();
   }
 
   window.editIncoming = editIncoming;

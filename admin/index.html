@@ -240,6 +240,56 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- 2FA / TOTP -->
+                    <div class="admin-card mb-3">
+                        <div class="admin-card-header">
+                            <span><i class="bi bi-shield-lock me-2"></i>Двухфакторная аутентификация (2FA)</span>
+                        </div>
+                        <div class="admin-card-body" id="totpSection">
+                            <p class="text-muted small mb-3">Защитите свой аккаунт с помощью Google Authenticator или другого TOTP-приложения.</p>
+                            <div id="totpStatus" class="mb-3"></div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="totpSetupBtn">
+                                    <i class="bi bi-qr-code me-1"></i>Настроить 2FA
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger d-none" id="totpDisableBtn">
+                                    <i class="bi bi-shield-x me-1"></i>Отключить 2FA
+                                </button>
+                            </div>
+                            <!-- Setup form -->
+                            <div id="totpSetupForm" class="d-none mt-4">
+                                <div class="row g-3 align-items-start">
+                                    <div class="col-auto">
+                                        <img id="totpQrImg" src="" alt="QR" class="border rounded" style="width:200px;height:200px;" />
+                                    </div>
+                                    <div class="col">
+                                        <p class="small mb-2">1. Установите <strong>Google Authenticator</strong> или <strong>Authy</strong></p>
+                                        <p class="small mb-2">2. Отсканируйте QR-код или введите секрет вручную:</p>
+                                        <div class="input-group input-group-sm mb-3" style="max-width:340px;">
+                                            <input type="text" class="form-control font-monospace" id="totpSecretDisplay" readonly />
+                                            <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('totpSecretDisplay').value)">
+                                                <i class="bi bi-clipboard"></i>
+                                            </button>
+                                        </div>
+                                        <p class="small mb-2">3. Введите код из приложения для подтверждения:</p>
+                                        <div class="input-group input-group-sm" style="max-width:240px;">
+                                            <input type="text" class="form-control" id="totpVerifyCode" placeholder="000000" maxlength="6" pattern="\d{6}" inputmode="numeric" />
+                                            <button class="btn btn-primary" type="button" id="totpConfirmBtn">Подтвердить</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Disable form -->
+                            <div id="totpDisableForm" class="d-none mt-3">
+                                <p class="small text-muted">Введите текущий код из приложения для отключения 2FA:</p>
+                                <div class="input-group input-group-sm" style="max-width:240px;">
+                                    <input type="text" class="form-control" id="totpDisableCode" placeholder="000000" maxlength="6" pattern="\d{6}" inputmode="numeric" />
+                                    <button class="btn btn-danger" type="button" id="totpConfirmDisableBtn">Отключить</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="admin-card">
                         <div class="admin-card-header">
                             <span data-i18n="system.emailQueue">Очередь писем</span>

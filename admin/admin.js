@@ -576,7 +576,7 @@ function exportAuditCsv() {
 /* ── System ── */
 
 async function loadSystemTab() {
-  await Promise.all([loadHealthStatus(), loadEmailQueue()]);
+  await Promise.all([loadHealthStatus(), loadEmailQueue(), load2faStatus()]);
 }
 
 async function loadHealthStatus() {
@@ -586,21 +586,41 @@ async function loadHealthStatus() {
     const data = await apiFetch(`${API}/health.php`);
     const ok = data.status === 'ok';
     const checks = data.checks || {};
+    const metrics = data.metrics || {};
+
+    const checkRow = (label, pass, detail = '') => `
+      <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+        <span>${escapeHtml(label)}</span>
+        <span class="d-flex align-items-center gap-2">
+          ${detail ? `<small class="text-muted">${escapeHtml(String(detail))}</small>` : ''}
+          <span class="${pass ? 'text-success' : 'text-danger'} fw-bold">${pass ? '✓' : '✗'}</span>
+        </span>
+      </div>`;
+
+    const metricRow = (label, val) => val !== undefined && val !== null ? `
+      <div class="d-flex justify-content-between py-1 border-bottom">
+        <span class="text-muted small">${escapeHtml(label)}</span>
+        <span class="small fw-semibold">${escapeHtml(String(val))}</span>
+      </div>` : '';
+
     el.innerHTML = `
       <div class="mb-3"><span class="health-badge ${ok ? 'ok' : 'degraded'}">
         <i class="bi bi-${ok ? 'check-circle' : 'exclamation-triangle'}"></i>
         ${ok ? t('system.statusOk') : t('system.statusDegraded')}
       </span></div>
       <div class="small">
-        <div class="d-flex justify-content-between py-1 border-bottom">
-          <span>${t('system.database')}</span>
-          <span class="${checks.database ? 'text-success' : 'text-danger'}">${checks.database ? '✓' : '✗'}</span>
-        </div>
-        <div class="d-flex justify-content-between py-1">
-          <span>${t('system.uploads')}</span>
-          <span class="${checks.uploads_writable ? 'text-success' : 'text-danger'}">${checks.uploads_writable ? '✓' : '✗'}</span>
-        </div>
+        ${checkRow(t('system.database'), checks.database)}
+        ${checkRow(t('system.uploads'), checks.uploads_writable)}
+        ${checks.smtp_reachable !== undefined ? checkRow('SMTP', checks.smtp_reachable) : (checks.smtp_configured === false ? checkRow('SMTP', false, 'не настроен') : '')}
+        ${checkRow('Pusher', checks.pusher_configured)}
+        ${metricRow('PHP версия', metrics.php_version)}
+        ${metricRow('PHP память', metrics.php_memory_mb !== undefined ? metrics.php_memory_mb + ' МБ / ' + metrics.php_memory_limit : null)}
+        ${metricRow('Загрузки', metrics.uploads_size_mb !== undefined ? metrics.uploads_size_mb + ' МБ (' + metrics.uploads_files + ' файлов)' : null)}
+        ${metricRow('Email в очереди', metrics.email_queue_pending !== undefined ? metrics.email_queue_pending + ' шт.' : null)}
+        ${metricRow('Таблиц в БД', metrics.db_table_count)}
+        ${metricRow('Последний cron', metrics.cron_last_run || 'нет данных')}
       </div>
+      ${(data.messages || []).length ? `<div class="alert alert-warning alert-sm mt-2 mb-0 py-1 small">${data.messages.map(m => escapeHtml(m)).join('<br>')}</div>` : ''}
       <div class="small text-muted mt-2">${formatDate(data.timestamp)}</div>`;
   } catch (err) {
     el.innerHTML = `<span class="text-danger">${escapeHtml(err.message)}</span>`;
@@ -653,6 +673,92 @@ async function retryEmail(id) {
     showError(err.message);
   }
 }
+
+/* ── 2FA / TOTP ── */
+
+async function load2faStatus() {
+  const statusEl = document.getElementById('totpStatus');
+  const setupBtn = document.getElementById('totpSetupBtn');
+  const disableBtn = document.getElementById('totpDisableBtn');
+  if (!statusEl) return;
+  try {
+    const data = await apiFetch(`${API}/auth.php?action=totp_setup`);
+    if (data.enabled) {
+      statusEl.innerHTML = '<span class="badge bg-success"><i class="bi bi-shield-check me-1"></i>2FA включена</span>';
+      setupBtn?.classList.add('d-none');
+      disableBtn?.classList.remove('d-none');
+    } else {
+      statusEl.innerHTML = '<span class="badge bg-secondary"><i class="bi bi-shield me-1"></i>2FA не настроена</span>';
+      setupBtn?.classList.remove('d-none');
+      disableBtn?.classList.add('d-none');
+    }
+    if (data.secret) {
+      const qrImg = document.getElementById('totpQrImg');
+      if (qrImg) qrImg.src = data.qr_url;
+      const secretDisplay = document.getElementById('totpSecretDisplay');
+      if (secretDisplay) secretDisplay.value = data.secret;
+    }
+  } catch (err) {
+    statusEl.innerHTML = `<span class="text-danger small">${escapeHtml(err.message)}</span>`;
+  }
+}
+
+document.getElementById('totpSetupBtn')?.addEventListener('click', async () => {
+  try {
+    const data = await apiFetch(`${API}/auth.php?action=totp_setup`);
+    const qrImg = document.getElementById('totpQrImg');
+    if (qrImg) qrImg.src = data.qr_url;
+    const secretDisplay = document.getElementById('totpSecretDisplay');
+    if (secretDisplay) secretDisplay.value = data.secret;
+    document.getElementById('totpSetupForm')?.classList.remove('d-none');
+    document.getElementById('totpDisableForm')?.classList.add('d-none');
+    document.getElementById('totpVerifyCode')?.focus();
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+document.getElementById('totpConfirmBtn')?.addEventListener('click', async () => {
+  const code = document.getElementById('totpVerifyCode')?.value?.trim() || '';
+  if (!code) { showError('Введите код из приложения'); return; }
+  try {
+    await apiFetch(`${API}/auth.php?action=totp_enable`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ totp_code: code }),
+    });
+    showSuccess('2FA успешно включена');
+    document.getElementById('totpSetupForm')?.classList.add('d-none');
+    document.getElementById('totpVerifyCode').value = '';
+    load2faStatus();
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+document.getElementById('totpDisableBtn')?.addEventListener('click', () => {
+  document.getElementById('totpDisableForm')?.classList.remove('d-none');
+  document.getElementById('totpSetupForm')?.classList.add('d-none');
+  document.getElementById('totpDisableCode')?.focus();
+});
+
+document.getElementById('totpConfirmDisableBtn')?.addEventListener('click', async () => {
+  const code = document.getElementById('totpDisableCode')?.value?.trim() || '';
+  if (!code) { showError('Введите код из приложения'); return; }
+  try {
+    await apiFetch(`${API}/auth.php?action=totp_disable`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ totp_code: code }),
+    });
+    showSuccess('2FA отключена');
+    document.getElementById('totpDisableForm')?.classList.add('d-none');
+    document.getElementById('totpDisableCode').value = '';
+    load2faStatus();
+  } catch (err) {
+    showError(err.message);
+  }
+});
 
 /* ── Event listeners ── */
 

@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS users (
     region_id INT COMMENT 'ID региона (NULL для админов)',
     is_active BOOLEAN DEFAULT TRUE COMMENT 'Активен ли пользователь',
     last_login TIMESTAMP NULL COMMENT 'Последний вход',
+    totp_secret VARCHAR(64) NULL COMMENT 'Base32 секрет TOTP (2FA)',
+    totp_enabled BOOLEAN DEFAULT FALSE COMMENT 'Включена ли двухфакторная аутентификация',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE SET NULL,
