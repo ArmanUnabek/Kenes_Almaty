@@ -5,7 +5,8 @@ require_once __DIR__ . '/../config.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $expectedToken = getenv('HEALTH_CHECK_TOKEN') ?: '';
-$providedToken = (string)($_GET['token'] ?? $_SERVER['HTTP_X_HEALTH_TOKEN'] ?? '');
+// Token must be sent as X-Health-Token header — never in the URL (would appear in access logs)
+$providedToken = (string)($_SERVER['HTTP_X_HEALTH_TOKEN'] ?? '');
 
 if ($expectedToken !== '') {
     if ($providedToken === '' || !hash_equals($expectedToken, $providedToken)) {
@@ -69,17 +70,26 @@ $metrics['uploads_files']   = iterator_count(
     new RecursiveIteratorIterator(new RecursiveDirectoryIterator($uploadDir, FilesystemIterator::SKIP_DOTS))
 );
 
-// SMTP ping (TCP socket only — no credentials needed)
+// SMTP check: connect and verify the 220 greeting banner
 $smtpHost = SMTP_HOST;
 $smtpPort = SMTP_PORT ?: 587;
 if ($smtpHost) {
     $checks['smtp_reachable'] = false;
     $sock = @fsockopen($smtpHost, $smtpPort, $errno, $errstr, 3);
     if ($sock) {
-        $checks['smtp_reachable'] = true;
+        stream_set_timeout($sock, 3);
+        $banner = fgets($sock, 512);
+        fwrite($sock, "QUIT\r\n");
         fclose($sock);
+        // A valid SMTP server responds with "220 ..."
+        if ($banner !== false && str_starts_with(ltrim($banner), '220')) {
+            $checks['smtp_reachable'] = true;
+        } else {
+            $checks['smtp_reachable'] = false;
+            $messages[] = 'smtp: connected but no valid 220 greeting';
+        }
     } else {
-        $messages[] = "smtp: {$errstr} ({$errno})";
+        $messages[] = 'smtp: connection failed';
     }
 } else {
     $checks['smtp_configured'] = false;

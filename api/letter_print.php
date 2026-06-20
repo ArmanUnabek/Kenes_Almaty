@@ -18,10 +18,19 @@ if (!in_array($type, ['incoming', 'outgoing'], true) || $id <= 0) {
     exit;
 }
 
-$db    = getDBConnection();
-$table = $type === 'incoming' ? 'incoming_letters' : 'outgoing_letters';
-$stmt  = $db->prepare("SELECT * FROM {$table} WHERE id = ?");
-$stmt->execute([$id]);
+$db       = getDBConnection();
+$regionId = getCurrentRegionId();
+$table    = $type === 'incoming' ? 'incoming_letters' : 'outgoing_letters';
+
+// Include region_id in the query so admins cannot cross active-region boundaries
+// (canAccessRegion returns true for all admins regardless of active region)
+if ($regionId) {
+    $stmt = $db->prepare("SELECT * FROM {$table} WHERE id = ? AND region_id = ?");
+    $stmt->execute([$id, $regionId]);
+} else {
+    $stmt = $db->prepare("SELECT * FROM {$table} WHERE id = ?");
+    $stmt->execute([$id]);
+}
 $letter = $stmt->fetch();
 
 if (!$letter) {

@@ -63,40 +63,42 @@ if ($format === 'json') {
     exit;
 }
 
-header('Content-Type: text/csv; charset=utf-8');
-header('Content-Disposition: attachment; filename="' . $filename . '.csv"');
-$out = fopen('php://output', 'w');
-fprintf($out, "\xEF\xBB\xBF");
+if ($format === 'csv') {
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '.csv"');
+    $out = fopen('php://output', 'w');
+    fprintf($out, "\xEF\xBB\xBF");
 
-fputcsv($out, ['Тип', 'РегНомер', 'Дата', 'Организация', 'Категория', 'Номер', 'Тема', 'Примечание'], ';');
-foreach ($incoming as $row) {
-    fputcsv($out, [
-        'Входящее',
-        'Вх.' . ($row['seq'] ?? ''),
-        $row['date'] ?? '',
-        $row['organization'] ?? '',
-        $row['category'] ?? 'KK',
-        $row['kk_number'] ?? '',
-        $row['subject'] ?? '',
-        $row['note'] ?? '',
-    ], ';');
-}
+    fputcsv($out, ['Тип', 'РегНомер', 'Дата', 'Организация', 'Категория', 'Номер', 'Тема', 'Примечание'], ';');
+    foreach ($incoming as $row) {
+        fputcsv($out, [
+            'Входящее',
+            'Вх.' . ($row['seq'] ?? ''),
+            $row['date'] ?? '',
+            $row['organization'] ?? '',
+            $row['category'] ?? 'KK',
+            $row['kk_number'] ?? '',
+            $row['subject'] ?? '',
+            $row['note'] ?? '',
+        ], ';');
+    }
 
-fputcsv($out, [], ';');
-fputcsv($out, ['Тип', 'Порядк№', 'Дата', 'Исходящий№', 'Организация', 'Тема', 'Примечание'], ';');
-foreach ($outgoing as $row) {
-    fputcsv($out, [
-        'Исходящее',
-        'Исх.' . ($row['seq'] ?? ''),
-        $row['date'] ?? '',
-        $row['outgoing_number'] ?? '',
-        $row['organization'] ?? '',
-        $row['subject'] ?? '',
-        $row['note'] ?? '',
-    ], ';');
+    fputcsv($out, [], ';');
+    fputcsv($out, ['Тип', 'Порядк№', 'Дата', 'Исходящий№', 'Организация', 'Тема', 'Примечание'], ';');
+    foreach ($outgoing as $row) {
+        fputcsv($out, [
+            'Исходящее',
+            'Исх.' . ($row['seq'] ?? ''),
+            $row['date'] ?? '',
+            $row['outgoing_number'] ?? '',
+            $row['organization'] ?? '',
+            $row['subject'] ?? '',
+            $row['note'] ?? '',
+        ], ';');
+    }
+    fclose($out);
+    exit;
 }
-fclose($out);
-exit;
 
 // ── XLSX export (SpreadsheetML / OOXML) ───────────────────────────────────────
 if ($format === 'xlsx') {
@@ -201,19 +203,30 @@ function buildXlsx(array $incoming, array $outgoing): string {
         . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
         . '</Relationships>';
 
-    // Build ZIP in memory
+    // Build ZIP in a temp file (ZipArchive requires a real path, not php://temp)
     $tmp = tempnam(sys_get_temp_dir(), 'xlsx_');
+    if ($tmp === false) {
+        throw new \RuntimeException('Cannot create temp file for XLSX export');
+    }
     $zip = new ZipArchive();
-    $zip->open($tmp, ZipArchive::OVERWRITE);
-    $zip->addFromString('[Content_Types].xml', $contentTypes);
-    $zip->addFromString('_rels/.rels', $relsRoot);
-    $zip->addFromString('xl/workbook.xml', $workbookXml);
-    $zip->addFromString('xl/_rels/workbook.xml.rels', $workbookRels);
-    $zip->addFromString('xl/worksheets/sheet1.xml', $sheet1Xml);
-    $zip->addFromString('xl/worksheets/sheet2.xml', $sheet2Xml);
-    $zip->close();
-
-    $content = file_get_contents($tmp);
-    unlink($tmp);
-    return $content;
+    if ($zip->open($tmp, ZipArchive::OVERWRITE) !== true) {
+        @unlink($tmp);
+        throw new \RuntimeException('Cannot open ZipArchive for XLSX export');
+    }
+    try {
+        $zip->addFromString('[Content_Types].xml', $contentTypes);
+        $zip->addFromString('_rels/.rels', $relsRoot);
+        $zip->addFromString('xl/workbook.xml', $workbookXml);
+        $zip->addFromString('xl/_rels/workbook.xml.rels', $workbookRels);
+        $zip->addFromString('xl/worksheets/sheet1.xml', $sheet1Xml);
+        $zip->addFromString('xl/worksheets/sheet2.xml', $sheet2Xml);
+        $zip->close();
+        $content = file_get_contents($tmp);
+        if ($content === false) {
+            throw new \RuntimeException('Cannot read XLSX temp file');
+        }
+        return $content;
+    } finally {
+        @unlink($tmp);
+    }
 }

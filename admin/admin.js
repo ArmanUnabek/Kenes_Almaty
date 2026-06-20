@@ -682,8 +682,11 @@ async function load2faStatus() {
   const disableBtn = document.getElementById('totpDisableBtn');
   if (!statusEl) return;
   try {
-    const data = await apiFetch(`${API}/auth.php?action=totp_setup`);
-    if (data.enabled) {
+    // Use auth check (not totp_setup) — totp_setup regenerates the provisioning
+    // secret in the session and would break any in-progress enrollment
+    const data = await apiFetch(`${API}/auth.php?action=check`);
+    const totpEnabled = !!(data.user?.totp_enabled);
+    if (totpEnabled) {
       statusEl.innerHTML = '<span class="badge bg-success"><i class="bi bi-shield-check me-1"></i>2FA включена</span>';
       setupBtn?.classList.add('d-none');
       disableBtn?.classList.remove('d-none');
@@ -691,12 +694,6 @@ async function load2faStatus() {
       statusEl.innerHTML = '<span class="badge bg-secondary"><i class="bi bi-shield me-1"></i>2FA не настроена</span>';
       setupBtn?.classList.remove('d-none');
       disableBtn?.classList.add('d-none');
-    }
-    if (data.secret) {
-      const qrImg = document.getElementById('totpQrImg');
-      if (qrImg) qrImg.src = data.qr_url;
-      const secretDisplay = document.getElementById('totpSecretDisplay');
-      if (secretDisplay) secretDisplay.value = data.secret;
     }
   } catch (err) {
     statusEl.innerHTML = `<span class="text-danger small">${escapeHtml(err.message)}</span>`;

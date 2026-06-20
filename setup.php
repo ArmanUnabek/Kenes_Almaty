@@ -14,9 +14,9 @@ define('SETUP_VERSION', '1.0');
 
 // Prevent running in production if setup is locked
 $lockFile = __DIR__ . '/.setup_complete';
-if (file_exists($lockFile) && !isset($_GET['force'])) {
+if (file_exists($lockFile)) {
     http_response_code(403);
-    die('<h2>Инициализация уже выполнена.</h2><p>Удалите файл <code>.setup_complete</code> и добавьте <code>?force=1</code> для повторного запуска.</p>');
+    die('<h2>Инициализация уже выполнена.</h2><p>Удалите файл <code>.setup_complete</code> вручную на сервере для повторного запуска.</p>');
 }
 
 $isCli = php_sapi_name() === 'cli';
@@ -128,8 +128,8 @@ if (!$isCli && $_SERVER['REQUEST_METHOD'] === 'POST' && $dbPdo) {
         try {
             // Check if any user exists
             $count = (int)$dbPdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
-            if ($count > 0 && !isset($_GET['force'])) {
-                $userResult = ['error' => 'Пользователи уже существуют. Используйте ?force=1 для принудительного создания.'];
+            if ($count > 0) {
+                $userResult = ['error' => 'Пользователи уже существуют. Удалите файл .setup_complete для повторного запуска.'];
             } else {
                 $hash = password_hash($password, PASSWORD_DEFAULT);
                 $stmt = $dbPdo->prepare("

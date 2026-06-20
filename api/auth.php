@@ -102,6 +102,12 @@ function handleLogin($db) {
             ], JSON_ENCODE_FLAGS);
             return;
         }
+        // Tighter rate limit for the TOTP step: 5 attempts per 5 minutes per IP
+        if (!RateLimiter::check('totp_' . $ip, 5, 300)) {
+            http_response_code(429);
+            echo json_encode(['error' => 'Слишком много попыток. Подождите 5 минут.'], JSON_ENCODE_FLAGS);
+            return;
+        }
         if (!TotpService::verify($user['totp_secret'], $totpCode)) {
             http_response_code(401);
             echo json_encode(['error' => 'Неверный код двухфакторной аутентификации'], JSON_ENCODE_FLAGS);
@@ -286,7 +292,7 @@ function handleCheck($db) {
         return;
     }
 
-    $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, email FROM users WHERE id = ? AND is_active = TRUE');
+    $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, email, totp_enabled FROM users WHERE id = ? AND is_active = TRUE');
     $stmt->execute([$_SESSION['user_id']]);
     $user = $stmt->fetch();
 

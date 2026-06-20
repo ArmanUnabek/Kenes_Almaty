@@ -36,9 +36,12 @@ class TotpService
     {
         $code = preg_replace('/\s+/', '', $code);
         if (!preg_match('/^\d{6}$/', $code)) return false;
+        // Reject empty or corrupt secrets before any HMAC is computed
+        if (self::base32Decode($secret) === '') return false;
         $counter = (int)(time() / self::STEP);
-        for ($i = -self::DRIFT; $i <= self::DRIFT; $i++) {
-            if (hash_equals(self::hotp($secret, $counter + $i), $code)) {
+        // Check current window first (most common case), then ±DRIFT
+        foreach ([0, -1, 1] as $i) {
+            if (abs($i) <= self::DRIFT && hash_equals(self::hotp($secret, $counter + $i), $code)) {
                 return true;
             }
         }
@@ -72,7 +75,7 @@ class TotpService
     private static function hotp(string $secret, int $counter): string
     {
         $key  = self::base32Decode($secret);
-        $msg  = pack('N*', 0) . pack('N*', $counter);  // 8-byte big-endian
+        $msg  = pack('J', $counter);  // RFC 4226: 8-byte unsigned big-endian counter
         $hash = hash_hmac('sha1', $msg, $key, true);
         $offset = ord($hash[19]) & 0x0F;
         $code = (
