@@ -2140,6 +2140,11 @@ body, .app-body, .app-topbar, .card, .form-control, .form-select,
     background: #1F2937;
     color: #F9FAFB;
 }
+.bg-success-soft { background: var(--status-success-soft); color: var(--color-success); }
+.bg-warning-soft { background: var(--status-warning-soft); color: var(--color-warning); }
+.bg-primary-soft { background: var(--brand-primary-soft);  color: var(--brand-primary); }
+.bg-info-soft    { background: var(--status-info-soft);    color: var(--color-info); }
+.bg-danger-soft  { background: var(--status-danger-soft);  color: var(--color-danger); }
 
 .update-category-body h5 {
     font-size: 0.9375rem;
@@ -2180,6 +2185,11 @@ body.dark-mode .bg-dark-soft {
     background: #374151;
     color: #F9FAFB;
 }
+body.dark-mode .bg-success-soft { color: #4ade80; }
+body.dark-mode .bg-warning-soft { color: #fbbf24; }
+body.dark-mode .bg-primary-soft { color: #60a5fa; }
+body.dark-mode .bg-info-soft    { color: #38bdf8; }
+body.dark-mode .bg-danger-soft  { color: #f87171; }
 
 
 /* ── Calendar styles ── */
@@ -2206,7 +2216,7 @@ body.dark-mode .bg-dark-soft {
 }
 .cal-cell:hover { background: var(--bg-hover); }
 .cal-cell--empty { border: none; cursor: default; }
-.cal-cell--today { background: #e7f1ff; border-color: #0d6efd; }
+.cal-cell--today { background: var(--brand-primary-soft); border-color: var(--brand-primary); }
 .cal-cell--past  { opacity: .55; }
 .cal-day-num {
   font-size: 0.8rem;
@@ -2218,7 +2228,7 @@ body.dark-mode .bg-dark-soft {
 }
 .cal-badge {
   font-size: 0.65rem;
-  background: #0d6efd;
+  background: var(--brand-primary);
   color: #fff;
   border-radius: 20px;
   padding: 1px 5px;
@@ -2236,10 +2246,13 @@ body.dark-mode .bg-dark-soft {
   border-radius: 50%;
   display: inline-block;
 }
-.cal-dot--incoming { background: #0d6efd; }
-.cal-dot--outgoing { background: #198754; }
+.cal-dot--incoming { background: var(--brand-primary); }
+.cal-dot--outgoing { background: var(--color-success); }
 .cal-day-letter { font-size: 0.82rem; }
 
 /* Dark mode */
 body.dark-mode .cal-cell { border-color: var(--border-default); }
-body.dark-mode .cal-cell--today { background: #1e3a5f; border-color: #3b82f6; }
+body.dark-mode .cal-cell--today { border-color: #3b82f6; }
+body.dark-mode .cal-badge { background: #60a5fa; }
+body.dark-mode .cal-dot--incoming { background: #60a5fa; }
+body.dark-mode .cal-dot--outgoing { background: #4ade80; }

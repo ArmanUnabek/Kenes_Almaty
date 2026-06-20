@@ -19,7 +19,7 @@ body.admin-body {
 
 .admin-sidebar {
   width: var(--admin-sidebar-w);
-  background: linear-gradient(180deg, #1a3f75 0%, #0f2847 100%);
+  background: linear-gradient(180deg, var(--brand-navy-light, #1B2A4A) 0%, var(--brand-navy, #0F1B33) 100%);
   color: #fff;
   flex-shrink: 0;
   display: flex;
