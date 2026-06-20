@@ -1103,10 +1103,20 @@
             <!-- Вкладка «Архив» -->
             <div class="tab-pane fade" id="pane-archive" role="tabpanel">
                 <div class="data-card mb-3">
-                    <div class="data-card-header d-flex align-items-center gap-2">
+                    <div class="data-card-header d-flex align-items-center gap-2 flex-wrap">
                         <i class="bi bi-archive"></i>
                         <h5 class="mb-0">Архив писем</h5>
                         <span class="text-muted small ms-2">Удалённые письма. Только администратор может восстановить.</span>
+                        <div class="dropdown ms-auto" id="archiveExportDropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-download"></i> Экспорт
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="export.php?format=xlsx&archived=1"><i class="bi bi-file-earmark-excel me-2"></i>Excel (.xlsx)</a></li>
+                                <li><a class="dropdown-item" href="export.php?format=csv&archived=1"><i class="bi bi-filetype-csv me-2"></i>CSV</a></li>
+                                <li><a class="dropdown-item" href="export.php?format=json&archived=1"><i class="bi bi-filetype-json me-2"></i>JSON</a></li>
+                            </ul>
+                        </div>
                     </div>
                     <div class="data-card-body p-0">
                         <div class="btn-group m-2">
@@ -1272,7 +1282,19 @@
                 <div class="modal-body p-0">
                     <div class="p-3 border-bottom">
                         <input type="search" class="form-control" id="globalSearchInput" placeholder="Письма, организации, члены ОС..." autocomplete="off" />
-                        <div class="form-text">Горячая клавиша: Ctrl+K</div>
+                        <div class="d-flex align-items-center gap-2 mt-2">
+                            <div class="btn-group btn-group-sm" id="searchScopeGroup" role="group">
+                                <input type="radio" class="btn-check" name="searchScope" id="scopeAll" value="all" checked autocomplete="off">
+                                <label class="btn btn-outline-secondary" for="scopeAll">Все</label>
+                                <input type="radio" class="btn-check" name="searchScope" id="scopeLetters" value="letters" autocomplete="off">
+                                <label class="btn btn-outline-secondary" for="scopeLetters">Письма</label>
+                                <input type="radio" class="btn-check" name="searchScope" id="scopeMembers" value="members" autocomplete="off">
+                                <label class="btn btn-outline-secondary" for="scopeMembers">Члены ОС</label>
+                                <input type="radio" class="btn-check" name="searchScope" id="scopeArchived" value="archived" autocomplete="off">
+                                <label class="btn btn-outline-secondary" for="scopeArchived"><i class="bi bi-archive"></i> Архив</label>
+                            </div>
+                            <span class="text-muted small ms-auto">Ctrl+K</span>
+                        </div>
                     </div>
                     <div id="globalSearchResults" class="global-search-results"></div>
                 </div>

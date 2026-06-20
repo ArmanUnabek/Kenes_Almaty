@@ -23,43 +23,93 @@ $regionClauseOutgoing = $regionId ? ' AND region_id = ?' : '';
 $regionClauseMembers = $regionId ? ' AND m.region_id = ?' : '';
 $regionParams = $regionId ? [$regionId] : [];
 
-if ($scope === 'all' || $scope === 'letters') {
+// deleted_at filter: active by default, archived when scope=archived
+$archivedFilter = $scope === 'archived'
+    ? " AND (deleted_at IS NOT NULL AND deleted_at != '0000-00-00 00:00:00')"
+    : " AND (deleted_at IS NULL OR deleted_at = '0000-00-00 00:00:00')";
+
+if ($scope === 'all' || $scope === 'letters' || $scope === 'archived') {
     $sqlIncoming = "
         SELECT 'incoming' AS source, id, date, organization, subject, kk_number AS number_label
         FROM incoming_letters
         WHERE (subject LIKE ? OR note LIKE ? OR organization LIKE ? OR kk_number LIKE ?)
+        {$archivedFilter}
         {$regionClauseIncoming}
         ORDER BY date DESC
         LIMIT ?
     ";
-    $stmt = $db->prepare($sqlIncoming);
-    $params = [$like, $like, $like, $like];
-    if ($regionId) {
-        $params[] = $regionId;
-    }
-    $params[] = $limit;
-    $stmt->execute($params);
-    foreach ($stmt->fetchAll() as $row) {
-        $items[] = $row;
+    try {
+        $stmt = $db->prepare($sqlIncoming);
+        $params = [$like, $like, $like, $like];
+        if ($regionId) {
+            $params[] = $regionId;
+        }
+        $params[] = $limit;
+        $stmt->execute($params);
+        foreach ($stmt->fetchAll() as $row) {
+            $items[] = $row;
+        }
+    } catch (\Throwable $e) {
+        // deleted_at column not yet created — retry without the filter
+        $sqlFallback = "
+            SELECT 'incoming' AS source, id, date, organization, subject, kk_number AS number_label
+            FROM incoming_letters
+            WHERE (subject LIKE ? OR note LIKE ? OR organization LIKE ? OR kk_number LIKE ?)
+            {$regionClauseIncoming}
+            ORDER BY date DESC
+            LIMIT ?
+        ";
+        $stmt = $db->prepare($sqlFallback);
+        $params = [$like, $like, $like, $like];
+        if ($regionId) {
+            $params[] = $regionId;
+        }
+        $params[] = $limit;
+        $stmt->execute($params);
+        foreach ($stmt->fetchAll() as $row) {
+            $items[] = $row;
+        }
     }
 
     $sqlOutgoing = "
         SELECT 'outgoing' AS source, id, date, organization, subject, outgoing_number AS number_label
         FROM outgoing_letters
         WHERE (subject LIKE ? OR note LIKE ? OR organization LIKE ? OR outgoing_number LIKE ?)
+        {$archivedFilter}
         {$regionClauseOutgoing}
         ORDER BY date DESC
         LIMIT ?
     ";
-    $stmt = $db->prepare($sqlOutgoing);
-    $params = [$like, $like, $like, $like];
-    if ($regionId) {
-        $params[] = $regionId;
-    }
-    $params[] = $limit;
-    $stmt->execute($params);
-    foreach ($stmt->fetchAll() as $row) {
-        $items[] = $row;
+    try {
+        $stmt = $db->prepare($sqlOutgoing);
+        $params = [$like, $like, $like, $like];
+        if ($regionId) {
+            $params[] = $regionId;
+        }
+        $params[] = $limit;
+        $stmt->execute($params);
+        foreach ($stmt->fetchAll() as $row) {
+            $items[] = $row;
+        }
+    } catch (\Throwable $e) {
+        $sqlFallback = "
+            SELECT 'outgoing' AS source, id, date, organization, subject, outgoing_number AS number_label
+            FROM outgoing_letters
+            WHERE (subject LIKE ? OR note LIKE ? OR organization LIKE ? OR outgoing_number LIKE ?)
+            {$regionClauseOutgoing}
+            ORDER BY date DESC
+            LIMIT ?
+        ";
+        $stmt = $db->prepare($sqlFallback);
+        $params = [$like, $like, $like, $like];
+        if ($regionId) {
+            $params[] = $regionId;
+        }
+        $params[] = $limit;
+        $stmt->execute($params);
+        foreach ($stmt->fetchAll() as $row) {
+            $items[] = $row;
+        }
     }
 }
 

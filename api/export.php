@@ -26,16 +26,38 @@ RateLimiter::requireCheck(
 
 $db = getDBConnection();
 $regionId = getCurrentRegionId();
-$regionClause = $regionId ? ' WHERE region_id = ?' : '';
+$archived = isset($_GET['archived']) && $_GET['archived'] === '1';
+
+// Build WHERE clauses
+$conditions = [];
+$conditions[] = $archived
+    ? "(deleted_at IS NOT NULL AND deleted_at != '0000-00-00 00:00:00')"
+    : "(deleted_at IS NULL OR deleted_at = '0000-00-00 00:00:00')";
+if ($regionId) {
+    $conditions[] = 'region_id = ?';
+}
+$where  = ' WHERE ' . implode(' AND ', $conditions);
 $params = $regionId ? [$regionId] : [];
 
-$stmt = $db->prepare('SELECT * FROM incoming_letters' . $regionClause . ' ORDER BY date DESC, seq DESC');
-$stmt->execute($params);
-$incoming = $stmt->fetchAll();
+try {
+    $stmt = $db->prepare('SELECT * FROM incoming_letters' . $where . ' ORDER BY date DESC, seq DESC');
+    $stmt->execute($params);
+    $incoming = $stmt->fetchAll();
 
-$stmt = $db->prepare('SELECT * FROM outgoing_letters' . $regionClause . ' ORDER BY date DESC, seq DESC');
-$stmt->execute($params);
-$outgoing = $stmt->fetchAll();
+    $stmt = $db->prepare('SELECT * FROM outgoing_letters' . $where . ' ORDER BY date DESC, seq DESC');
+    $stmt->execute($params);
+    $outgoing = $stmt->fetchAll();
+} catch (\Throwable $e) {
+    // deleted_at column not yet created — fall back to unfiltered export
+    $fallbackWhere = $regionId ? ' WHERE region_id = ?' : '';
+    $stmt = $db->prepare('SELECT * FROM incoming_letters' . $fallbackWhere . ' ORDER BY date DESC, seq DESC');
+    $stmt->execute($params);
+    $incoming = $stmt->fetchAll();
+
+    $stmt = $db->prepare('SELECT * FROM outgoing_letters' . $fallbackWhere . ' ORDER BY date DESC, seq DESC');
+    $stmt->execute($params);
+    $outgoing = $stmt->fetchAll();
+}
 
 SecurityAuditService::logExport(
     $db,
@@ -47,7 +69,7 @@ SecurityAuditService::logExport(
 );
 
 $date = date('Y-m-d');
-$filename = 'os_journal_' . $date;
+$filename = 'os_journal_' . ($archived ? 'archive_' : '') . $date;
 
 if ($format === 'json') {
     $payload = [
