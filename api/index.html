@@ -54,6 +54,10 @@
             <button class="nav-link" id="tab-events" data-bs-toggle="tab" data-bs-target="#pane-events" type="button" role="tab">
                 <i class="bi bi-calendar-event"></i> <span class="sidebar-label" data-i18n="nav.events">Мероприятия</span>
             </button>
+            <button class="nav-link" id="tab-updates" data-bs-toggle="tab" data-bs-target="#pane-updates" type="button" role="tab">
+                <i class="bi bi-stars"></i> <span class="sidebar-label">Что нового</span>
+                <span class="badge bg-danger ms-auto" id="updatesBadge" style="font-size:0.65rem">NEW</span>
+            </button>
             <a class="nav-link d-none" id="navAdminPanel" href="/admin/">
                 <i class="bi bi-shield-lock"></i> <span class="sidebar-label" data-i18n="nav.admin">Админ-панель</span>
             </a>
@@ -988,6 +992,133 @@
                 </div>
             </div>
         </div>
+
+            <!-- Вкладка «Что нового» -->
+            <div class="tab-pane fade" id="pane-updates" role="tabpanel">
+                <div class="updates-page">
+                    <div class="updates-header">
+                        <div class="updates-icon"><i class="bi bi-stars"></i></div>
+                        <div>
+                            <h2 class="updates-title">Что нового в системе</h2>
+                            <p class="updates-subtitle">Последние улучшения Журнала Общественного Совета</p>
+                        </div>
+                    </div>
+
+                    <!-- Версия июнь 2026 -->
+                    <div class="update-release">
+                        <div class="update-release-header">
+                            <span class="update-release-tag">Июнь 2026</span>
+                            <span class="update-release-label">Крупное обновление</span>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-success-soft"><i class="bi bi-phone"></i></div>
+                            <div class="update-category-body">
+                                <h5>Приложение теперь работает как мобильное</h5>
+                                <p>Журнал можно установить на экран телефона или планшета — как обычное приложение. При потере интернета вместо белого экрана появляется страница «Нет соединения».</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-warning-soft"><i class="bi bi-printer"></i></div>
+                            <div class="update-category-body">
+                                <h5>Кнопка «Распечатать» на каждом письме</h5>
+                                <p>В таблице входящих и исходящих появилась кнопка <i class="bi bi-printer"></i>. Нажмите — откроется готовая форма письма для печати: с реквизитами, темой, ответственными и сроком.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-primary-soft"><i class="bi bi-check2-square"></i></div>
+                            <div class="update-category-body">
+                                <h5>Групповые действия с письмами</h5>
+                                <p>Теперь можно выбрать несколько писем сразу — появятся чекбоксы в каждой строке. Отметив нужные, вы можете скачать их одним файлом.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-dark-soft"><i class="bi bi-moon-stars"></i></div>
+                            <div class="update-category-body">
+                                <h5>Тёмная тема</h5>
+                                <p>В правом верхнем углу появился переключатель <i class="bi bi-moon-fill"></i>. Нажмите — интерфейс переключится в тёмный режим. Выбор сохраняется при следующем входе.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-success-soft"><i class="bi bi-file-earmark-excel"></i></div>
+                            <div class="update-category-body">
+                                <h5>Экспорт в Excel</h5>
+                                <p>Рядом с кнопками «CSV» и «PDF» появилась кнопка <strong>Excel</strong>. Скачивает все письма в таблицу Excel (.xlsx) — удобно для отчётов и распечатки.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-danger-soft"><i class="bi bi-shield-lock"></i></div>
+                            <div class="update-category-body">
+                                <h5>Двухфакторная защита входа (2FA)</h5>
+                                <p>Администраторы могут подключить защиту через приложение Google Authenticator. При входе кроме пароля нужно ввести одноразовый 6-значный код — так аккаунт защищён, даже если пароль попал к посторонним. Настройка — в Админ-панели → Система.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-info-soft"><i class="bi bi-activity"></i></div>
+                            <div class="update-category-body">
+                                <h5>Улучшенный мониторинг системы</h5>
+                                <p>В Админ-панели раздел «Состояние системы» теперь показывает: сколько памяти использует сервер, статус почтовой очереди, размер загруженных файлов и когда последний раз выполнялась автоматическая рассылка напоминаний.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Более ранние версии -->
+                    <div class="update-release update-release--older">
+                        <div class="update-release-header">
+                            <span class="update-release-tag">Ранее</span>
+                            <span class="update-release-label">Предыдущие обновления</span>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-primary-soft"><i class="bi bi-envelope-check"></i></div>
+                            <div class="update-category-body">
+                                <h5>Email-уведомления о просроченных письмах</h5>
+                                <p>Система автоматически отправляет напоминание ответственным членам ОС, если срок ответа на письмо истекает или уже прошёл.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-warning-soft"><i class="bi bi-upload"></i></div>
+                            <div class="update-category-body">
+                                <h5>Импорт писем из CSV</h5>
+                                <p>Теперь можно загрузить сразу много писем из таблицы CSV. Кнопка «Импорт CSV» находится в верхнем меню.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-success-soft"><i class="bi bi-person-badge"></i></div>
+                            <div class="update-category-body">
+                                <h5>Фото и статистика членов ОС</h5>
+                                <p>У каждого члена Общественного совета можно загрузить фотографию. Страница члена показывает, сколько писем за ним закреплено, сколько просрочено и по каким комиссиям.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-info-soft"><i class="bi bi-translate"></i></div>
+                            <div class="update-category-body">
+                                <h5>Казахский язык интерфейса</h5>
+                                <p>Переключатель языка в боковом меню — интерфейс полностью переведён на казахский язык.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-primary-soft"><i class="bi bi-graph-up-arrow"></i></div>
+                            <div class="update-category-body">
+                                <h5>Графики и KPI на дашборде</h5>
+                                <p>Главная страница показывает активность по месяцам, статистику по категориям и рейтинг вовлечённости членов ОС.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="updates-footer">Все вопросы и пожелания по работе системы — обращайтесь к администратору.</p>
+                </div>
+            </div>
     </div>
 
     <!-- Глобальный поиск -->

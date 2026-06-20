@@ -365,8 +365,22 @@
   window.sanitizeCsv = sanitizeCsv;
   window.toggleDarkMode = toggleDarkMode;
 
+  function initUpdatesBadge() {
+    const UPDATES_VERSION = 'jun2026';
+    const badge = document.getElementById('updatesBadge');
+    if (!badge) return;
+    if (localStorage.getItem('updates_seen') === UPDATES_VERSION) {
+      badge.classList.add('d-none');
+    }
+    document.getElementById('tab-updates')?.addEventListener('click', () => {
+      localStorage.setItem('updates_seen', UPDATES_VERSION);
+      badge.classList.add('d-none');
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     bindExportImport();
     initDarkMode();
+    initUpdatesBadge();
   });
 })(window);
