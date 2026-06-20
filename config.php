@@ -24,6 +24,8 @@ require_once __DIR__ . '/src/Services/LetterPersistenceService.php';
 require_once __DIR__ . '/src/Services/SecurityAuditService.php';
 require_once __DIR__ . '/src/Services/AuditSanitizer.php';
 require_once __DIR__ . '/src/Services/NotificationRecipientPolicy.php';
+require_once __DIR__ . '/src/Services/TotpService.php';
+require_once __DIR__ . '/src/Services/TelegramService.php';
 
 use App\Logger;
 use App\ErrorHandler;
@@ -42,8 +44,19 @@ define('PUSHER_KEY', getenv('PUSHER_KEY') ?: '');
 define('PUSHER_SECRET', getenv('PUSHER_SECRET') ?: '');
 define('PUSHER_CLUSTER', getenv('PUSHER_CLUSTER') ?: 'eu');
 
+// SMTP email settings (optional)
+define('SMTP_HOST',      getenv('SMTP_HOST')      ?: '');
+define('SMTP_PORT',      (int)(getenv('SMTP_PORT')  ?: 587));
+define('SMTP_USER',      getenv('SMTP_USER')      ?: '');
+define('SMTP_PASS',      getenv('SMTP_PASS')      ?: '');
+define('SMTP_FROM',      getenv('SMTP_FROM')      ?: 'noreply@example.com');
+define('SMTP_FROM_NAME', getenv('SMTP_FROM_NAME') ?: 'Журнал ОС');
+
+// Telegram Bot (опционально — для уведомлений о дедлайнах)
+define('TELEGRAM_BOT_TOKEN', getenv('TELEGRAM_BOT_TOKEN') ?: '');
+
 // Настройки для загрузки фото
-define('UPLOAD_DIR', 'uploads/photos/');
+define('UPLOAD_DIR', APP_ROOT . '/uploads/photos/');
 define('MAX_FILE_SIZE', 5 * 1024 * 1024); // 5 МБ
 define('ALLOWED_IMAGE_TYPES', ['image/jpeg', 'image/png', 'image/jpg']);
 

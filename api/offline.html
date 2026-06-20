@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Нет соединения — Журнал ОС</title>
+<style>
+  :root { --navy: #0F1B33; --gold: #D9A521; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--navy);
+    color: #fff;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem;
+  }
+  .card {
+    max-width: 400px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 3rem 2rem;
+  }
+  .icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+    background: var(--gold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+    font-size: 2rem;
+  }
+  h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: .5rem; }
+  p { color: rgba(255,255,255,.65); font-size: .9375rem; line-height: 1.6; margin-bottom: 1.5rem; }
+  button {
+    background: var(--gold);
+    color: var(--navy);
+    border: none;
+    border-radius: 8px;
+    padding: .625rem 1.5rem;
+    font-size: .9375rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { opacity: .9; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">📋</div>
+  <h1>Нет соединения</h1>
+  <p>Проверьте подключение к интернету и попробуйте снова. Данные журнала недоступны в офлайн-режиме.</p>
+  <button onclick="location.reload()">Попробовать снова</button>
+</div>
+</body>
+</html>

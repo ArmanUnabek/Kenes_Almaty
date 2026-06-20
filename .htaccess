@@ -56,6 +56,14 @@ php_value max_input_time 300
     Deny from all
 </FilesMatch>
 
+# Block setup.php if lock file exists (after initial setup)
+<Files "setup.php">
+    <IfModule mod_rewrite.c>
+        RewriteCond %{DOCUMENT_ROOT}/.setup_complete -f
+        RewriteRule ^ - [F,L]
+    </IfModule>
+</Files>
+
 # Запрет доступа к лог-файлам отладки
 <FilesMatch "^debug-.*\.log$">
     Order allow,deny

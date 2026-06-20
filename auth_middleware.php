@@ -235,6 +235,25 @@ function enrichUserPayload(array $user): array
         $user['region'] = null;
     }
 
+    // Resolve linked OS member (for "My Letters" feature)
+    if (empty($user['member_id'])) {
+        try {
+            $memberRegion = $regionId ?: ($user['region_id'] ?? null);
+            if ($memberRegion && !empty($user['full_name'])) {
+                $mStmt = $db->prepare('SELECT id FROM os_members WHERE full_name = ? AND region_id = ? AND status = ? LIMIT 1');
+                $mStmt->execute([$user['full_name'], (int)$memberRegion, 'active']);
+                $mRow = $mStmt->fetch();
+                $user['member_id'] = $mRow ? (int)$mRow['id'] : null;
+            } else {
+                $user['member_id'] = null;
+            }
+        } catch (\Throwable $e) {
+            $user['member_id'] = null;
+        }
+    } else {
+        $user['member_id'] = (int)$user['member_id'];
+    }
+
     return $user;
 }
 

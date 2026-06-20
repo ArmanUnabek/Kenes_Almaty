@@ -80,6 +80,11 @@
                         <label for="password" class="form-label" id="loginPasswordLabel">Пароль</label>
                         <input type="password" class="form-control" id="password" name="password" autocomplete="current-password" required />
                     </div>
+                    <div class="form-group d-none" id="totpGroup">
+                        <label for="totpCode" class="form-label">Код 2FA (Google Authenticator)</label>
+                        <input type="text" class="form-control" id="totpCode" name="totp_code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="000000" />
+                        <small class="text-muted">Введите 6-значный код из приложения-аутентификатора.</small>
+                    </div>
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="rememberMe" name="rememberMe" />
                         <label class="form-check-label" for="rememberMe" id="loginRememberLabel">Запомнить меня</label>
@@ -119,12 +124,15 @@
         const form = document.getElementById('loginForm');
         const usernameInput = document.getElementById('username');
         const passwordInput = document.getElementById('password');
+        const totpInput = document.getElementById('totpCode');
+        const totpGroup = document.getElementById('totpGroup');
         const rememberMeCheckbox = document.getElementById('rememberMe');
         const consentCheckbox = document.getElementById('consentCheck');
         const errorAlert = document.getElementById('errorAlert');
         const infoAlert = document.getElementById('infoAlert');
         const loginBtn = form.querySelector('button[type="submit"]');
         const t = (k) => window.LoginI18n?.t(k) || k;
+        let totpRequired = false;
 
         window.addEventListener('DOMContentLoaded', () => {
             const savedUsername = localStorage.getItem('login_username');
@@ -156,12 +164,25 @@
             errorAlert.classList.add('d-none');
             infoAlert.classList.add('d-none');
             try {
+                const params = { username, password };
+                if (totpRequired && totpInput.value.trim()) {
+                    params.totp_code = totpInput.value.trim();
+                }
                 const response = await fetch('api/auth.php?action=login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ username, password })
+                    body: new URLSearchParams(params)
                 });
                 const data = await response.json();
+                if (response.status === 202 && data.totp_required) {
+                    // Show 2FA field
+                    totpRequired = true;
+                    totpGroup.classList.remove('d-none');
+                    totpInput.required = true;
+                    totpInput.focus();
+                    showInfo('Введите код из приложения Google Authenticator');
+                    return;
+                }
                 if (response.ok && data.authenticated) {
                     const consentVersion = window.SITE_CONFIG?.consentVersion || '1.0';
                     localStorage.setItem('pd_consent_version', consentVersion);

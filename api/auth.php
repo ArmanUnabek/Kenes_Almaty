@@ -5,6 +5,7 @@ require_once __DIR__ . '/../src/Middleware/CsrfMiddleware.php';
 
 use App\Middleware\CsrfMiddleware;
 use App\Middleware\RateLimiter;
+use App\Services\TotpService;
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -28,6 +29,18 @@ try {
 
         case 'switch_region':
             handleSwitchRegion($db);
+            break;
+
+        case 'totp_setup':
+            handleTotpSetup($db);
+            break;
+
+        case 'totp_enable':
+            handleTotpEnable($db);
+            break;
+
+        case 'totp_disable':
+            handleTotpDisable($db);
             break;
 
         case 'check':
@@ -60,7 +73,7 @@ function handleLogin($db) {
         return;
     }
 
-    $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, password_hash FROM users WHERE username = ? AND is_active = TRUE');
+    $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, password_hash, totp_secret, totp_enabled FROM users WHERE username = ? AND is_active = TRUE');
     $stmt->execute([$username]);
     $user = $stmt->fetch();
 
@@ -74,6 +87,32 @@ function handleLogin($db) {
         http_response_code(401);
         echo json_encode(['error' => 'Неверный логин или пароль'], JSON_ENCODE_FLAGS);
         return;
+    }
+
+    // 2FA/TOTP check
+    $totpEnabled = !empty($user['totp_enabled']) && !empty($user['totp_secret']);
+    if ($totpEnabled) {
+        $totpCode = $_POST['totp_code'] ?? '';
+        if (empty($totpCode)) {
+            // Password correct but 2FA code not provided — signal client to show 2FA field
+            http_response_code(202);
+            echo json_encode([
+                'totp_required' => true,
+                'message' => 'Введите код двухфакторной аутентификации',
+            ], JSON_ENCODE_FLAGS);
+            return;
+        }
+        // Tighter rate limit for the TOTP step: 5 attempts per 5 minutes per IP
+        if (!RateLimiter::check('totp_' . $ip, 5, 300)) {
+            http_response_code(429);
+            echo json_encode(['error' => 'Слишком много попыток. Подождите 5 минут.'], JSON_ENCODE_FLAGS);
+            return;
+        }
+        if (!TotpService::verify($user['totp_secret'], $totpCode)) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Неверный код двухфакторной аутентификации'], JSON_ENCODE_FLAGS);
+            return;
+        }
     }
 
     session_regenerate_id(true);
@@ -95,13 +134,84 @@ function handleLogin($db) {
     $db->prepare('INSERT INTO activity_logs (user_id, action, entity_type, ip_address) VALUES (?, ?, ?, ?)')
         ->execute([$user['id'], 'login', 'user', $_SERVER['REMOTE_ADDR'] ?? '']);
 
-    unset($user['password_hash']);
+    unset($user['password_hash'], $user['totp_secret']);
     $user = enrichUserPayload($user);
 
     echo json_encode([
         'authenticated' => true,
         'user' => $user
     ], JSON_ENCODE_FLAGS);
+}
+
+function handleTotpSetup($db) {
+    checkAuth();
+    $userId = (int)($_SESSION['user_id'] ?? 0);
+    $stmt = $db->prepare('SELECT username, totp_secret, totp_enabled FROM users WHERE id = ?');
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch();
+    if (!$user) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Пользователь не найден'], JSON_ENCODE_FLAGS);
+        return;
+    }
+    // Generate new secret (provisioning — not saved until confirmed)
+    $secret = TotpService::generateSecret();
+    // Store provisioning secret in session
+    $_SESSION['totp_provisioning'] = $secret;
+    $uri = TotpService::getUri($secret, $user['username']);
+    echo json_encode([
+        'secret'     => $secret,
+        'uri'        => $uri,
+        'qr_url'     => TotpService::getQrUrl($uri),
+        'enabled'    => (bool)$user['totp_enabled'],
+    ], JSON_ENCODE_FLAGS);
+}
+
+function handleTotpEnable($db) {
+    checkAuth();
+    CsrfMiddleware::requireVerification();
+    $userId = (int)($_SESSION['user_id'] ?? 0);
+    $data = json_decode(file_get_contents('php://input'), true) ?: [];
+    $code = trim($data['totp_code'] ?? '');
+    $secret = $_SESSION['totp_provisioning'] ?? '';
+    if (!$secret) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Сначала получите секрет через totp_setup'], JSON_ENCODE_FLAGS);
+        return;
+    }
+    if (!TotpService::verify($secret, $code)) {
+        http_response_code(422);
+        echo json_encode(['error' => 'Неверный код. Проверьте время на устройстве.'], JSON_ENCODE_FLAGS);
+        return;
+    }
+    $db->prepare('UPDATE users SET totp_secret = ?, totp_enabled = TRUE WHERE id = ?')
+        ->execute([$secret, $userId]);
+    unset($_SESSION['totp_provisioning']);
+    echo json_encode(['success' => true, 'message' => '2FA успешно включена'], JSON_ENCODE_FLAGS);
+}
+
+function handleTotpDisable($db) {
+    checkAuth();
+    CsrfMiddleware::requireVerification();
+    $userId = (int)($_SESSION['user_id'] ?? 0);
+    $data = json_decode(file_get_contents('php://input'), true) ?: [];
+    $code = trim($data['totp_code'] ?? '');
+    $stmt = $db->prepare('SELECT totp_secret, totp_enabled FROM users WHERE id = ?');
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch();
+    if (!$user || !$user['totp_enabled'] || !$user['totp_secret']) {
+        http_response_code(400);
+        echo json_encode(['error' => '2FA не включена'], JSON_ENCODE_FLAGS);
+        return;
+    }
+    if (!TotpService::verify($user['totp_secret'], $code)) {
+        http_response_code(422);
+        echo json_encode(['error' => 'Неверный код'], JSON_ENCODE_FLAGS);
+        return;
+    }
+    $db->prepare('UPDATE users SET totp_secret = NULL, totp_enabled = FALSE WHERE id = ?')
+        ->execute([$userId]);
+    echo json_encode(['success' => true, 'message' => '2FA отключена'], JSON_ENCODE_FLAGS);
 }
 
 function handleLogout($db) {
@@ -182,7 +292,7 @@ function handleCheck($db) {
         return;
     }
 
-    $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, email FROM users WHERE id = ? AND is_active = TRUE');
+    $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, email, totp_enabled FROM users WHERE id = ? AND is_active = TRUE');
     $stmt->execute([$_SESSION['user_id']]);
     $user = $stmt->fetch();
 
