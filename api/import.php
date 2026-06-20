@@ -40,7 +40,11 @@ $user     = getCurrentUser();
 $userId   = (int)($user['id'] ?? 0);
 $regionId = getCurrentRegionId();
 
-RateLimiter::requireCheck('import_csv_' . $userId, 5, 3600);
+if (!RateLimiter::check('import_csv_' . $userId, 5, 3600)) {
+    http_response_code(429);
+    echo json_encode(['error' => 'Слишком много запросов импорта. Попробуйте через час.'], JSON_ENCODE_FLAGS);
+    exit;
+}
 
 if (empty($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
     http_response_code(400);

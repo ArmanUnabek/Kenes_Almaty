@@ -25,11 +25,11 @@ class EmailService
         string $bodyHtml,
         ?string $bodyText = null
     ): bool {
-        $host    = defined('SMTP_HOST') ? SMTP_HOST : '';
-        $port    = defined('SMTP_PORT') ? (int)SMTP_PORT : 587;
-        $user    = defined('SMTP_USER') ? SMTP_USER : '';
-        $pass    = defined('SMTP_PASS') ? SMTP_PASS : '';
-        $from    = defined('SMTP_FROM') ? SMTP_FROM : 'noreply@example.com';
+        $host     = defined('SMTP_HOST') ? SMTP_HOST : '';
+        $port     = defined('SMTP_PORT') ? (int)SMTP_PORT : 587;
+        $user     = defined('SMTP_USER') ? SMTP_USER : '';
+        $pass     = defined('SMTP_PASS') ? SMTP_PASS : '';
+        $from     = defined('SMTP_FROM') ? SMTP_FROM : 'noreply@example.com';
         $fromName = defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'Журнал ОС';
 
         if (empty($host)) {
@@ -60,7 +60,6 @@ class EmailService
         $headers .= $message;
 
         try {
-            // Determine connection type
             if ($port === 465) {
                 $socket = @fsockopen("ssl://{$host}", $port, $errno, $errstr, 15);
             } else {
@@ -71,14 +70,15 @@ class EmailService
                 return false;
             }
 
-            $read = fgets($socket, 512);
-            if (strpos($read, '220') !== 0) {
+            // Read server greeting (may be multi-line)
+            if (!self::smtpReadGreeting($socket, '220')) {
                 fclose($socket);
-                error_log('EmailService::sendSmtp: bad greeting: ' . $read);
                 return false;
             }
 
             $domain = gethostname() ?: 'localhost';
+
+            // EHLO returns multi-line 250 response; smtpCmd drains all lines
             if (!self::smtpCmd($socket, "EHLO {$domain}", '250')) {
                 fclose($socket);
                 return false;
@@ -95,6 +95,7 @@ class EmailService
                     error_log('EmailService::sendSmtp: TLS negotiation failed');
                     return false;
                 }
+                // Re-EHLO after TLS
                 if (!self::smtpCmd($socket, "EHLO {$domain}", '250')) {
                     fclose($socket);
                     return false;
@@ -121,7 +122,7 @@ class EmailService
                 fclose($socket);
                 return false;
             }
-            if (!self::smtpCmd($socket, "RCPT TO:<{$to}>", '25')) {
+            if (!self::smtpCmd($socket, "RCPT TO:<{$to}>", '250')) {
                 fclose($socket);
                 return false;
             }
@@ -150,66 +151,120 @@ class EmailService
 
     /**
      * Process the email queue: send up to $batchSize queued emails.
+     * Uses a file lock to prevent parallel runs from double-sending.
      * Returns ['sent' => N, 'failed' => N, 'skipped' => N].
      */
     public static function processQueue(PDO $db, int $batchSize = 10): array
     {
         $result = ['sent' => 0, 'failed' => 0, 'skipped' => 0];
 
-        $stmt = $db->prepare("
-            SELECT id, recipient_email, subject, body_html, body_text
-            FROM email_queue
-            WHERE status = 'queued'
-            ORDER BY id ASC
-            LIMIT ?
-        ");
-        $stmt->bindValue(1, $batchSize, PDO::PARAM_INT);
-        $stmt->execute();
-        $rows = $stmt->fetchAll();
-
-        if (empty($rows)) {
+        // Exclusive file lock prevents two cron processes from claiming the same rows
+        $lockPath = sys_get_temp_dir() . '/os_journal_email_queue.lock';
+        $lock = fopen($lockPath, 'c');
+        if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
+            $result['skipped'] = -1; // -1 signals: another process holds the lock
+            if ($lock) {
+                fclose($lock);
+            }
             return $result;
         }
 
-        $stmtSent = $db->prepare("
-            UPDATE email_queue SET status = 'sent', sent_at = NOW(), error = NULL WHERE id = ?
-        ");
-        $stmtFail = $db->prepare("
-            UPDATE email_queue SET status = 'failed', error = ? WHERE id = ?
-        ");
+        try {
+            $stmt = $db->prepare("
+                SELECT id, recipient_email, subject, body_html, body_text
+                FROM email_queue
+                WHERE status = 'queued'
+                ORDER BY id ASC
+                LIMIT ?
+            ");
+            $stmt->bindValue(1, $batchSize, PDO::PARAM_INT);
+            $stmt->execute();
+            $rows = $stmt->fetchAll();
 
-        foreach ($rows as $row) {
-            $id = (int)$row['id'];
-            try {
-                $ok = self::sendSmtp(
-                    $row['recipient_email'],
-                    $row['subject'],
-                    $row['body_html'] ?? '',
-                    $row['body_text'] ?? null
-                );
-                if ($ok) {
-                    $stmtSent->execute([$id]);
-                    $result['sent']++;
-                } else {
-                    $stmtFail->execute(['SMTP send returned false', $id]);
-                    $result['failed']++;
-                }
-            } catch (\Throwable $e) {
-                $stmtFail->execute([$e->getMessage(), $id]);
-                $result['failed']++;
-                error_log("EmailService::processQueue id={$id} error: " . $e->getMessage());
+            if (empty($rows)) {
+                return $result;
             }
+
+            $stmtSent = $db->prepare("
+                UPDATE email_queue SET status = 'sent', sent_at = NOW(), error = NULL WHERE id = ?
+            ");
+            $stmtFail = $db->prepare("
+                UPDATE email_queue SET status = 'failed', error = ? WHERE id = ?
+            ");
+
+            foreach ($rows as $row) {
+                $id = (int)$row['id'];
+                try {
+                    $ok = self::sendSmtp(
+                        $row['recipient_email'],
+                        $row['subject'],
+                        $row['body_html'] ?? '',
+                        $row['body_text'] ?? null
+                    );
+                    if ($ok) {
+                        $stmtSent->execute([$id]);
+                        $result['sent']++;
+                    } else {
+                        $stmtFail->execute(['SMTP send returned false', $id]);
+                        $result['failed']++;
+                    }
+                } catch (\Throwable $e) {
+                    $stmtFail->execute([$e->getMessage(), $id]);
+                    $result['failed']++;
+                    error_log("EmailService::processQueue id={$id} error: " . $e->getMessage());
+                }
+            }
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
         }
 
         return $result;
     }
 
+    /**
+     * Send an SMTP command and drain all response lines (handles multi-line responses
+     * like EHLO where the server sends 250-capability lines followed by a final 250 line).
+     * Lines with a hyphen in position 3 (e.g. "250-AUTH LOGIN") are continuation lines.
+     * The final line has a space in position 3 (e.g. "250 OK").
+     */
     private static function smtpCmd($socket, string $cmd, string $expectedCode): bool
     {
         fputs($socket, $cmd . "\r\n");
-        $resp = fgets($socket, 512);
-        if (strpos($resp, $expectedCode) !== 0) {
-            error_log("EmailService SMTP cmd '{$cmd}' expected {$expectedCode}, got: " . trim($resp));
+
+        do {
+            $line = fgets($socket, 512);
+            if ($line === false) {
+                error_log("EmailService SMTP cmd '{$cmd}': connection closed unexpectedly");
+                return false;
+            }
+            // position 3 is '-' for continuation lines, ' ' for the last line
+            $isContinued = isset($line[3]) && $line[3] === '-';
+        } while ($isContinued);
+
+        if (strpos($line, $expectedCode) !== 0) {
+            error_log("EmailService SMTP cmd '{$cmd}' expected {$expectedCode}, got: " . trim($line));
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Read the initial SMTP greeting (may be multi-line on some servers).
+     */
+    private static function smtpReadGreeting($socket, string $expectedCode): bool
+    {
+        do {
+            $line = fgets($socket, 512);
+            if ($line === false) {
+                error_log('EmailService::sendSmtp: connection closed during greeting');
+                return false;
+            }
+            $isContinued = isset($line[3]) && $line[3] === '-';
+        } while ($isContinued);
+
+        if (strpos($line, $expectedCode) !== 0) {
+            error_log('EmailService::sendSmtp: bad greeting: ' . trim($line));
             return false;
         }
         return true;

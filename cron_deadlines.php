@@ -128,7 +128,7 @@ try {
         ];
         $notifications[] = $payload;
 
-        // Email назначенным членам письма
+        // Email назначенным членам письма (один раз в день на каждое письмо+получатель)
         if ($smtpEnabled) {
             $stmtMembers = $db->prepare("
                 SELECT m.email, m.full_name
@@ -149,9 +149,23 @@ try {
                 . ' — ' . ($letter['organization'] ?? '');
             $bodyHtml    = buildDeadlineEmailHtml($payload, $statusLabel);
 
+            // Дедупликация: не ставить в очередь если уже есть за сегодня
+            $stmtDup = $db->prepare("
+                SELECT COUNT(*) FROM email_queue
+                WHERE recipient_email = ?
+                  AND subject = ?
+                  AND created_at >= ?
+                  AND status != 'failed'
+            ");
+            $todayStart = date('Y-m-d') . ' 00:00:00';
+
             foreach ($members as $member) {
                 if (!filter_var($member['email'], FILTER_VALIDATE_EMAIL)) {
                     continue;
+                }
+                $stmtDup->execute([$member['email'], $subject, $todayStart]);
+                if ((int)$stmtDup->fetchColumn() > 0) {
+                    continue; // уже уведомили сегодня
                 }
                 EmailService::enqueue($db, $member['email'], $subject, $bodyHtml, strip_tags($bodyHtml));
                 $emailsQueued++;
