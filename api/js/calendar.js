@@ -111,10 +111,7 @@
     const label = `${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
 
     const panel = document.getElementById('calendarDayPanel');
-    const title = document.getElementById('calendarDayTitle');
-    if (!panel || !title) return;
-
-    title.textContent = label;
+    if (!panel) return;
 
     const makeRows = (letters, type) => letters.map((l) => {
       const prefix = type === 'incoming' ? `Вх.${l.seq}` : `Исх.${l.seq}`;
@@ -142,7 +139,7 @@
       }
     }
 
-    panel.innerHTML = html;
+    panel.innerHTML = `<div class="fw-semibold border-bottom pb-1 mb-2">${label}</div>${html}`;
     panel.classList.remove('d-none');
   }
 

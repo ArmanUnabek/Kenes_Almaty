@@ -182,13 +182,14 @@ try {
                     SELECT DISTINCT u.telegram_chat_id
                     FROM letter_members lm
                     JOIN os_members m ON lm.member_id = m.id
-                    JOIN users u ON u.member_id = m.id
+                    JOIN users u ON u.full_name = m.full_name
+                         AND (u.region_id = ? OR u.role = 'admin')
                     WHERE lm.letter_type = 'incoming'
                       AND lm.letter_id = ?
                       AND u.telegram_chat_id IS NOT NULL
                       AND u.telegram_chat_id != ''
                 ");
-                $stmtTg->execute([(int)$letter['id']]);
+                $stmtTg->execute([(int)$letter['region_id'], (int)$letter['id']]);
                 $tgRecipients = $stmtTg->fetchAll(\PDO::FETCH_COLUMN);
                 $statusEmoji  = $status === 'overdue' ? '🔴' : '🟡';
                 $tgText       = "{$statusEmoji} <b>Журнал ОС</b>: входящее письмо Вх.{$letter['seq']} ({$letter['organization']})\n"
