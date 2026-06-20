@@ -48,6 +48,9 @@
   function navigateToResult(item) {
     if (item._archived && (item.source === 'incoming' || item.source === 'outgoing')) {
       document.getElementById('tab-archive')?.click();
+      // Switch the archive type toggle to match the result's source
+      const toggleId = item.source === 'outgoing' ? 'archiveTypeOutgoing' : 'archiveTypeIncoming';
+      setTimeout(() => document.getElementById(toggleId)?.click(), 150);
       return;
     }
     if (item.source === 'incoming' || item.source === 'outgoing') {

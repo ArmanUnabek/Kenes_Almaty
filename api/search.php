@@ -50,24 +50,27 @@ if ($scope === 'all' || $scope === 'letters' || $scope === 'archived') {
             $items[] = $row;
         }
     } catch (\Throwable $e) {
-        // deleted_at column not yet created — retry without the filter
-        $sqlFallback = "
-            SELECT 'incoming' AS source, id, date, organization, subject, kk_number AS number_label
-            FROM incoming_letters
-            WHERE (subject LIKE ? OR note LIKE ? OR organization LIKE ? OR kk_number LIKE ?)
-            {$regionClauseIncoming}
-            ORDER BY date DESC
-            LIMIT ?
-        ";
-        $stmt = $db->prepare($sqlFallback);
-        $params = [$like, $like, $like, $like];
-        if ($regionId) {
-            $params[] = $regionId;
-        }
-        $params[] = $limit;
-        $stmt->execute($params);
-        foreach ($stmt->fetchAll() as $row) {
-            $items[] = $row;
+        // deleted_at column not yet created
+        // For archived scope: no archived letters can exist yet, so return nothing
+        if ($scope !== 'archived') {
+            $sqlFallback = "
+                SELECT 'incoming' AS source, id, date, organization, subject, kk_number AS number_label
+                FROM incoming_letters
+                WHERE (subject LIKE ? OR note LIKE ? OR organization LIKE ? OR kk_number LIKE ?)
+                {$regionClauseIncoming}
+                ORDER BY date DESC
+                LIMIT ?
+            ";
+            $stmt = $db->prepare($sqlFallback);
+            $params = [$like, $like, $like, $like];
+            if ($regionId) {
+                $params[] = $regionId;
+            }
+            $params[] = $limit;
+            $stmt->execute($params);
+            foreach ($stmt->fetchAll() as $row) {
+                $items[] = $row;
+            }
         }
     }
 
@@ -92,23 +95,26 @@ if ($scope === 'all' || $scope === 'letters' || $scope === 'archived') {
             $items[] = $row;
         }
     } catch (\Throwable $e) {
-        $sqlFallback = "
-            SELECT 'outgoing' AS source, id, date, organization, subject, outgoing_number AS number_label
-            FROM outgoing_letters
-            WHERE (subject LIKE ? OR note LIKE ? OR organization LIKE ? OR outgoing_number LIKE ?)
-            {$regionClauseOutgoing}
-            ORDER BY date DESC
-            LIMIT ?
-        ";
-        $stmt = $db->prepare($sqlFallback);
-        $params = [$like, $like, $like, $like];
-        if ($regionId) {
-            $params[] = $regionId;
-        }
-        $params[] = $limit;
-        $stmt->execute($params);
-        foreach ($stmt->fetchAll() as $row) {
-            $items[] = $row;
+        // deleted_at column not yet created
+        if ($scope !== 'archived') {
+            $sqlFallback = "
+                SELECT 'outgoing' AS source, id, date, organization, subject, outgoing_number AS number_label
+                FROM outgoing_letters
+                WHERE (subject LIKE ? OR note LIKE ? OR organization LIKE ? OR outgoing_number LIKE ?)
+                {$regionClauseOutgoing}
+                ORDER BY date DESC
+                LIMIT ?
+            ";
+            $stmt = $db->prepare($sqlFallback);
+            $params = [$like, $like, $like, $like];
+            if ($regionId) {
+                $params[] = $regionId;
+            }
+            $params[] = $limit;
+            $stmt->execute($params);
+            foreach ($stmt->fetchAll() as $row) {
+                $items[] = $row;
+            }
         }
     }
 }

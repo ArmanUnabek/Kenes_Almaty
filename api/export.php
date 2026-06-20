@@ -48,15 +48,21 @@ try {
     $stmt->execute($params);
     $outgoing = $stmt->fetchAll();
 } catch (\Throwable $e) {
-    // deleted_at column not yet created — fall back to unfiltered export
-    $fallbackWhere = $regionId ? ' WHERE region_id = ?' : '';
-    $stmt = $db->prepare('SELECT * FROM incoming_letters' . $fallbackWhere . ' ORDER BY date DESC, seq DESC');
-    $stmt->execute($params);
-    $incoming = $stmt->fetchAll();
+    // deleted_at column not yet created
+    if ($archived) {
+        // Archive can't be distinguished without the column — return nothing
+        $incoming = [];
+        $outgoing = [];
+    } else {
+        $fallbackWhere = $regionId ? ' WHERE region_id = ?' : '';
+        $stmt = $db->prepare('SELECT * FROM incoming_letters' . $fallbackWhere . ' ORDER BY date DESC, seq DESC');
+        $stmt->execute($params);
+        $incoming = $stmt->fetchAll();
 
-    $stmt = $db->prepare('SELECT * FROM outgoing_letters' . $fallbackWhere . ' ORDER BY date DESC, seq DESC');
-    $stmt->execute($params);
-    $outgoing = $stmt->fetchAll();
+        $stmt = $db->prepare('SELECT * FROM outgoing_letters' . $fallbackWhere . ' ORDER BY date DESC, seq DESC');
+        $stmt->execute($params);
+        $outgoing = $stmt->fetchAll();
+    }
 }
 
 SecurityAuditService::logExport(
