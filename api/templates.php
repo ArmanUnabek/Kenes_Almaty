@@ -14,25 +14,60 @@ checkAuth();
 $db     = getDBConnection();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-// Ensure letter_templates table exists (runtime migration)
-$db->exec("
-    CREATE TABLE IF NOT EXISTS letter_templates (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        region_id INT NOT NULL,
-        name VARCHAR(255) NOT NULL,
-        letter_type ENUM('incoming','outgoing') NOT NULL,
-        organization VARCHAR(255),
-        subject TEXT,
-        note TEXT,
-        category ENUM('KK','N','JT','ZT') DEFAULT 'KK',
-        created_by INT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE CASCADE,
-        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
-        INDEX idx_region_type (region_id, letter_type)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-");
+// Ensure letter_templates table exists (runtime migration, driver-aware)
+$driver = $db->getAttribute(\PDO::ATTR_DRIVER_NAME);
+if ($driver === 'sqlite') {
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS letter_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            region_id INTEGER NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            letter_type TEXT NOT NULL,
+            organization VARCHAR(255),
+            subject TEXT,
+            note TEXT,
+            category TEXT DEFAULT 'KK',
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ");
+} elseif ($driver === 'pgsql') {
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS letter_templates (
+            id SERIAL PRIMARY KEY,
+            region_id INTEGER NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            letter_type VARCHAR(20) NOT NULL,
+            organization VARCHAR(255),
+            subject TEXT,
+            note TEXT,
+            category VARCHAR(5) DEFAULT 'KK',
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ");
+} else {
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS letter_templates (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            region_id INT NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            letter_type ENUM('incoming','outgoing') NOT NULL,
+            organization VARCHAR(255),
+            subject TEXT,
+            note TEXT,
+            category ENUM('KK','N','JT','ZT') DEFAULT 'KK',
+            created_by INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE CASCADE,
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+            INDEX idx_region_type (region_id, letter_type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+}
 
 switch ($method) {
     case 'GET':
@@ -161,7 +196,7 @@ function handleUpdateTemplate(\PDO $db): void
     }
 
     $db->prepare("
-        UPDATE letter_templates SET name=?, organization=?, subject=?, note=?, category=?, updated_at=NOW()
+        UPDATE letter_templates SET name=?, organization=?, subject=?, note=?, category=?, updated_at=CURRENT_TIMESTAMP
         WHERE id=?
     ")->execute([
         $name,

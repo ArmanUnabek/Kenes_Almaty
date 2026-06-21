@@ -31,9 +31,11 @@ class TotpService
 
     /**
      * Проверяет введённый код с допуском ±DRIFT шагов.
+     * При совпадении в $matchedCounter возвращается номер интервала (для защиты от повтора).
      */
-    public static function verify(string $secret, string $code): bool
+    public static function verify(string $secret, string $code, ?int &$matchedCounter = null): bool
     {
+        $matchedCounter = null;
         $code = preg_replace('/\s+/', '', $code);
         if (!preg_match('/^\d{6}$/', $code)) return false;
         // Reject empty or corrupt secrets before any HMAC is computed
@@ -42,6 +44,7 @@ class TotpService
         // Check current window first (most common case), then ±DRIFT
         foreach ([0, -1, 1] as $i) {
             if (abs($i) <= self::DRIFT && hash_equals(self::hotp($secret, $counter + $i), $code)) {
+                $matchedCounter = $counter + $i;
                 return true;
             }
         }

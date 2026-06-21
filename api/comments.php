@@ -14,10 +14,31 @@ checkAuth();
 $db  = getDBConnection();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-// Ensure letter_comments table exists (runtime migration)
-static $tableChecked = false;
-if (!$tableChecked) {
-    $tableChecked = true;
+// Ensure letter_comments table exists (runtime migration, driver-aware)
+$driver = $db->getAttribute(\PDO::ATTR_DRIVER_NAME);
+if ($driver === 'sqlite') {
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS letter_comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            letter_type TEXT NOT NULL,
+            letter_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            comment TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ");
+} elseif ($driver === 'pgsql') {
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS letter_comments (
+            id SERIAL PRIMARY KEY,
+            letter_type VARCHAR(20) NOT NULL,
+            letter_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            comment TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ");
+} else {
     $db->exec("
         CREATE TABLE IF NOT EXISTS letter_comments (
             id INT AUTO_INCREMENT PRIMARY KEY,

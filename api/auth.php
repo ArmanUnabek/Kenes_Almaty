@@ -6,6 +6,7 @@ require_once __DIR__ . '/../src/Middleware/CsrfMiddleware.php';
 use App\Middleware\CsrfMiddleware;
 use App\Middleware\RateLimiter;
 use App\Services\TotpService;
+use App\Services\FileCache;
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -73,6 +74,14 @@ function handleLogin($db) {
         return;
     }
 
+    // Доп. лимит против распределённого перебора одного аккаунта (с многих IP).
+    // Порог выше IP-лимита, чтобы не давать легко «залочить» легитимного пользователя.
+    if (!RateLimiter::check('login_user_' . strtolower($username), 30, 900)) {
+        http_response_code(429);
+        echo json_encode(['error' => 'Слишком много попыток входа в этот аккаунт. Попробуйте позже.'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
     $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, password_hash, totp_secret, totp_enabled FROM users WHERE username = ? AND is_active = TRUE');
     $stmt->execute([$username]);
     $user = $stmt->fetch();
@@ -108,11 +117,22 @@ function handleLogin($db) {
             echo json_encode(['error' => 'Слишком много попыток. Подождите 5 минут.'], JSON_ENCODE_FLAGS);
             return;
         }
-        if (!TotpService::verify($user['totp_secret'], $totpCode)) {
+        $matchedCounter = null;
+        if (!TotpService::verify($user['totp_secret'], $totpCode, $matchedCounter)) {
             http_response_code(401);
             echo json_encode(['error' => 'Неверный код двухфакторной аутентификации'], JSON_ENCODE_FLAGS);
             return;
         }
+        // Защита от повтора: один и тот же код (интервал) нельзя использовать дважды.
+        $replayKey = 'totp_used_' . (int)$user['id'] . '_' . (int)$matchedCounter;
+        $cache = new FileCache();
+        if ($cache->get($replayKey)) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Этот код уже был использован. Дождитесь следующего.'], JSON_ENCODE_FLAGS);
+            return;
+        }
+        // TTL покрывает окно дрейфа (±1 шаг) с запасом.
+        $cache->set($replayKey, 1, 120);
     }
 
     session_regenerate_id(true);
