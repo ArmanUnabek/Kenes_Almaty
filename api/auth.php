@@ -329,7 +329,7 @@ function handleTgLogin(\PDO $db): void
         $db->exec("DELETE FROM telegram_login_tokens WHERE expires_at < NOW()");
     } catch (\Throwable $e) {}
 
-    $stmt = $db->prepare('SELECT * FROM telegram_login_tokens WHERE token = ?');
+    $stmt = $db->prepare('SELECT * FROM telegram_login_tokens WHERE token = ? AND expires_at > NOW()');
     $stmt->execute([$token]);
     $row = $stmt->fetch();
 

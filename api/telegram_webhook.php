@@ -242,9 +242,9 @@ function botStatus(\PDO $db, string $chatId): void
     if ($regionId) {
         $stmt = $db->prepare("
             SELECT
-                SUM(CASE WHEN deadline_date < ? AND deleted_at IS NULL AND outgoing_id IS NULL THEN 1 ELSE 0 END) AS overdue,
-                SUM(CASE WHEN deadline_date BETWEEN ? AND DATE_ADD(?, INTERVAL 3 DAY) AND deleted_at IS NULL AND outgoing_id IS NULL THEN 1 ELSE 0 END) AS urgent,
-                SUM(CASE WHEN deadline_date > DATE_ADD(?, INTERVAL 3 DAY) AND deleted_at IS NULL AND outgoing_id IS NULL THEN 1 ELSE 0 END) AS pending
+                SUM(CASE WHEN deadline_date < ? AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS overdue,
+                SUM(CASE WHEN deadline_date BETWEEN ? AND DATE_ADD(?, INTERVAL 3 DAY) AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS urgent,
+                SUM(CASE WHEN deadline_date > DATE_ADD(?, INTERVAL 3 DAY) AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS pending
             FROM incoming_letters
             WHERE region_id = ?
         ");
@@ -252,9 +252,9 @@ function botStatus(\PDO $db, string $chatId): void
     } else {
         $stmt = $db->prepare("
             SELECT
-                SUM(CASE WHEN deadline_date < ? AND deleted_at IS NULL AND outgoing_id IS NULL THEN 1 ELSE 0 END) AS overdue,
-                SUM(CASE WHEN deadline_date BETWEEN ? AND DATE_ADD(?, INTERVAL 3 DAY) AND deleted_at IS NULL AND outgoing_id IS NULL THEN 1 ELSE 0 END) AS urgent,
-                SUM(CASE WHEN deadline_date > DATE_ADD(?, INTERVAL 3 DAY) AND deleted_at IS NULL AND outgoing_id IS NULL THEN 1 ELSE 0 END) AS pending
+                SUM(CASE WHEN deadline_date < ? AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS overdue,
+                SUM(CASE WHEN deadline_date BETWEEN ? AND DATE_ADD(?, INTERVAL 3 DAY) AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS urgent,
+                SUM(CASE WHEN deadline_date > DATE_ADD(?, INTERVAL 3 DAY) AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS pending
             FROM incoming_letters
         ");
         $stmt->execute([$today, $today, $today, $today]);
@@ -288,7 +288,7 @@ function botLetters(\PDO $db, string $chatId): void
         $stmt = $db->prepare("
             SELECT seq, organization, deadline_date, date
             FROM incoming_letters
-            WHERE region_id = ? AND deleted_at IS NULL AND outgoing_id IS NULL
+            WHERE region_id = ? AND deleted_at IS NULL AND linked_outgoing_id IS NULL
               AND deadline_date IS NOT NULL
             ORDER BY deadline_date ASC
             LIMIT 5
@@ -298,7 +298,7 @@ function botLetters(\PDO $db, string $chatId): void
         $stmt = $db->prepare("
             SELECT seq, organization, deadline_date, date
             FROM incoming_letters
-            WHERE deleted_at IS NULL AND outgoing_id IS NULL
+            WHERE deleted_at IS NULL AND linked_outgoing_id IS NULL
               AND deadline_date IS NOT NULL
             ORDER BY deadline_date ASC
             LIMIT 5
@@ -353,7 +353,7 @@ function botMyLetters(\PDO $db, string $chatId): void
         JOIN os_members m ON m.id = lm.member_id
         WHERE m.full_name = ?
           AND il.deleted_at IS NULL
-          AND il.outgoing_id IS NULL
+          AND il.linked_outgoing_id IS NULL
           AND il.deadline_date IS NOT NULL
         ORDER BY il.deadline_date ASC
         LIMIT 5

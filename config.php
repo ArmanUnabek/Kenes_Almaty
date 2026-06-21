@@ -55,6 +55,9 @@ define('SMTP_PASS',      getenv('SMTP_PASS')      ?: '');
 define('SMTP_FROM',      getenv('SMTP_FROM')      ?: 'noreply@example.com');
 define('SMTP_FROM_NAME', getenv('SMTP_FROM_NAME') ?: 'Журнал ОС');
 
+// URL приложения (используется для генерации ссылок в письмах/боте)
+define('APP_URL', rtrim(envValue('APP_URL') ?? '', '/'));
+
 // Telegram Bot (опционально — для уведомлений и webhook-команд)
 define('TELEGRAM_BOT_TOKEN',      envValue('TELEGRAM_BOT_TOKEN')      ?? '');
 define('TELEGRAM_BOT_USERNAME',   envValue('TELEGRAM_BOT_USERNAME')   ?? '');
