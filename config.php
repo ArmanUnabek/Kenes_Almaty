@@ -1,6 +1,8 @@
 <?php
 define('APP_ROOT', __DIR__);
 
+date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'Asia/Almaty');
+
 if (!defined('JSON_ENCODE_FLAGS')) {
     define('JSON_ENCODE_FLAGS', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }

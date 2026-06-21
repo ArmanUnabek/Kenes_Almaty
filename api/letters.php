@@ -110,10 +110,22 @@ class LettersController extends ApiController
         }
 
         $letters = $stmt->fetchAll();
+
+        // Batch-fetch scan counts to avoid N+1 queries
+        $scanCounts = [];
+        if ($letters) {
+            $ids = array_column($letters, 'id');
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $stmtScans = $this->db->prepare(
+                "SELECT letter_id, COUNT(*) AS cnt FROM letter_scans WHERE letter_type = ? AND letter_id IN ({$placeholders}) GROUP BY letter_id"
+            );
+            $stmtScans->execute(array_merge([$this->type], $ids));
+            foreach ($stmtScans->fetchAll() as $row) {
+                $scanCounts[(int)$row['letter_id']] = (int)$row['cnt'];
+            }
+        }
         foreach ($letters as &$letter) {
-            $stmt2 = $this->db->prepare('SELECT COUNT(*) as count FROM letter_scans WHERE letter_type = ? AND letter_id = ?');
-            $stmt2->execute([$this->type, $letter['id']]);
-            $letter['scans_count'] = (int)$stmt2->fetchColumn();
+            $letter['scans_count'] = $scanCounts[(int)$letter['id']] ?? 0;
         }
         unset($letter);
 
