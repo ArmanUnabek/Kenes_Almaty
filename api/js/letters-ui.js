@@ -1928,21 +1928,42 @@ async function deleteOutgoing(id) {
     URL.revokeObjectURL(url);
   }
 
+  async function batchArchiveSelected(type) {
+    const ids = getSelectedIds(type);
+    if (!ids.length) return;
+    if (!confirm(`Переместить ${ids.length} писем(а) в архив?`)) return;
+    try {
+      const res = await fetch(`letters.php?type=${type}&action=bulk`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка архивации');
+      showToast(`Архивировано: ${data.archived ?? ids.length}`, 'success');
+      clearBatchSelection(type);
+      refreshLetters();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  }
+
+  function clearBatchSelection(type) {
+    const cls = type === 'incoming' ? '.batch-check-incoming' : '.batch-check-outgoing';
+    const allId = type === 'incoming' ? 'selectAllIncoming' : 'selectAllOutgoing';
+    document.querySelectorAll(cls).forEach((cb) => { cb.checked = false; });
+    const all = document.getElementById(allId);
+    if (all) all.checked = false;
+    updateBatchBar(type);
+  }
+
   function bindBatchActions() {
     document.getElementById('batchExportIncoming')?.addEventListener('click', () => batchExportSelected('incoming'));
     document.getElementById('batchExportOutgoing')?.addEventListener('click', () => batchExportSelected('outgoing'));
-    document.getElementById('batchClearIncoming')?.addEventListener('click', () => {
-      document.querySelectorAll('.batch-check-incoming').forEach((cb) => { cb.checked = false; });
-      const all = document.getElementById('selectAllIncoming');
-      if (all) all.checked = false;
-      updateBatchBar('incoming');
-    });
-    document.getElementById('batchClearOutgoing')?.addEventListener('click', () => {
-      document.querySelectorAll('.batch-check-outgoing').forEach((cb) => { cb.checked = false; });
-      const all = document.getElementById('selectAllOutgoing');
-      if (all) all.checked = false;
-      updateBatchBar('outgoing');
-    });
+    document.getElementById('batchArchiveIncoming')?.addEventListener('click', () => batchArchiveSelected('incoming'));
+    document.getElementById('batchArchiveOutgoing')?.addEventListener('click', () => batchArchiveSelected('outgoing'));
+    document.getElementById('batchClearIncoming')?.addEventListener('click', () => clearBatchSelection('incoming'));
+    document.getElementById('batchClearOutgoing')?.addEventListener('click', () => clearBatchSelection('outgoing'));
   }
 
   function initLettersUI() {

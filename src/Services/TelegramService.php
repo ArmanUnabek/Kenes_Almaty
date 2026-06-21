@@ -109,4 +109,68 @@ class TelegramService
     {
         return self::botToken() !== '';
     }
+
+    /**
+     * Notify users who have a linked Telegram account that they were assigned to a letter.
+     *
+     * @param \PDO   $db        Active DB connection
+     * @param array  $memberIds List of os_members.id that were newly assigned
+     * @param string $type      'incoming' or 'outgoing'
+     * @param int    $seq       Letter sequence number (for display)
+     * @param string $org       Organization / subject of the letter
+     */
+    public static function notifyLetterAssignment(
+        \PDO $db,
+        array $memberIds,
+        string $type,
+        int $seq,
+        string $org
+    ): void {
+        if (empty($memberIds) || !self::isConfigured()) {
+            return;
+        }
+
+        // Get full_name for each member, then find linked users
+        $placeholders = implode(',', array_fill(0, count($memberIds), '?'));
+        $stmtM = $db->prepare("SELECT id, full_name FROM os_members WHERE id IN ({$placeholders})");
+        $stmtM->execute($memberIds);
+        $members = $stmtM->fetchAll(\PDO::FETCH_ASSOC);
+
+        if (empty($members)) {
+            return;
+        }
+
+        $namePlaceholders = implode(',', array_fill(0, count($members), '?'));
+        $names = array_column($members, 'full_name');
+        $stmtU = $db->prepare(
+            "SELECT full_name, telegram_chat_id FROM users WHERE full_name IN ({$namePlaceholders}) AND telegram_chat_id IS NOT NULL AND is_active = TRUE"
+        );
+        $stmtU->execute($names);
+        $users = $stmtU->fetchAll(\PDO::FETCH_ASSOC);
+
+        if (empty($users)) {
+            return;
+        }
+
+        $typeLabel = $type === 'incoming' ? 'Вх.' : 'Исх.';
+        $orgShort  = mb_substr($org, 0, 60);
+        $appUrl    = defined('APP_URL') ? rtrim(APP_URL, '/') : '';
+        $link      = $appUrl ? $appUrl . '/api/' : '';
+
+        foreach ($users as $u) {
+            $chatId = $u['telegram_chat_id'];
+            $userName = htmlspecialchars($u['full_name'] ?? '', ENT_QUOTES);
+            $text  = "📋 <b>Вас назначили на письмо</b>\n\n" .
+                     "{$typeLabel}<b>{$seq}</b> · " . htmlspecialchars($orgShort, ENT_QUOTES) . "\n\n" .
+                     "Здравствуйте, <b>{$userName}</b>! Вы добавлены как исполнитель.";
+            if ($link) {
+                $text .= "\n<a href=\"{$link}\">Открыть журнал</a>";
+            }
+            try {
+                self::sendMessage((string)$chatId, $text);
+            } catch (\Throwable $e) {
+                error_log('TelegramService::notifyLetterAssignment failed for chat ' . $chatId . ': ' . $e->getMessage());
+            }
+        }
+    }
 }

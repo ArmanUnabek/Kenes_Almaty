@@ -35,6 +35,9 @@ class LettersController extends ApiController
                     if ($action === 'restore') {
                         $this->requireDeleteAccess();
                         $this->handleRestore();
+                    } elseif ($action === 'bulk_restore') {
+                        $this->requireDeleteAccess();
+                        $this->handleBulkRestore();
                     } else {
                         $this->handleCreate();
                     }
@@ -47,7 +50,11 @@ class LettersController extends ApiController
                 case 'DELETE':
                     $this->requireDeleteAccess();
                     $this->requireCsrf();
-                    $this->handleDelete();
+                    if ($this->getQueryParam('action') === 'bulk') {
+                        $this->handleBulkDelete();
+                    } else {
+                        $this->handleDelete();
+                    }
                     break;
                 default:
                     $this->error('Метод не поддерживается', 405);
@@ -305,6 +312,66 @@ class LettersController extends ApiController
             'id' => $id,
         ]);
         $this->json(['message' => 'Письмо восстановлено из архива']);
+    }
+
+    private function handleBulkDelete(): void
+    {
+        $data = $this->getJsonInput() ?? [];
+        $ids  = array_values(array_filter(array_map('intval', $data['ids'] ?? [])));
+        if (empty($ids) || count($ids) > 100) {
+            $this->error('ids должен содержать от 1 до 100 элементов', 400);
+        }
+
+        $deletedBy   = (int)($_SESSION['user_id'] ?? 0);
+        $regionId    = $this->resolveRegionIdForRead();
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        if ($regionId) {
+            $params = array_merge($ids, [$deletedBy, $deletedBy], $ids, [$regionId]);
+            $stmt   = $this->db->prepare(
+                "UPDATE {$this->table} SET deleted_at = NOW(), deleted_by = ? WHERE id IN ({$placeholders}) AND region_id = ? AND deleted_at IS NULL"
+            );
+            $params = array_merge([$deletedBy], $ids, [$regionId]);
+        } else {
+            $params = array_merge([$deletedBy], $ids);
+            $stmt   = $this->db->prepare(
+                "UPDATE {$this->table} SET deleted_at = NOW(), deleted_by = ? WHERE id IN ({$placeholders}) AND deleted_at IS NULL"
+            );
+        }
+        $stmt->execute($params);
+        $affected = $stmt->rowCount();
+
+        pusherTrigger('council-documents', 'documents-updated', ['action' => 'bulk_delete', 'type' => $this->type]);
+        $this->json(['archived' => $affected, 'message' => "Перемещено в архив: {$affected}"]);
+    }
+
+    private function handleBulkRestore(): void
+    {
+        $data = $this->getJsonInput() ?? [];
+        $ids  = array_values(array_filter(array_map('intval', $data['ids'] ?? [])));
+        if (empty($ids) || count($ids) > 100) {
+            $this->error('ids должен содержать от 1 до 100 элементов', 400);
+        }
+
+        $regionId     = $this->resolveRegionIdForRead();
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        if ($regionId) {
+            $params = array_merge($ids, [$regionId]);
+            $stmt   = $this->db->prepare(
+                "UPDATE {$this->table} SET deleted_at = NULL, deleted_by = NULL WHERE id IN ({$placeholders}) AND region_id = ? AND deleted_at IS NOT NULL"
+            );
+        } else {
+            $params = $ids;
+            $stmt   = $this->db->prepare(
+                "UPDATE {$this->table} SET deleted_at = NULL, deleted_by = NULL WHERE id IN ({$placeholders}) AND deleted_at IS NOT NULL"
+            );
+        }
+        $stmt->execute($params);
+        $affected = $stmt->rowCount();
+
+        pusherTrigger('council-documents', 'documents-updated', ['action' => 'bulk_restore', 'type' => $this->type]);
+        $this->json(['restored' => $affected, 'message' => "Восстановлено: {$affected}"]);
     }
 
     private function ensureSoftDeleteColumns(): void

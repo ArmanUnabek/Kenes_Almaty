@@ -100,6 +100,38 @@
                         <span class="loading-spinner"></span>
                         <span class="btn-text" id="loginSubmitText">Войти</span>
                     </button>
+                    <div class="text-center mt-3">
+                        <a href="#" id="forgotPasswordLink" style="font-size:.8125rem;color:var(--text-secondary)">Забыли пароль?</a>
+                    </div>
+                </form>
+
+                <!-- Forgot password form (hidden by default) -->
+                <form id="forgotForm" class="d-none">
+                    <div id="forgotAlert" class="alert d-none" role="alert"></div>
+                    <p style="font-size:.875rem;color:var(--text-secondary);margin-bottom:16px">Введите email, привязанный к вашему аккаунту. Мы вышлем ссылку для сброса пароля.</p>
+                    <div class="form-group">
+                        <label for="forgotEmail" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="forgotEmail" required />
+                    </div>
+                    <button type="submit" class="btn btn-login">Отправить ссылку</button>
+                    <div class="text-center mt-3">
+                        <a href="#" id="backToLoginLink" style="font-size:.8125rem;color:var(--text-secondary)">← Вернуться ко входу</a>
+                    </div>
+                </form>
+
+                <!-- Reset password form (shown when ?action=reset&token=... in URL) -->
+                <form id="resetForm" class="d-none">
+                    <div id="resetAlert" class="alert d-none" role="alert"></div>
+                    <p style="font-size:.875rem;color:var(--text-secondary);margin-bottom:16px">Введите новый пароль для вашего аккаунта.</p>
+                    <div class="form-group">
+                        <label for="newPassword" class="form-label">Новый пароль</label>
+                        <input type="password" class="form-control" id="newPassword" minlength="8" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword" class="form-label">Повторите пароль</label>
+                        <input type="password" class="form-control" id="confirmPassword" minlength="8" required />
+                    </div>
+                    <button type="submit" class="btn btn-login">Сохранить пароль</button>
                 </form>
             </div>
         </div>
@@ -237,6 +269,96 @@
         [usernameInput, passwordInput].forEach(el => {
             el.addEventListener('input', () => errorAlert.classList.add('d-none'));
         });
+
+        // Password reset flow
+        const loginFormEl   = form;
+        const forgotFormEl  = document.getElementById('forgotForm');
+        const resetFormEl   = document.getElementById('resetForm');
+        const loginBody     = document.querySelector('.login-body h2');
+
+        document.getElementById('forgotPasswordLink').addEventListener('click', (e) => {
+            e.preventDefault();
+            loginFormEl.classList.add('d-none');
+            document.getElementById('forgotPasswordLink').classList.add('d-none');
+            forgotFormEl.classList.remove('d-none');
+            if (loginBody) loginBody.textContent = 'Сброс пароля';
+        });
+
+        document.getElementById('backToLoginLink').addEventListener('click', (e) => {
+            e.preventDefault();
+            forgotFormEl.classList.add('d-none');
+            loginFormEl.classList.remove('d-none');
+            document.getElementById('forgotPasswordLink').classList.remove('d-none');
+            if (loginBody) loginBody.textContent = 'Вход в систему';
+        });
+
+        forgotFormEl.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const alertEl = document.getElementById('forgotAlert');
+            const email   = document.getElementById('forgotEmail').value.trim();
+            try {
+                const res  = await fetch('api/auth.php?action=forgot_password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email }),
+                });
+                const data = await res.json();
+                alertEl.className = 'alert alert-info';
+                alertEl.textContent = data.message || 'Письмо отправлено.';
+                alertEl.classList.remove('d-none');
+            } catch (_) {
+                alertEl.className = 'alert alert-danger';
+                alertEl.textContent = t('err.network');
+                alertEl.classList.remove('d-none');
+            }
+        });
+
+        // Check for reset token in URL
+        (() => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('action') === 'reset' && params.get('token')) {
+                loginFormEl.classList.add('d-none');
+                forgotFormEl.classList.add('d-none');
+                resetFormEl.classList.remove('d-none');
+                if (loginBody) loginBody.textContent = 'Новый пароль';
+
+                resetFormEl.addEventListener('submit', async (ev) => {
+                    ev.preventDefault();
+                    const alertEl = document.getElementById('resetAlert');
+                    const pass    = document.getElementById('newPassword').value;
+                    const conf    = document.getElementById('confirmPassword').value;
+                    if (pass !== conf) {
+                        alertEl.className = 'alert alert-danger';
+                        alertEl.textContent = 'Пароли не совпадают';
+                        alertEl.classList.remove('d-none');
+                        return;
+                    }
+                    try {
+                        const res  = await fetch('api/auth.php?action=reset_password', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ token: params.get('token'), password: pass }),
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            alertEl.className = 'alert alert-success';
+                            alertEl.textContent = data.message;
+                            alertEl.classList.remove('d-none');
+                            resetFormEl.querySelectorAll('input, button').forEach(el => el.disabled = true);
+                            setTimeout(() => { window.location.href = '/login.html'; }, 2000);
+                        } else {
+                            alertEl.className = 'alert alert-danger';
+                            alertEl.textContent = data.error || 'Ошибка сброса пароля';
+                            alertEl.classList.remove('d-none');
+                        }
+                    } catch (_) {
+                        alertEl.className = 'alert alert-danger';
+                        alertEl.textContent = t('err.network');
+                        alertEl.classList.remove('d-none');
+                    }
+                });
+            }
+        })();
 
         // Show Telegram login option if bot is configured
         (async () => {

@@ -307,6 +307,47 @@ function ensureMemberI18nColumns(PDO $db): void
     }
 }
 
+function ensurePasswordResetTokens(\PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    try {
+        if (DB_DRIVER === 'sqlite') {
+            $db->exec("
+                CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INT NOT NULL,
+                    token CHAR(64) NOT NULL UNIQUE,
+                    expires_at DATETIME NOT NULL,
+                    used_at DATETIME NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ");
+            return;
+        }
+
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                token CHAR(64) NOT NULL,
+                expires_at DATETIME NOT NULL,
+                used_at DATETIME NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_prt_token (token),
+                INDEX idx_prt_expires (expires_at),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (\Throwable $e) {
+        error_log('ensurePasswordResetTokens: ' . $e->getMessage());
+    }
+}
+
 function ensureTelegramTables(\PDO $db): void
 {
     static $checked = false;
@@ -416,6 +457,7 @@ function getDBConnection(): PDO
         ensureAuditLogsSchema($db);
         ensureTranslationSchema($db);
         ensureMemberI18nColumns($db);
+        ensurePasswordResetTokens($db);
         ensureTelegramTables($db);
         
         return $db;

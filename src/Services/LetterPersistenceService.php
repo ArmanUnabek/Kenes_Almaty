@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Services\TelegramService;
+
 class LetterPersistenceService
 {
     public static function ensureRecipientsSupport(\PDO $db): void
@@ -113,6 +115,11 @@ class LetterPersistenceService
 
     public static function syncLetterMembers(\PDO $db, string $type, int $letterId, array $members): void
     {
+        // Capture existing member IDs before clearing so we can detect new assignments
+        $stmtExisting = $db->prepare('SELECT member_id FROM letter_members WHERE letter_type = ? AND letter_id = ?');
+        $stmtExisting->execute([$type, $letterId]);
+        $existingIds = array_map('intval', $stmtExisting->fetchAll(\PDO::FETCH_COLUMN));
+
         $stmtDelete = $db->prepare('DELETE FROM letter_members WHERE letter_type = ? AND letter_id = ?');
         $stmtDelete->execute([$type, $letterId]);
         if (empty($members)) {
@@ -122,6 +129,8 @@ class LetterPersistenceService
             INSERT INTO letter_members (letter_type, letter_id, member_id, is_lead)
             VALUES (?, ?, ?, ?)
         ');
+        $letterRegion  = self::getLetterRegionId($db, $type, $letterId);
+        $insertedIds   = [];
         foreach ($members as $member) {
             $memberId = (int)($member['member_id'] ?? 0);
             if ($memberId <= 0) {
@@ -130,7 +139,6 @@ class LetterPersistenceService
             $check = $db->prepare('SELECT region_id FROM os_members WHERE id = ?');
             $check->execute([$memberId]);
             $memberRegion = (int)$check->fetchColumn();
-            $letterRegion = self::getLetterRegionId($db, $type, $letterId);
             if ($letterRegion > 0 && $memberRegion > 0 && $memberRegion !== $letterRegion) {
                 continue;
             }
@@ -140,6 +148,31 @@ class LetterPersistenceService
                 $memberId,
                 !empty($member['is_lead']) ? 1 : 0,
             ]);
+            $insertedIds[] = $memberId;
+        }
+
+        // Notify members who are newly assigned (not in previous set)
+        $newlyAssigned = array_diff($insertedIds, $existingIds);
+        if (!empty($newlyAssigned)) {
+            try {
+                // Fetch letter seq and organization for the notification message
+                $table = $type === 'incoming' ? 'incoming_letters' : 'outgoing_letters';
+                $orgCol = $type === 'incoming' ? 'organization' : 'recipient';
+                $stmtLetter = $db->prepare("SELECT seq, {$orgCol} AS org FROM {$table} WHERE id = ?");
+                $stmtLetter->execute([$letterId]);
+                $letter = $stmtLetter->fetch(\PDO::FETCH_ASSOC);
+                if ($letter) {
+                    TelegramService::notifyLetterAssignment(
+                        $db,
+                        array_values($newlyAssigned),
+                        $type,
+                        (int)$letter['seq'],
+                        (string)($letter['org'] ?? '')
+                    );
+                }
+            } catch (\Throwable $e) {
+                error_log('syncLetterMembers: Telegram notify failed: ' . $e->getMessage());
+            }
         }
     }
 
