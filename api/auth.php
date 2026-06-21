@@ -7,9 +7,22 @@ use App\Middleware\CsrfMiddleware;
 use App\Middleware\RateLimiter;
 use App\Services\TotpService;
 
-header('Content-Type: application/json; charset=utf-8');
-
 $action = $_GET['action'] ?? $_POST['action'] ?? 'check';
+
+// tg_login redirects to the app rather than returning JSON — handle it first
+if ($action === 'tg_login') {
+    try {
+        $db = getDBConnection();
+        handleTgLogin($db);
+    } catch (\Throwable $e) {
+        error_log('tg_login failed: ' . $e->getMessage());
+        http_response_code(500);
+        echo 'Internal error';
+    }
+    exit;
+}
+
+header('Content-Type: application/json; charset=utf-8');
 
 try {
     $db = getDBConnection();
@@ -41,6 +54,10 @@ try {
 
         case 'totp_disable':
             handleTotpDisable($db);
+            break;
+
+        case 'tg_link_code':
+            handleTgLinkCode($db);
             break;
 
         case 'check':
@@ -270,6 +287,97 @@ function handleSwitchRegion($db) {
         'active_region_id' => $regionId,
         'user' => $user,
         'message' => 'Регион переключён'
+    ], JSON_ENCODE_FLAGS);
+}
+
+function handleTgLogin(\PDO $db): void
+{
+    $token = $_GET['token'] ?? '';
+    if ($token === '' || strlen($token) !== 64) {
+        http_response_code(400);
+        echo 'Invalid token';
+        return;
+    }
+
+    // Delete stale expired tokens while we're here
+    try {
+        $db->exec("DELETE FROM telegram_login_tokens WHERE expires_at < NOW()");
+    } catch (\Throwable $e) {}
+
+    $stmt = $db->prepare('SELECT * FROM telegram_login_tokens WHERE token = ?');
+    $stmt->execute([$token]);
+    $row = $stmt->fetch();
+
+    if (!$row || $row['used_at'] !== null) {
+        http_response_code(403);
+        echo 'Ссылка недействительна или уже была использована';
+        return;
+    }
+
+    $stmt2 = $db->prepare('SELECT id, username, full_name, role, region_id FROM users WHERE id = ? AND is_active = TRUE');
+    $stmt2->execute([$row['user_id']]);
+    $user = $stmt2->fetch();
+
+    if (!$user) {
+        http_response_code(403);
+        echo 'Пользователь не найден';
+        return;
+    }
+
+    // Mark token as used
+    $db->prepare('UPDATE telegram_login_tokens SET used_at = NOW() WHERE id = ?')->execute([$row['id']]);
+
+    // Start session
+    if (function_exists('configureSessionCookie')) {
+        configureSessionCookie();
+    }
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    session_regenerate_id(true);
+
+    $_SESSION['user_id']          = $user['id'];
+    $_SESSION['username']         = $user['username'];
+    $_SESSION['role']             = $user['role'];
+    $_SESSION['region_id']        = $user['region_id'];
+    $_SESSION['last_activity_at'] = time();
+
+    $db->prepare('UPDATE users SET last_login = ? WHERE id = ?')->execute([date('Y-m-d H:i:s'), $user['id']]);
+    try {
+        $db->prepare('INSERT INTO activity_logs (user_id, action, entity_type, ip_address) VALUES (?, ?, ?, ?)')
+           ->execute([$user['id'], 'tg_login', 'user', $_SERVER['REMOTE_ADDR'] ?? '']);
+    } catch (\Throwable $e) {}
+
+    header('Location: /api/');
+}
+
+function handleTgLinkCode(\PDO $db): void
+{
+    checkAuth();
+    CsrfMiddleware::requireVerification();
+
+    $userId = (int)($_SESSION['user_id'] ?? 0);
+    if ($userId <= 0) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Требуется авторизация'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
+    // Delete old unused codes for this user
+    try {
+        $db->prepare('DELETE FROM telegram_link_codes WHERE user_id = ? AND used_at IS NULL')->execute([$userId]);
+    } catch (\Throwable $e) {}
+
+    $code      = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    $expiresAt = date('Y-m-d H:i:s', time() + 600); // 10 minutes
+
+    $db->prepare('INSERT INTO telegram_link_codes (user_id, code, expires_at) VALUES (?, ?, ?)')
+       ->execute([$userId, $code, $expiresAt]);
+
+    echo json_encode([
+        'code'       => $code,
+        'expires_in' => 600,
+        'bot'        => defined('TELEGRAM_BOT_USERNAME') ? TELEGRAM_BOT_USERNAME : '',
     ], JSON_ENCODE_FLAGS);
 }
 

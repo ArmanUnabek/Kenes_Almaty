@@ -55,8 +55,10 @@ define('SMTP_PASS',      getenv('SMTP_PASS')      ?: '');
 define('SMTP_FROM',      getenv('SMTP_FROM')      ?: 'noreply@example.com');
 define('SMTP_FROM_NAME', getenv('SMTP_FROM_NAME') ?: 'Журнал ОС');
 
-// Telegram Bot (опционально — для уведомлений о дедлайнах)
-define('TELEGRAM_BOT_TOKEN', getenv('TELEGRAM_BOT_TOKEN') ?: '');
+// Telegram Bot (опционально — для уведомлений и webhook-команд)
+define('TELEGRAM_BOT_TOKEN',      envValue('TELEGRAM_BOT_TOKEN')      ?? '');
+define('TELEGRAM_BOT_USERNAME',   envValue('TELEGRAM_BOT_USERNAME')   ?? '');
+define('TELEGRAM_WEBHOOK_SECRET', envValue('TELEGRAM_WEBHOOK_SECRET') ?? '');
 
 // Настройки для загрузки фото
 define('UPLOAD_DIR', APP_ROOT . '/uploads/photos/');

@@ -81,11 +81,52 @@
                 <div class="sidebar-user-name" id="userName">Гость</div>
                 <div class="sidebar-user-role" id="userRegion">—</div>
             </div>
+            <button class="sidebar-logout" id="tgLinkBtn" type="button" title="Привязать Telegram" style="display:none" aria-label="Привязать Telegram">
+                <i class="bi bi-telegram" style="color:#29b6f6"></i>
+            </button>
             <button class="sidebar-logout" id="logoutBtn" type="button" data-i18n-title="common.logout" title="Выйти">
                 <i class="bi bi-box-arrow-right"></i>
             </button>
         </div>
     </aside>
+
+    <!-- Telegram Link Modal -->
+    <div class="modal fade" id="tgLinkModal" tabindex="-1" aria-labelledby="tgLinkModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="tgLinkModalLabel">
+                        <i class="bi bi-telegram me-2" style="color:#29b6f6"></i>Привязать Telegram
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="tgLinkLoading" class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        <span class="ms-2 text-muted">Генерация кода…</span>
+                    </div>
+                    <div id="tgLinkCodeArea" style="display:none">
+                        <p class="text-muted mb-2">Отправьте боту следующую команду:</p>
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <code id="tgLinkCodeCmd" class="fs-5 px-3 py-2 rounded flex-grow-1 text-center"
+                                  style="background:var(--bg-muted);letter-spacing:.2em"></code>
+                            <button class="btn btn-outline-secondary btn-sm" id="tgCopyCodeBtn" type="button" title="Скопировать">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                        <p class="text-muted small mb-2">Код действителен <b>10 минут</b>. Откройте бота и отправьте команду выше.</p>
+                        <a id="tgOpenBotLink" href="#" target="_blank" rel="noopener" class="btn btn-primary btn-sm">
+                            <i class="bi bi-telegram me-1"></i>Открыть бота в Telegram
+                        </a>
+                    </div>
+                    <div id="tgLinkError" class="alert alert-danger d-none mt-2"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="app-shell">
         <header class="app-topbar">
@@ -1429,6 +1470,65 @@
                 window.location.href = '../login.html';
             }
         });
+
+        // Telegram link button
+        (() => {
+            const tgBtn  = document.getElementById('tgLinkBtn');
+            const modal  = new bootstrap.Modal(document.getElementById('tgLinkModal'));
+            const codeEl = document.getElementById('tgLinkCodeCmd');
+            const area   = document.getElementById('tgLinkCodeArea');
+            const loading = document.getElementById('tgLinkLoading');
+            const errEl  = document.getElementById('tgLinkError');
+            const botLink = document.getElementById('tgOpenBotLink');
+            const copyBtn = document.getElementById('tgCopyCodeBtn');
+
+            // Show the Telegram button only when the bot is configured
+            if (window.TELEGRAM_BOT_USERNAME) {
+                tgBtn.style.display = '';
+                if (botLink) {
+                    botLink.href = 'https://t.me/' + encodeURIComponent(window.TELEGRAM_BOT_USERNAME);
+                }
+            }
+
+            tgBtn?.addEventListener('click', async () => {
+                // Reset modal state
+                area.style.display = 'none';
+                loading.style.display = '';
+                errEl.classList.add('d-none');
+                modal.show();
+
+                try {
+                    const csrf = document.querySelector('meta[name="csrf-token"]')?.content
+                        || window._csrfToken || '';
+                    const res = await fetch('auth.php?action=tg_link_code', {
+                        method: 'POST',
+                        headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: new URLSearchParams({ action: 'tg_link_code' })
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.code) throw new Error(data.error || 'Ошибка сервера');
+
+                    codeEl.textContent = '/link ' + data.code;
+                    if (data.bot && botLink) {
+                        botLink.href = 'https://t.me/' + encodeURIComponent(data.bot);
+                    }
+                    loading.style.display = 'none';
+                    area.style.display = '';
+                } catch (err) {
+                    loading.style.display = 'none';
+                    errEl.textContent = err.message || 'Ошибка генерации кода';
+                    errEl.classList.remove('d-none');
+                }
+            });
+
+            copyBtn?.addEventListener('click', () => {
+                const cmd = codeEl?.textContent || '';
+                navigator.clipboard?.writeText(cmd).then(() => {
+                    copyBtn.innerHTML = '<i class="bi bi-clipboard-check"></i>';
+                    setTimeout(() => { copyBtn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 1500);
+                });
+            });
+        })();
 
         // PWA Service Worker
         if ('serviceWorker' in navigator) {
