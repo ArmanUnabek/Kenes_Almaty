@@ -1,8 +1,6 @@
 <?php
 define('APP_ROOT', __DIR__);
 
-date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'Asia/Almaty');
-
 if (!defined('JSON_ENCODE_FLAGS')) {
     define('JSON_ENCODE_FLAGS', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
@@ -39,6 +37,9 @@ Logger::init();
 
 // База данных вынесена в отдельный файл (удобно для переноса на другой хостинг)
 require_once __DIR__ . '/db.php';
+
+// Timezone must be set after db.php loads the .env file so APP_TIMEZONE is available
+date_default_timezone_set(envValue('APP_TIMEZONE') ?? 'Asia/Almaty');
 
 // Pusher realtime settings (fill with your credentials)
 define('PUSHER_APP_ID', getenv('PUSHER_APP_ID') ?: '');

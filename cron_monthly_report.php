@@ -140,7 +140,7 @@ try {
             WHERE is_active = TRUE
               AND email IS NOT NULL AND email != ''
               AND (region_id = ? OR role = 'admin')
-              AND role IN ('admin', 'moderator')
+              AND role IN ('admin', 'manager')
         ");
         $stmtRecip->execute([$regionId]);
         $recipients = $stmtRecip->fetchAll(\PDO::FETCH_COLUMN);
