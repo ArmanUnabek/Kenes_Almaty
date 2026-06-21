@@ -25,9 +25,13 @@ if (!TelegramService::isConfigured()) {
     exit;
 }
 
-$webhookSecret = defined('TELEGRAM_WEBHOOK_SECRET') && TELEGRAM_WEBHOOK_SECRET !== ''
-    ? TELEGRAM_WEBHOOK_SECRET
-    : substr(hash('sha256', TELEGRAM_BOT_TOKEN), 0, 32);
+if (defined('TELEGRAM_WEBHOOK_SECRET') && TELEGRAM_WEBHOOK_SECRET !== '') {
+    $webhookSecret = TELEGRAM_WEBHOOK_SECRET;
+} else {
+    // Fallback: derive from token. Set TELEGRAM_WEBHOOK_SECRET env var for production.
+    error_log('WARNING: TELEGRAM_WEBHOOK_SECRET not configured. Set this env var for production security.');
+    $webhookSecret = substr(hash('sha256', TELEGRAM_BOT_TOKEN . ':webhook-secret'), 0, 32);
+}
 
 // Admin-only: register webhook with Telegram
 if (($_GET['action'] ?? '') === 'register') {

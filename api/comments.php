@@ -37,9 +37,12 @@ switch ($method) {
         break;
     case 'POST':
         requireWriteAccess();
+        \App\Middleware\CsrfMiddleware::requireVerification();
         handlePostComment($db);
         break;
     case 'DELETE':
+        requireWriteAccess();
+        \App\Middleware\CsrfMiddleware::requireVerification();
         handleDeleteComment($db);
         break;
     default:
@@ -134,6 +137,22 @@ function handleDeleteComment(\PDO $db): void
         http_response_code(403);
         echo json_encode(['error' => 'Нет прав на удаление этого комментария'], JSON_ENCODE_FLAGS);
         return;
+    }
+
+    // Region access check: verify user can access the letter this comment belongs to
+    $stmtFull = $db->prepare('SELECT letter_type, letter_id FROM letter_comments WHERE id = ?');
+    $stmtFull->execute([$id]);
+    $commentRow = $stmtFull->fetch();
+    if ($commentRow) {
+        $table = $commentRow['letter_type'] === 'incoming' ? 'incoming_letters' : 'outgoing_letters';
+        $stmtRegion = $db->prepare("SELECT region_id FROM {$table} WHERE id = ?");
+        $stmtRegion->execute([$commentRow['letter_id']]);
+        $letterRow = $stmtRegion->fetch();
+        if ($letterRow && !canAccessRegion((int)($letterRow['region_id'] ?? 0))) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Доступ запрещён'], JSON_ENCODE_FLAGS);
+            return;
+        }
     }
 
     $db->prepare('DELETE FROM letter_comments WHERE id = ?')->execute([$id]);

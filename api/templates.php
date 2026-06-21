@@ -38,14 +38,17 @@ switch ($method) {
         break;
     case 'POST':
         requireWriteAccess();
+        \App\Middleware\CsrfMiddleware::requireVerification();
         handleCreateTemplate($db);
         break;
     case 'PUT':
         requireWriteAccess();
+        \App\Middleware\CsrfMiddleware::requireVerification();
         handleUpdateTemplate($db);
         break;
     case 'DELETE':
         requireWriteAccess();
+        \App\Middleware\CsrfMiddleware::requireVerification();
         handleDeleteTemplate($db);
         break;
     default:
@@ -143,6 +146,12 @@ function handleUpdateTemplate(\PDO $db): void
         return;
     }
 
+    if (!canAccessRegion((int)($row['region_id'] ?? 0))) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Доступ запрещён'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
     $name = trim($data['name'] ?? '');
     if ($name === '') {
         http_response_code(400);
@@ -175,6 +184,21 @@ function handleDeleteTemplate(\PDO $db): void
         echo json_encode(['error' => 'ID не указан'], JSON_ENCODE_FLAGS);
         return;
     }
+
+    $stmt = $db->prepare('SELECT region_id FROM letter_templates WHERE id = ?');
+    $stmt->execute([$id]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Шаблон не найден'], JSON_ENCODE_FLAGS);
+        return;
+    }
+    if (!canAccessRegion((int)($row['region_id'] ?? 0))) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Доступ запрещён'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
     $db->prepare('DELETE FROM letter_templates WHERE id = ?')->execute([$id]);
     echo json_encode(['message' => 'Шаблон удалён'], JSON_ENCODE_FLAGS);
 }

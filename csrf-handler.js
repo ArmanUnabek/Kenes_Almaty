@@ -38,6 +38,9 @@ window.fetch = async function(...args) {
     return originalFetch.apply(this, args);
 };
 
+// Reset cached token (call on logout or session change)
+window.resetCsrfToken = function () { csrfToken = null; };
+
 // Получить токен при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
     getCsrfToken();

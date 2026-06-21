@@ -1444,10 +1444,12 @@
             const logoutTarget = e.target.closest('#logoutBtn');
             if (logoutTarget) {
                 e.preventDefault();
+                window.resetCsrfToken?.();
                 try {
                     await fetch('auth.php', { method: 'POST', body: new URLSearchParams({ action: 'logout' }) });
                 } catch {}
                 localStorage.removeItem('user');
+                localStorage.removeItem('login_username');
                 window.location.href = '../login.html';
             }
         });

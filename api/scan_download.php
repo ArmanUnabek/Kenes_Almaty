@@ -55,7 +55,8 @@ if ($regionId <= 0 || !canAccessRegion($regionId)) {
     exit;
 }
 
-$filename = basename($scan['file_name'] ?: 'scan.bin');
+// Sanitize filename to prevent header injection
+$filename = preg_replace('/[^\w.\-]/', '_', basename($scan['file_name'] ?: 'scan.bin'));
 SecurityAuditService::logScanDownload(
     $db,
     $userId,
@@ -66,7 +67,16 @@ SecurityAuditService::logScanDownload(
     $filename
 );
 
-$contentType = $scan['scan_type'] ?: 'application/octet-stream';
+// Whitelist allowed content types from DB to prevent stored XSS via Content-Type
+$allowedContentTypes = [
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+    'image/tiff', 'image/bmp', 'application/pdf', 'application/octet-stream',
+];
+$rawContentType = $scan['scan_type'] ?: 'application/octet-stream';
+$contentType = in_array($rawContentType, $allowedContentTypes, true)
+    ? $rawContentType
+    : 'application/octet-stream';
+
 $inline = isset($_GET['inline']) && $_GET['inline'] === '1';
 $allowedInline = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
 if ($inline && !in_array($contentType, $allowedInline, true)) {

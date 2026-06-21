@@ -23,28 +23,42 @@ class RateLimiter
         $file = self::CACHE_DIR . '/' . $key . '.json';
         $now = time();
 
-        $data = [];
-        if (file_exists($file)) {
-            $content = file_get_contents($file);
-            $data = json_decode($content, true) ?? [];
+        $fp = @fopen($file, 'c+');
+        if (!$fp) {
+            return true; // fail open if we can't create/open the file
         }
 
-        // Очищаем старые записи
-        $data['requests'] = array_filter($data['requests'] ?? [], function ($timestamp) use ($now, $window) {
-            return $timestamp > ($now - $window);
-        });
-
-        $requestCount = count($data['requests'] ?? []);
-
-        if ($requestCount >= $limit) {
-            return false;
+        if (!flock($fp, LOCK_EX)) {
+            fclose($fp);
+            return true; // fail open if we can't acquire lock
         }
 
-        // Добавляем новый запрос
-        $data['requests'][] = $now;
-        file_put_contents($file, json_encode($data));
+        try {
+            $content = stream_get_contents($fp);
+            $data = json_decode($content ?: '{}', true) ?? [];
 
-        return true;
+            // Очищаем старые записи
+            $data['requests'] = array_values(array_filter($data['requests'] ?? [], function ($timestamp) use ($now, $window) {
+                return $timestamp > ($now - $window);
+            }));
+
+            $requestCount = count($data['requests']);
+
+            if ($requestCount >= $limit) {
+                return false;
+            }
+
+            // Добавляем новый запрос
+            $data['requests'][] = $now;
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($data));
+
+            return true;
+        } finally {
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
     }
 
     public static function getIdentifier(): string

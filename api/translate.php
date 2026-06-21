@@ -75,5 +75,5 @@ try {
 } catch (\Throwable $e) {
     error_log('translate.php: ' . $e->getMessage());
     http_response_code(503);
-    echo json_encode(['error' => $e->getMessage()], JSON_ENCODE_FLAGS);
+    echo json_encode(['error' => 'Сервис перевода временно недоступен'], JSON_ENCODE_FLAGS);
 }

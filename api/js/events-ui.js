@@ -48,10 +48,11 @@
     if (!kpiList) return;
     const wrapper = document.createElement('div');
     wrapper.className = 'kpi-row col-12 d-flex gap-2';
+    const escHtml = window.AppUtils?.escapeHtml || ((s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'));
     wrapper.innerHTML = `
-      <input class="form-control form-control-sm" name="metric" placeholder="${t('events.kpi_metric', 'Метрика')}" value="${metric}"/>
-      <input class="form-control form-control-sm" name="value_numeric" type="number" step="0.01" placeholder="${t('events.kpi_number', 'Число')}" value="${valueNumeric}"/>
-      <input class="form-control form-control-sm" name="value_text" placeholder="${t('events.kpi_text', 'Текст')}" value="${valueText}"/>
+      <input class="form-control form-control-sm" name="metric" placeholder="${t('events.kpi_metric', 'Метрика')}" value="${escHtml(String(metric ?? ''))}"/>
+      <input class="form-control form-control-sm" name="value_numeric" type="number" step="0.01" placeholder="${t('events.kpi_number', 'Число')}" value="${escHtml(String(valueNumeric ?? ''))}"/>
+      <input class="form-control form-control-sm" name="value_text" placeholder="${t('events.kpi_text', 'Текст')}" value="${escHtml(String(valueText ?? ''))}"/>
       <button type="button" class="btn btn-sm btn-outline-danger">×</button>`;
     wrapper.querySelector('button').onclick = () => wrapper.remove();
     kpiList.appendChild(wrapper);

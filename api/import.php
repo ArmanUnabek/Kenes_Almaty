@@ -217,7 +217,7 @@ foreach ($lines as $line) {
         $imported++;
 
     } catch (\Throwable $e) {
-        $errors[] = ['row' => $rowNum, 'message' => 'Ошибка вставки: ' . $e->getMessage()];
+        $errors[] = ['row' => $rowNum, 'message' => 'Ошибка обработки строки'];
         $skipped++;
         error_log('import.php row ' . $rowNum . ': ' . $e->getMessage());
     }

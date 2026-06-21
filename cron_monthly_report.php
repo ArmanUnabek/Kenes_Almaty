@@ -47,31 +47,35 @@ try {
         $regionName = $region['name_ru'];
 
         // Count letters
-        $incomingCount = (int)$db->prepare("
-            SELECT COUNT(*) FROM incoming_letters
-            WHERE region_id = ? AND date BETWEEN ? AND ?
-        ")->execute([$regionId, $monthFrom, $monthTo]) ?
-            $db->query("SELECT COUNT(*) FROM incoming_letters WHERE region_id = {$regionId} AND date BETWEEN '{$monthFrom}' AND '{$monthTo}'")->fetchColumn() : 0;
+        $stmtIn = $db->prepare("SELECT COUNT(*) FROM incoming_letters WHERE region_id = ? AND date BETWEEN ? AND ?");
+        $stmtIn->execute([$regionId, $monthFrom, $monthTo]);
+        $incomingCount = (int)$stmtIn->fetchColumn();
 
-        $outgoingCount = (int)$db->query("SELECT COUNT(*) FROM outgoing_letters WHERE region_id = {$regionId} AND date BETWEEN '{$monthFrom}' AND '{$monthTo}'")->fetchColumn();
+        $stmtOut = $db->prepare("SELECT COUNT(*) FROM outgoing_letters WHERE region_id = ? AND date BETWEEN ? AND ?");
+        $stmtOut->execute([$regionId, $monthFrom, $monthTo]);
+        $outgoingCount = (int)$stmtOut->fetchColumn();
 
         // Top organizations by incoming
-        $topOrgs = $db->query("
+        $stmtOrgs = $db->prepare("
             SELECT organization, COUNT(*) AS cnt
             FROM incoming_letters
-            WHERE region_id = {$regionId} AND date BETWEEN '{$monthFrom}' AND '{$monthTo}'
+            WHERE region_id = ? AND date BETWEEN ? AND ?
             GROUP BY organization ORDER BY cnt DESC LIMIT 5
-        ")->fetchAll();
+        ");
+        $stmtOrgs->execute([$regionId, $monthFrom, $monthTo]);
+        $topOrgs = $stmtOrgs->fetchAll();
 
         // Most active members
-        $topMembers = $db->query("
+        $stmtMembers = $db->prepare("
             SELECT m.full_name, COUNT(DISTINCT lm.letter_id) AS cnt
             FROM letter_members lm
             JOIN os_members m ON lm.member_id = m.id
             JOIN incoming_letters il ON lm.letter_type = 'incoming' AND lm.letter_id = il.id
-            WHERE il.region_id = {$regionId} AND il.date BETWEEN '{$monthFrom}' AND '{$monthTo}'
+            WHERE il.region_id = ? AND il.date BETWEEN ? AND ?
             GROUP BY m.id ORDER BY cnt DESC LIMIT 5
-        ")->fetchAll();
+        ");
+        $stmtMembers->execute([$regionId, $monthFrom, $monthTo]);
+        $topMembers = $stmtMembers->fetchAll();
 
         // Build HTML email
         $orgRows = array_map(fn($r) => "<tr><td style='padding:4px 8px'>" . htmlspecialchars($r['organization'], ENT_QUOTES) . "</td><td style='padding:4px 8px;text-align:center'>{$r['cnt']}</td></tr>", $topOrgs);
@@ -128,13 +132,15 @@ try {
         }
 
         // Send to all managers/admins of this region
-        $recipients = $db->query("
+        $stmtRec = $db->prepare("
             SELECT DISTINCT email FROM users
             WHERE is_active = TRUE
               AND email IS NOT NULL AND email != ''
-              AND (region_id = {$regionId} OR role = 'admin')
+              AND (region_id = ? OR role = 'admin')
               AND role IN ('admin', 'manager')
-        ")->fetchAll(\PDO::FETCH_COLUMN);
+        ");
+        $stmtRec->execute([$regionId]);
+        $recipients = $stmtRec->fetchAll(\PDO::FETCH_COLUMN);
 
         $subject = "Отчёт за " . $firstOfMonth->format('m.Y') . " — {$regionName}";
         foreach ($recipients as $email) {
