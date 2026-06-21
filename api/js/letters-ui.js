@@ -1940,11 +1940,11 @@ async function deleteOutgoing(id) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Ошибка архивации');
-      showToast(`Архивировано: ${data.archived ?? ids.length}`, 'success');
+      window.showSuccess(`Архивировано: ${data.archived ?? ids.length}`);
       clearBatchSelection(type);
       refreshLetters();
     } catch (e) {
-      showToast(e.message, 'danger');
+      window.showError(e.message);
     }
   }
 

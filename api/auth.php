@@ -329,11 +329,11 @@ function handleTgLogin(\PDO $db): void
         $db->exec("DELETE FROM telegram_login_tokens WHERE expires_at < NOW()");
     } catch (\Throwable $e) {}
 
-    $stmt = $db->prepare('SELECT * FROM telegram_login_tokens WHERE token = ? AND expires_at > NOW()');
+    $stmt = $db->prepare('SELECT * FROM telegram_login_tokens WHERE token = ? AND expires_at > NOW() AND used_at IS NULL');
     $stmt->execute([$token]);
     $row = $stmt->fetch();
 
-    if (!$row || $row['used_at'] !== null) {
+    if (!$row) {
         http_response_code(403);
         echo 'Ссылка недействительна или уже была использована';
         return;

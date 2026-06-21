@@ -168,7 +168,7 @@ function botLink(\PDO $db, string $chatId, string $code): void
     }
 
     // Check if this chat is already linked to another user
-    $stmtChk = $db->prepare('SELECT id, username FROM users WHERE telegram_chat_id = ? AND id != ?');
+    $stmtChk = $db->prepare('SELECT id, username FROM users WHERE telegram_chat_id = ? AND id != ? AND is_active = TRUE');
     $stmtChk->execute([$chatId, $row['user_id']]);
     if ($stmtChk->fetch()) {
         TelegramService::sendMessage($chatId, '⚠️ Этот Telegram-аккаунт уже привязан к другому пользователю. Обратитесь к администратору.');
@@ -314,19 +314,21 @@ function botLetters(\PDO $db, string $chatId): void
 
     $lines = ["📬 <b>Ближайшие дедлайны:</b>\n"];
     foreach ($letters as $l) {
-        $deadline = $l['deadline_date'] ?? '—';
-        $daysLeft = $deadline !== '—'
-            ? (int)((strtotime($deadline) - strtotime($today)) / 86400)
+        $deadline     = $l['deadline_date'] ?? '—';
+        $deadlineTime = $deadline !== '—' ? strtotime($deadline) : false;
+        $todayTime    = strtotime($today);
+        $daysLeft     = ($deadlineTime !== false && $todayTime !== false)
+            ? (int)(($deadlineTime - $todayTime) / 86400)
             : null;
 
         $icon = '⏳';
         if ($daysLeft !== null) {
-            if ($daysLeft < 0)  $icon = '🔴';
+            if ($daysLeft < 0)      $icon = '🔴';
             elseif ($daysLeft <= 3) $icon = '🟡';
-            else                $icon = '🟢';
+            else                    $icon = '🟢';
         }
 
-        $deadlineLabel = $deadline !== '—' ? date('d.m.Y', strtotime($deadline)) : '—';
+        $deadlineLabel = $deadlineTime !== false ? date('d.m.Y', $deadlineTime) : '—';
         $org = htmlspecialchars(mb_substr($l['organization'] ?? '—', 0, 40), ENT_QUOTES);
         $lines[] = "{$icon} <b>Вх.{$l['seq']}</b> · {$org}\n   📅 Дедлайн: {$deadlineLabel}" .
                    ($daysLeft !== null ? " ({$daysLeft} дн.)" : '');
@@ -368,17 +370,19 @@ function botMyLetters(\PDO $db, string $chatId): void
 
     $lines = ["📌 <b>Мои письма без ответа:</b>\n"];
     foreach ($letters as $l) {
-        $deadline  = $l['deadline_date'] ?? '—';
-        $daysLeft  = $deadline !== '—'
-            ? (int)((strtotime($deadline) - strtotime($today)) / 86400)
+        $deadline     = $l['deadline_date'] ?? '—';
+        $deadlineTime = $deadline !== '—' ? strtotime($deadline) : false;
+        $todayTime    = strtotime($today);
+        $daysLeft     = ($deadlineTime !== false && $todayTime !== false)
+            ? (int)(($deadlineTime - $todayTime) / 86400)
             : null;
-        $icon      = '⏳';
+        $icon = '⏳';
         if ($daysLeft !== null) {
             if ($daysLeft < 0)      $icon = '🔴';
             elseif ($daysLeft <= 3) $icon = '🟡';
             else                    $icon = '🟢';
         }
-        $deadlineLabel = $deadline !== '—' ? date('d.m.Y', strtotime($deadline)) : '—';
+        $deadlineLabel = $deadlineTime !== false ? date('d.m.Y', $deadlineTime) : '—';
         $org   = htmlspecialchars(mb_substr($l['organization'] ?? '—', 0, 40), ENT_QUOTES);
         $lines[] = "{$icon} <b>Вх.{$l['seq']}</b> · {$org}\n   📅 {$deadlineLabel}" .
                    ($daysLeft !== null ? " ({$daysLeft} дн.)" : '');
