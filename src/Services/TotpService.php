@@ -63,11 +63,13 @@ class TotpService
     }
 
     /**
-     * URL Google Charts для QR-кода (не отправляет секрет на сервер — только данные URI).
+     * URL внешнего сервиса для QR-кода (не отправляет секрет на сервер — только данные URI).
+     * Google Image Charts (chart.googleapis.com) отключён Google, поэтому используем
+     * api.qrserver.com (goqr.me), отдающий PNG напрямую — подходит для <img src>.
      */
     public static function getQrUrl(string $uri): string
     {
-        return 'https://chart.googleapis.com/chart?chs=200x200&chld=M|0&cht=qr&chl=' . rawurlencode($uri);
+        return 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' . rawurlencode($uri);
     }
 
     // ── Internal ──────────────────────────────────────────────────────────────
