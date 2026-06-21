@@ -339,7 +339,10 @@ function getDBConnection(): PDO
             if ($schema) {
                 $db->exec($schema);
             }
-        } elseif (DB_DRIVER === 'sqlite') {
+        }
+        if (DB_DRIVER === 'sqlite') {
+            // Гарантируем наличие базовых таблиц даже если файл схемы отсутствует
+            // или БД создаётся впервые (CREATE TABLE IF NOT EXISTS — идемпотентно).
             ensureSqliteSchema($db);
         }
         

@@ -5,6 +5,8 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../auth_middleware.php';
 
+use App\Middleware\CsrfMiddleware;
+
 header('Content-Type: application/json; charset=utf-8');
 
 checkAuth();
@@ -37,14 +39,38 @@ switch ($method) {
         break;
     case 'POST':
         requireWriteAccess();
+        CsrfMiddleware::requireVerification();
         handlePostComment($db);
         break;
     case 'DELETE':
+        CsrfMiddleware::requireVerification();
         handleDeleteComment($db);
         break;
     default:
         http_response_code(405);
         echo json_encode(['error' => 'Метод не поддерживается'], JSON_ENCODE_FLAGS);
+}
+
+/**
+ * Проверяет, что письмо существует и принадлежит доступному пользователю региону.
+ * Прерывает выполнение с 404/403 при отсутствии доступа.
+ */
+function assertLetterAccess(\PDO $db, string $letterType, int $letterId): void
+{
+    $table = $letterType === 'incoming' ? 'incoming_letters' : 'outgoing_letters';
+    $stmt = $db->prepare("SELECT region_id FROM {$table} WHERE id = ?");
+    $stmt->execute([$letterId]);
+    $regionId = $stmt->fetchColumn();
+    if ($regionId === false) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Письмо не найдено'], JSON_ENCODE_FLAGS);
+        exit;
+    }
+    if ((int)$regionId > 0 && !canAccessRegion((int)$regionId)) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Доступ к письму запрещён'], JSON_ENCODE_FLAGS);
+        exit;
+    }
 }
 
 function handleGetComments(\PDO $db): void
@@ -57,6 +83,8 @@ function handleGetComments(\PDO $db): void
         echo json_encode(['error' => 'Укажите letter_type и letter_id'], JSON_ENCODE_FLAGS);
         return;
     }
+
+    assertLetterAccess($db, $letterType, $letterId);
 
     $stmt = $db->prepare("
         SELECT c.id, c.letter_type, c.letter_id, c.comment, c.created_at,
@@ -89,6 +117,8 @@ function handlePostComment(\PDO $db): void
         return;
     }
 
+    assertLetterAccess($db, $letterType, $letterId);
+
     $userId = (int)($_SESSION['user_id'] ?? 0);
     $stmt = $db->prepare("
         INSERT INTO letter_comments (letter_type, letter_id, user_id, comment)
@@ -118,7 +148,7 @@ function handleDeleteComment(\PDO $db): void
         return;
     }
 
-    $stmt = $db->prepare('SELECT user_id FROM letter_comments WHERE id = ?');
+    $stmt = $db->prepare('SELECT user_id, letter_type, letter_id FROM letter_comments WHERE id = ?');
     $stmt->execute([$id]);
     $row = $stmt->fetch();
     if (!$row) {
@@ -126,6 +156,8 @@ function handleDeleteComment(\PDO $db): void
         echo json_encode(['error' => 'Комментарий не найден'], JSON_ENCODE_FLAGS);
         return;
     }
+
+    assertLetterAccess($db, (string)$row['letter_type'], (int)$row['letter_id']);
 
     $currentUserId = (int)($_SESSION['user_id'] ?? 0);
     $isAdmin       = isAdmin();

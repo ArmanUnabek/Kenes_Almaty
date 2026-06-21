@@ -5,6 +5,8 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../auth_middleware.php';
 
+use App\Middleware\CsrfMiddleware;
+
 header('Content-Type: application/json; charset=utf-8');
 
 checkAuth();
@@ -38,14 +40,17 @@ switch ($method) {
         break;
     case 'POST':
         requireWriteAccess();
+        CsrfMiddleware::requireVerification();
         handleCreateTemplate($db);
         break;
     case 'PUT':
         requireWriteAccess();
+        CsrfMiddleware::requireVerification();
         handleUpdateTemplate($db);
         break;
     case 'DELETE':
         requireWriteAccess();
+        CsrfMiddleware::requireVerification();
         handleDeleteTemplate($db);
         break;
     default:
@@ -142,6 +147,11 @@ function handleUpdateTemplate(\PDO $db): void
         echo json_encode(['error' => 'Шаблон не найден'], JSON_ENCODE_FLAGS);
         return;
     }
+    if (!canAccessRegion((int)$row['region_id'])) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Доступ к шаблону запрещён'], JSON_ENCODE_FLAGS);
+        return;
+    }
 
     $name = trim($data['name'] ?? '');
     if ($name === '') {
@@ -175,6 +185,21 @@ function handleDeleteTemplate(\PDO $db): void
         echo json_encode(['error' => 'ID не указан'], JSON_ENCODE_FLAGS);
         return;
     }
+
+    $stmt = $db->prepare('SELECT region_id FROM letter_templates WHERE id = ?');
+    $stmt->execute([$id]);
+    $regionId = $stmt->fetchColumn();
+    if ($regionId === false) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Шаблон не найден'], JSON_ENCODE_FLAGS);
+        return;
+    }
+    if (!canAccessRegion((int)$regionId)) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Доступ к шаблону запрещён'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
     $db->prepare('DELETE FROM letter_templates WHERE id = ?')->execute([$id]);
     echo json_encode(['message' => 'Шаблон удалён'], JSON_ENCODE_FLAGS);
 }
