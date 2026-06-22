@@ -3,18 +3,22 @@
   let debounceTimer = null;
   let searchModal = null;
 
+  function t(key, fallback) {
+    return window.AppI18n?.t(key, fallback) ?? fallback;
+  }
+
   function getSelectedScope() {
     return document.querySelector('input[name="searchScope"]:checked')?.value ?? 'all';
   }
 
   function sourceLabel(source, archived) {
     if (archived) {
-      if (source === 'incoming') return 'Архив · Входящее';
-      if (source === 'outgoing') return 'Архив · Исходящее';
+      if (source === 'incoming') return t('search.source.archive_incoming', 'Архив · Входящее');
+      if (source === 'outgoing') return t('search.source.archive_outgoing', 'Архив · Исходящее');
     }
-    if (source === 'incoming') return 'Входящее';
-    if (source === 'outgoing') return 'Исходящее';
-    if (source === 'member') return 'Член ОС';
+    if (source === 'incoming') return t('search.source.incoming', 'Входящее');
+    if (source === 'outgoing') return t('search.source.outgoing', 'Исходящее');
+    if (source === 'member') return t('search.source.member', 'Член ОС');
     return source;
   }
 
@@ -72,11 +76,11 @@
     if (!body) return;
 
     if (!query) {
-      body.innerHTML = '<div class="text-muted small p-3">Введите запрос для поиска</div>';
+      body.innerHTML = `<div class="text-muted small p-3">${t('search.enter_query', 'Введите запрос для поиска')}</div>`;
       return;
     }
     if (!items.length) {
-      body.innerHTML = '<div class="text-muted small p-3">Ничего не найдено</div>';
+      body.innerHTML = `<div class="text-muted small p-3">${t('search.nothing_found', 'Ничего не найдено')}</div>`;
       return;
     }
 
@@ -110,14 +114,14 @@
       renderResults([], '');
       return;
     }
-    if (body) body.innerHTML = '<div class="text-muted small p-3">Поиск...</div>';
+    if (body) body.innerHTML = `<div class="text-muted small p-3">${t('search.searching', 'Поиск...')}</div>`;
     try {
       const resp = await fetch(`${API}/search.php?q=${encodeURIComponent(q)}&limit=20&scope=${encodeURIComponent(scope)}`);
       const data = await resp.json();
       const items = (data.items || []).map((item) => ({ ...item, _archived: scope === 'archived' }));
       renderResults(items, q);
     } catch (err) {
-      if (body) body.innerHTML = '<div class="text-danger small p-3">Ошибка поиска</div>';
+      if (body) body.innerHTML = `<div class="text-danger small p-3">${t('search.error', 'Ошибка поиска')}</div>`;
     }
   }
 
@@ -158,6 +162,12 @@
     });
 
     modalEl?.addEventListener('shown.bs.modal', () => input?.focus());
+  });
+
+  window.addEventListener('app:langchange', () => {
+    const input = document.getElementById('globalSearchInput');
+    if (input?.value.trim()) runSearch(input.value);
+    else renderResults([], '');
   });
 
   window.openGlobalSearch = openSearchModal;

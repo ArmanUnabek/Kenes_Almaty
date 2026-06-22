@@ -41,7 +41,7 @@
         : p.status === 'warning' ? 'badge bg-warning text-dark' : 'badge bg-secondary';
       const daysTxt = p.daysLeft < 0 ? `-${Math.abs(p.daysLeft)}` : `${p.daysLeft}`;
       return `<tr>
-        <td class="text-nowrap">Вх.${p.seq}</td>
+        <td class="text-nowrap">${t('notify.dead.incoming_prefix', 'Вх.')}${p.seq}</td>
         <td>${new Date(p.date).toLocaleDateString('ru-RU')}</td>
         <td>${p.org ? escapeHtml(p.org) : '—'}</td>
         <td><span class="${badgeClass}">${new Date(p.due).toLocaleDateString('ru-RU')}</span></td>
@@ -52,19 +52,26 @@
 
     box.innerHTML = `
       <div class="modal-notify-stats mb-3">
-        <span class="stat-chip stat-chip--neutral">Без ответа: ${summary.pending}</span>
-        <span class="stat-chip stat-chip--danger">Просрочено: ${summary.overdue}</span>
-        <span class="stat-chip stat-chip--warning">Скоро срок: ${summary.warning}</span>
+        <span class="stat-chip stat-chip--neutral">${t('notify.dead.pending', 'Без ответа')}: ${summary.pending}</span>
+        <span class="stat-chip stat-chip--danger">${t('notify.dead.overdue', 'Просрочено')}: ${summary.overdue}</span>
+        <span class="stat-chip stat-chip--warning">${t('notify.dead.due_soon', 'Скоро срок')}: ${summary.warning}</span>
       </div>
       <div class="table-responsive">
         <table class="table table-sm align-middle">
           <thead class="table-light">
-            <tr><th>Рег. №</th><th>Дата</th><th>От кого</th><th>Срок</th><th class="text-end">Дн.</th><th>Ответственные</th></tr>
+            <tr>
+              <th>${t('notify.dead.th_reg', 'Рег. №')}</th>
+              <th>${t('notify.dead.th_date', 'Дата')}</th>
+              <th>${t('notify.dead.th_from', 'От кого')}</th>
+              <th>${t('notify.dead.th_deadline', 'Срок')}</th>
+              <th class="text-end">${t('notify.dead.th_days', 'Дн.')}</th>
+              <th>${t('notify.dead.th_responsible', 'Ответственные')}</th>
+            </tr>
           </thead>
-          <tbody>${rows || '<tr><td colspan="6" class="text-center text-muted">Нет элементов</td></tr>'}</tbody>
+          <tbody>${rows || `<tr><td colspan="6" class="text-center text-muted">${t('notify.dead.empty', 'Нет элементов')}</td></tr>`}</tbody>
         </table>
       </div>
-      <div class="small text-muted mt-2">15 рабочих дней от даты входящего.</div>`;
+      <div class="small text-muted mt-2">${t('notify.dead.hint', '15 рабочих дней от даты входящего.')}</div>`;
   }
 
   async function renderEmailTab(box) {
@@ -100,7 +107,7 @@
         </div>
         <div class="col-md-8">
           <label class="form-label small">${t('notify.email.subject', 'Тема')}</label>
-          <input type="text" class="form-control form-control-sm" id="notifyEmailSubject" value="Уведомление ОС" />
+          <input type="text" class="form-control form-control-sm" id="notifyEmailSubject" value="${t('notify.email.default_subject', 'Уведомление ОС')}" />
         </div>
         <div class="col-12">
           <label class="form-label small">${t('notify.email.body', 'Текст письма')}</label>
@@ -110,11 +117,16 @@
           <button type="submit" class="btn btn-sm btn-primary">${t('notify.email.send', 'Отправить')}</button>
         </div>
         ${!isAdmin ? `<div class="col-12"><p class="small text-muted mb-0">${t('notify.email.moderator_hint', 'Модератор: только email пользователей/членов ОС вашего региона или домены из NOTIFY_ALLOWED_DOMAINS.')}</p></div>` : ''}
-      </form>` : '<p class="small text-muted">Отправка email доступна модераторам и админам.</p>'}
+      </form>` : `<p class="small text-muted">${t('notify.email.no_access', 'Отправка email доступна модераторам и админам.')}</p>`}
       <h6 class="small fw-semibold">${t('notify.email.queue', 'Очередь отправки')}</h6>
       <div class="table-responsive">
         <table class="table table-sm">
-          <thead class="table-light"><tr><th>Дата</th><th>Кому</th><th>Тема</th><th>Статус</th></tr></thead>
+          <thead class="table-light"><tr>
+            <th>${t('notify.email.th_date', 'Дата')}</th>
+            <th>${t('notify.email.th_to', 'Кому')}</th>
+            <th>${t('notify.email.th_subject', 'Тема')}</th>
+            <th>${t('notify.email.th_status', 'Статус')}</th>
+          </tr></thead>
           <tbody>${queueRows}</tbody>
         </table>
       </div>`;
@@ -140,7 +152,7 @@
           }),
         });
         const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(data.error || 'Ошибка отправки');
+        if (!resp.ok) throw new Error(data.error || t('notify.send_error', 'Ошибка отправки'));
         window.showSuccess?.(data.message || t('notify.queued', 'Поставлено в очередь'));
         await renderEmailTab(emailPane);
       } catch (err) {
@@ -174,6 +186,15 @@
   document.addEventListener('DOMContentLoaded', () => {
     bindEmailPaneDelegation();
     document.getElementById('notifyBtn')?.addEventListener('click', openNotifyModal);
+  });
+
+  window.addEventListener('app:langchange', () => {
+    const deadlinesPane = document.getElementById('notifyDeadlinesPane');
+    const emailPane = document.getElementById('notifyEmailPane');
+    if (deadlinesPane && deadlinesPane.innerHTML) renderDeadlinesTab(deadlinesPane);
+    if (emailPane && emailPane.innerHTML && !emailPane.querySelector('#notifyEmailForm')?.matches(':focus-within')) {
+      renderEmailTab(emailPane);
+    }
   });
 
   window.openNotifyModal = openNotifyModal;

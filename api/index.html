@@ -9,7 +9,7 @@
     <title>Журнал ОС — Статистика обращений</title>
     <link rel="manifest" href="/api/manifest.json" />
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <link href="/styles.css?v=21" rel="stylesheet" />
+    <link href="/styles.css?v=22" rel="stylesheet" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -197,19 +197,19 @@
                 </span>
                 <div class="topbar-secondary export-admin-only d-none d-lg-flex align-items-center gap-2">
                     <button class="btn btn-outline-secondary btn-sm" id="exportCsvBtn">
-                        <i class="bi bi-file-earmark-spreadsheet"></i> <span class="btn-label">CSV</span>
+                        <i class="bi bi-file-earmark-spreadsheet"></i> <span class="btn-label" data-i18n="topbar.export_csv">CSV</span>
                     </button>
                     <button class="btn btn-outline-success btn-sm" id="exportXlsxBtn" title="Экспорт в Excel">
                         <i class="bi bi-file-earmark-excel"></i> <span class="btn-label">Excel</span>
                     </button>
                     <a class="btn btn-outline-secondary btn-sm" id="exportPdfBtn" href="/api/export_pdf.php?type=summary" target="_blank" rel="noopener">
-                        <i class="bi bi-file-earmark-pdf"></i> <span class="btn-label">PDF</span>
+                        <i class="bi bi-file-earmark-pdf"></i> <span class="btn-label" data-i18n="topbar.export_pdf">PDF</span>
                     </a>
                     <button class="btn btn-primary btn-sm" id="exportJsonBtn">
-                        <i class="bi bi-download"></i> <span class="btn-label">JSON</span>
+                        <i class="bi bi-download"></i> <span class="btn-label" data-i18n="topbar.export_json">JSON</span>
                     </button>
                     <label class="btn btn-outline-secondary btn-sm mb-0" title="Импорт JSON">
-                        <i class="bi bi-upload"></i> <span class="btn-label">Импорт</span>
+                        <i class="bi bi-upload"></i> <span class="btn-label" data-i18n="topbar.import">Импорт</span>
                         <input type="file" id="importJsonInput" hidden accept="application/json" />
                     </label>
                     <label class="btn btn-outline-secondary btn-sm mb-0" title="Импорт CSV (входящие/исходящие)">
@@ -222,10 +222,10 @@
                         <i class="bi bi-three-dots-vertical"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end" id="topbarMoreMenu">
-                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportCsvBtn"><i class="bi bi-file-earmark-spreadsheet me-2"></i>CSV</button></li>
+                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportCsvBtn"><i class="bi bi-file-earmark-spreadsheet me-2"></i><span data-i18n="topbar.export_csv">CSV</span></button></li>
                         <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportXlsxBtn"><i class="bi bi-file-earmark-excel me-2"></i>Excel</button></li>
-                        <li class="export-admin-only"><a class="dropdown-item" href="/api/export_pdf.php?type=summary" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-2"></i>PDF</a></li>
-                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportJsonBtn"><i class="bi bi-download me-2"></i>JSON</button></li>
+                        <li class="export-admin-only"><a class="dropdown-item" href="/api/export_pdf.php?type=summary" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-2"></i><span data-i18n="topbar.export_pdf">PDF</span></a></li>
+                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportJsonBtn"><i class="bi bi-download me-2"></i><span data-i18n="topbar.export_json">JSON</span></button></li>
                         <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="importJson"><i class="bi bi-upload me-2"></i>Импорт JSON</button></li>
                         <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="importCsv"><i class="bi bi-filetype-csv me-2"></i>Импорт CSV</button></li>
                     </ul>
