@@ -21,6 +21,12 @@ class ErrorHandler
 
     public static function handleError(int $errno, string $errstr, string $errfile, int $errline): bool
     {
+        // Уважать оператор подавления ошибок «@» и отключённые уровни (error_reporting).
+        // Иначе каждый @unlink/@mkdir/@file_get_contents засоряет лог предупреждениями.
+        if (!(error_reporting() & $errno)) {
+            return false;
+        }
+
         $errorTypes = [
             E_ERROR => 'Fatal Error',
             E_WARNING => 'Warning',

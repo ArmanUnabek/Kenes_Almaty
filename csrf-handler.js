@@ -19,13 +19,13 @@ async function getCsrfToken() {
     return null;
 }
 
-// Перехватчик для всех fetch запросов
+// Intercept all fetch requests to inject CSRF token and capture rotated token
 const originalFetch = window.fetch;
 window.fetch = async function(...args) {
     const [resource, config] = args;
     const method = (config?.method || 'GET').toUpperCase();
 
-    // Добавить CSRF токен для POST, PUT, DELETE запросов
+    // Add CSRF token for state-changing requests
     if (['POST', 'PUT', 'DELETE'].includes(method)) {
         const token = await getCsrfToken();
         if (token) {
@@ -35,10 +35,18 @@ window.fetch = async function(...args) {
         }
     }
 
-    return originalFetch.apply(this, args);
+    const response = await originalFetch.apply(this, args);
+
+    // If server rotated the CSRF token, update our cache immediately
+    const newToken = response.headers.get('X-New-CSRF-Token');
+    if (newToken) {
+        csrfToken = newToken;
+    }
+
+    return response;
 };
 
-// Получить токен при загрузке страницы
+// Fetch initial CSRF token on page load
 document.addEventListener('DOMContentLoaded', () => {
     getCsrfToken();
 });

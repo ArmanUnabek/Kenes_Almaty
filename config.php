@@ -20,6 +20,8 @@ require_once __DIR__ . '/src/Services/LetterPersistenceService.php';
 require_once __DIR__ . '/src/Services/SecurityAuditService.php';
 require_once __DIR__ . '/src/Services/AuditSanitizer.php';
 require_once __DIR__ . '/src/Services/NotificationRecipientPolicy.php';
+require_once __DIR__ . '/src/Services/TotpService.php';
+require_once __DIR__ . '/src/Services/TelegramService.php';
 
 use App\Logger;
 use App\ErrorHandler;
@@ -37,14 +39,33 @@ if (!defined('SESSION_IDLE_TIMEOUT_SECONDS')) {
     define('SESSION_IDLE_TIMEOUT_SECONDS', max(300, $sessionLifetime));
 }
 
+// Timezone must be set after db.php loads the .env file so APP_TIMEZONE is available
+date_default_timezone_set(envValue('APP_TIMEZONE') ?? 'Asia/Almaty');
+
 // Pusher realtime settings (fill with your credentials)
 define('PUSHER_APP_ID', getenv('PUSHER_APP_ID') ?: '');
 define('PUSHER_KEY', getenv('PUSHER_KEY') ?: '');
 define('PUSHER_SECRET', getenv('PUSHER_SECRET') ?: '');
 define('PUSHER_CLUSTER', getenv('PUSHER_CLUSTER') ?: 'eu');
 
+// SMTP email settings (optional)
+define('SMTP_HOST',      getenv('SMTP_HOST')      ?: '');
+define('SMTP_PORT',      (int)(getenv('SMTP_PORT')  ?: 587));
+define('SMTP_USER',      getenv('SMTP_USER')      ?: '');
+define('SMTP_PASS',      getenv('SMTP_PASS')      ?: '');
+define('SMTP_FROM',      getenv('SMTP_FROM')      ?: 'noreply@example.com');
+define('SMTP_FROM_NAME', getenv('SMTP_FROM_NAME') ?: 'Журнал ОС');
+
+// URL приложения (используется для генерации ссылок в письмах/боте)
+define('APP_URL', rtrim(envValue('APP_URL') ?? '', '/'));
+
+// Telegram Bot (опционально — для уведомлений и webhook-команд)
+define('TELEGRAM_BOT_TOKEN',      envValue('TELEGRAM_BOT_TOKEN')      ?? '');
+define('TELEGRAM_BOT_USERNAME',   envValue('TELEGRAM_BOT_USERNAME')   ?? '');
+define('TELEGRAM_WEBHOOK_SECRET', envValue('TELEGRAM_WEBHOOK_SECRET') ?? '');
+
 // Настройки для загрузки фото
-define('UPLOAD_DIR', 'uploads/photos/');
+define('UPLOAD_DIR', APP_ROOT . '/uploads/photos/');
 $uploadMaxMb = (int) (envValue('UPLOAD_MAX_MB', '5') ?: 5);
 define('MAX_FILE_SIZE', max(1, $uploadMaxMb) * 1024 * 1024);
 define('ALLOWED_IMAGE_TYPES', ['image/jpeg', 'image/png', 'image/jpg']);

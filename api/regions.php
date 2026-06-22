@@ -150,25 +150,32 @@ switch ($method) {
             break;
         }
 
-        $existingStmt = $db->prepare('SELECT settings FROM regions WHERE id = ?');
+        $existingStmt = $db->prepare('SELECT name_kz, name_ru, code, is_active, settings FROM regions WHERE id = ?');
         $existingStmt->execute([$id]);
         $existingRow = $existingStmt->fetch();
+        if (!$existingRow) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Регион не найден'], $JSON_FLAGS);
+            break;
+        }
         $existingSettings = RegionService::parseSettings($existingRow['settings'] ?? null);
         $newSettings = array_key_exists('settings', $data)
             ? array_merge($existingSettings, is_array($data['settings']) ? $data['settings'] : [])
             : $existingSettings;
-        
+
+        // Частичное обновление: отсутствующие поля сохраняют текущее значение,
+        // а не затираются пустой строкой.
         $stmt = $db->prepare("
-            UPDATE regions 
+            UPDATE regions
             SET name_kz = ?, name_ru = ?, code = ?, is_active = ?, settings = ?
             WHERE id = ?
         ");
-        
+
         $stmt->execute([
-            $data['name_kz'] ?? '',
-            $data['name_ru'] ?? '',
-            $data['code'] ?? '',
-            $data['is_active'] ?? TRUE,
+            array_key_exists('name_kz', $data) ? $data['name_kz'] : $existingRow['name_kz'],
+            array_key_exists('name_ru', $data) ? $data['name_ru'] : $existingRow['name_ru'],
+            array_key_exists('code', $data) ? $data['code'] : $existingRow['code'],
+            array_key_exists('is_active', $data) ? ($data['is_active'] ? 1 : 0) : $existingRow['is_active'],
             json_encode($newSettings, JSON_ENCODE_FLAGS),
             $id
         ]);

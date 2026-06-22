@@ -66,8 +66,38 @@ if (!$health['uploads_writable']) {
     $health['status'] = 'degraded';
 }
 
+// Regional comparison for admins
+$regionsComparison = [];
+try {
+    $rcStmt = $db->query("
+        SELECT r.id, r.name_ru, r.code,
+               (SELECT COUNT(*) FROM incoming_letters i WHERE i.region_id = r.id AND (i.deleted_at IS NULL OR i.deleted_at = '0000-00-00 00:00:00')) AS incoming,
+               (SELECT COUNT(*) FROM outgoing_letters o WHERE o.region_id = r.id AND (o.deleted_at IS NULL OR o.deleted_at = '0000-00-00 00:00:00')) AS outgoing
+        FROM regions r
+        WHERE r.is_active = TRUE
+        ORDER BY r.name_ru
+    ");
+    $regionsComparison = $rcStmt->fetchAll();
+} catch (\Throwable $e) {
+    // deleted_at column may not exist yet — fall back without filter
+    try {
+        $rcStmt = $db->query("
+            SELECT r.id, r.name_ru, r.code,
+                   (SELECT COUNT(*) FROM incoming_letters i WHERE i.region_id = r.id) AS incoming,
+                   (SELECT COUNT(*) FROM outgoing_letters o WHERE o.region_id = r.id) AS outgoing
+            FROM regions r
+            WHERE r.is_active = TRUE
+            ORDER BY r.name_ru
+        ");
+        $regionsComparison = $rcStmt->fetchAll();
+    } catch (\Throwable $e2) {
+        // ignore
+    }
+}
+
 echo json_encode([
     'stats' => $stats,
     'health' => $health,
+    'regions_comparison' => $regionsComparison,
     'timestamp' => date('c'),
 ], JSON_ENCODE_FLAGS);

@@ -8,8 +8,10 @@ class UserRepository
 
     public function getById(int $id): ?array
     {
+        $this->ensureTelegramChatIdColumn();
         $stmt = $this->db->prepare('
             SELECT u.id, u.username, u.email, u.full_name, u.role, u.region_id, u.is_active, u.last_login, u.created_at,
+                   u.telegram_chat_id,
                    r.name_ru AS region_name
             FROM users u
             LEFT JOIN regions r ON u.region_id = r.id
@@ -59,8 +61,10 @@ class UserRepository
         $countStmt->execute($params);
         $total = (int)$countStmt->fetchColumn();
 
+        $this->ensureTelegramChatIdColumn();
         $sql = '
             SELECT u.id, u.username, u.email, u.full_name, u.role, u.region_id, u.is_active, u.last_login, u.created_at,
+                   u.telegram_chat_id,
                    r.name_ru AS region_name
             FROM users u
             LEFT JOIN regions r ON u.region_id = r.id
@@ -118,6 +122,11 @@ class UserRepository
             $fields[] = 'password_hash = ?';
             $params[] = password_hash($data['password'], PASSWORD_DEFAULT);
         }
+        if (array_key_exists('telegram_chat_id', $data)) {
+            $this->ensureTelegramChatIdColumn();
+            $fields[] = 'telegram_chat_id = ?';
+            $params[] = $data['telegram_chat_id'] ?: null;
+        }
 
         if (empty($fields)) {
             return false;
@@ -133,6 +142,38 @@ class UserRepository
     {
         $stmt = $this->db->prepare('UPDATE users SET is_active = FALSE WHERE id = ?');
         return $stmt->execute([$id]);
+    }
+
+    private static bool $telegramColChecked = false;
+
+    private function ensureTelegramChatIdColumn(): void
+    {
+        if (self::$telegramColChecked) return;
+        self::$telegramColChecked = true;
+        try {
+            $driver = $this->db->getAttribute(\PDO::ATTR_DRIVER_NAME);
+            if ($driver === 'sqlite') {
+                $names = array_column($this->db->query('PRAGMA table_info(users)')->fetchAll(), 'name');
+                if (!in_array('telegram_chat_id', $names, true)) {
+                    $this->db->exec('ALTER TABLE users ADD COLUMN telegram_chat_id VARCHAR(50) NULL DEFAULT NULL');
+                }
+                return;
+            }
+            if ($driver === 'pgsql') {
+                $stmt = $this->db->prepare("SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'telegram_chat_id'");
+                $stmt->execute();
+                if (!$stmt->fetchColumn()) {
+                    $this->db->exec('ALTER TABLE users ADD COLUMN telegram_chat_id VARCHAR(50) NULL DEFAULT NULL');
+                }
+                return;
+            }
+            $cols = $this->db->query("SHOW COLUMNS FROM users LIKE 'telegram_chat_id'")->fetchAll();
+            if (empty($cols)) {
+                $this->db->exec("ALTER TABLE users ADD COLUMN telegram_chat_id VARCHAR(50) NULL DEFAULT NULL");
+            }
+        } catch (\Throwable $e) {
+            // ignore — column may already exist
+        }
     }
 
     public function usernameExists(string $username, ?int $excludeId = null): bool

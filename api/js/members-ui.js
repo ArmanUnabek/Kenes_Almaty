@@ -4,6 +4,8 @@
 (function (window) {
   const api = () => window.AppCore?.API_BASE || '/api';
 
+  let memberStatsModal = null;
+
   function t(key, fallback) {
     return window.AppI18n?.t(key) || fallback;
   }
@@ -183,7 +185,7 @@
     }
 
     grid.innerHTML = list.map((member) => {
-      const color = member.commission_color || '#1D4ED8';
+      const color = escapeHtml(member.commission_color || '#1D4ED8');
       const commissionBadge = member.commission_name
         ? `<span class="badge commission-badge" style="background:${color}20;color:${color}">${escapeHtml(member.commission_name)}</span>`
         : '';
@@ -200,19 +202,31 @@
               ${commissionBadge}
               ${memberLocalizedField(member, 'organization', 'organization_kz') ? `<p class="small text-muted mt-2 mb-0">${escapeHtml(memberLocalizedField(member, 'organization', 'organization_kz'))}</p>` : ''}
               ${member.phone ? `<p class="small text-muted mb-0">${escapeHtml(member.phone)}</p>` : ''}
-              ${window.canWrite() ? `
-                <div class="mt-3 d-flex justify-content-center gap-2 flex-wrap">
+              <div class="mt-3 d-flex justify-content-center gap-2 flex-wrap">
+                <button type="button" class="btn btn-sm btn-outline-info" data-stats-member="${member.id}" data-member-name="${escapeHtml(member.full_name || '')}" data-member-commission="${escapeHtml(member.commission_name || '')}">
+                  <i class="bi bi-bar-chart"></i> ${t('members.stats', 'Статистика')}
+                </button>
+                ${window.canWrite() ? `
                   <button type="button" class="btn btn-sm btn-outline-primary" data-edit-member="${member.id}"><i class="bi bi-pencil"></i> ${t('action.edit', 'Изменить')}</button>
                   <label class="btn btn-sm btn-outline-secondary mb-0">
                     <i class="bi bi-camera"></i> ${t('members.photo', 'Фото')}
                     <input type="file" accept="image/jpeg,image/png" class="d-none" data-photo-upload="${member.id}">
                   </label>
                   ${window.canDelete() ? `<button type="button" class="btn btn-sm btn-outline-danger" data-delete-member="${member.id}"><i class="bi bi-trash"></i></button>` : ''}
-                </div>` : ''}
+                ` : ''}
+              </div>
             </div>
           </div>
         </div>`;
     }).join('');
+
+    grid.querySelectorAll('[data-stats-member]').forEach((btn) => {
+      btn.addEventListener('click', () => openMemberStats(
+        Number(btn.dataset.statsMember),
+        btn.dataset.memberName,
+        btn.dataset.memberCommission,
+      ));
+    });
 
     if (window.canWrite()) {
       grid.querySelectorAll('[data-edit-member]').forEach((btn) => {
@@ -274,7 +288,7 @@
     });
 
     grid.innerHTML = catalog.map((commission) => {
-      const color = commission.color || '#1D4ED8';
+      const color = escapeHtml(commission.color || '#1D4ED8');
       const count = memberCounts[commission.id] || 0;
       return `
         <div class="col-12 col-md-6 col-xl-4">
@@ -395,6 +409,106 @@
       translateField('memberOrganization', 'memberOrganizationKz');
     });
     initKazLlmTranslate();
+  }
+
+  function openMemberStats(memberId, memberName, commissionName) {
+    const modalEl = document.getElementById('memberStatsModal');
+    if (!modalEl) return;
+    if (!memberStatsModal) {
+      memberStatsModal = new bootstrap.Modal(modalEl);
+    }
+
+    document.getElementById('memberStatsName').textContent = memberName || '—';
+    document.getElementById('memberStatsCommission').textContent = commissionName || '';
+
+    const avatarEl = document.getElementById('memberStatsAvatar');
+    if (avatarEl) avatarEl.textContent = getInitials(memberName);
+
+    const content = document.getElementById('memberStatsContent');
+    if (content) {
+      content.innerHTML = `<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary" role="status"></div></div>`;
+    }
+
+    memberStatsModal.show();
+
+    fetch(`${api()}/member_stats.php?member_id=${memberId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (content) content.innerHTML = renderMemberStats(data);
+      })
+      .catch((err) => {
+        if (content) content.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`;
+      });
+  }
+
+  function renderMemberStats(s) {
+    if (s.error) return `<div class="alert alert-danger">${escapeHtml(s.error)}</div>`;
+
+    const rate = s.response_rate !== null ? s.response_rate : null;
+    const rateBar = rate !== null
+      ? `<div class="mt-3">
+           <div class="d-flex justify-content-between small mb-1">
+             <span>${t('members.stat_response_rate', 'Процент ответов')}</span>
+             <strong>${rate}%</strong>
+           </div>
+           <div class="progress" style="height:8px">
+             <div class="progress-bar ${rate >= 75 ? 'bg-success' : rate >= 40 ? 'bg-warning' : 'bg-danger'}"
+                  role="progressbar" style="width:${rate}%"></div>
+           </div>
+         </div>`
+      : '';
+
+    const kpis = [
+      { label: t('members.stat_incoming', 'Входящих'), value: s.assigned_incoming, cls: 'border-primary' },
+      { label: t('members.stat_outgoing', 'Исходящих'), value: s.assigned_outgoing, cls: 'border-secondary' },
+      { label: t('members.stat_closed', 'Отвечено'), value: s.closed_incoming, cls: 'border-success' },
+      { label: t('members.stat_open', 'Открытых'), value: s.open_incoming, cls: 'border-warning' },
+      { label: t('members.stat_overdue', 'Просроченных'), value: s.overdue_incoming, cls: s.overdue_incoming > 0 ? 'border-danger' : 'border-secondary' },
+      { label: t('members.stat_lead', 'Ведущий по'), value: s.lead_count, cls: 'border-info' },
+    ];
+
+    const kpiHtml = kpis.map((k) => `
+      <div class="col-6 col-sm-4">
+        <div class="border-start border-3 ${k.cls} ps-3 py-1 mb-3">
+          <div class="small text-muted">${k.label}</div>
+          <div class="fs-4 fw-bold">${k.value}</div>
+        </div>
+      </div>`).join('');
+
+    let recentHtml = '';
+    if (s.recent_letters && s.recent_letters.length) {
+      const rows = s.recent_letters.map((l) => {
+        const statusBadge = l.is_closed
+          ? `<span class="badge bg-success-subtle text-success">${t('members.stat_answered', 'Отвечено')}</span>`
+          : `<span class="badge bg-warning-subtle text-warning">${t('members.stat_pending', 'Открыто')}</span>`;
+        const leadBadge = l.is_lead ? `<span class="badge bg-info-subtle text-info ms-1">${t('members.stat_lead_badge', 'Ведущий')}</span>` : '';
+        return `<tr>
+          <td class="text-muted small">${escapeHtml(l.date || '')}</td>
+          <td>${escapeHtml(l.organization || '')}</td>
+          <td class="text-muted small">${escapeHtml(l.kk_number || '—')}</td>
+          <td>${statusBadge}${leadBadge}</td>
+        </tr>`;
+      }).join('');
+      recentHtml = `
+        <h6 class="mt-4 mb-2">${t('members.stat_recent', 'Последние входящие письма')}</h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>${t('members.stat_date', 'Дата')}</th>
+                <th>${t('members.stat_org', 'Организация')}</th>
+                <th>${t('letters.kk_number', 'Рег. номер')}</th>
+                <th>${t('common.status', 'Статус')}</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    } else {
+      recentHtml = `<p class="text-muted mt-3 mb-0">${t('members.stat_no_letters', 'Писем не назначено')}</p>`;
+    }
+
+    return `<div class="row g-0">${kpiHtml}</div>${rateBar}${recentHtml}`;
   }
 
   window.AppMembers = {

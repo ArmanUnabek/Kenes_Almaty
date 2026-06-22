@@ -11,8 +11,10 @@ $limit = max(1, min(500, (int)($_GET['limit'] ?? 50)));
 $offset = ($page - 1) * $limit;
 $securityOnly = isset($_GET['security']) && $_GET['security'] === '1';
 $regionFilter = isset($_GET['region_id']) ? (int)$_GET['region_id'] : 0;
-$search = trim((string)($_GET['search'] ?? ''));
-$format = strtolower((string)($_GET['format'] ?? 'json'));
+$search       = trim((string)($_GET['search'] ?? ''));
+$format       = strtolower((string)($_GET['format'] ?? 'json'));
+$tableFilter  = trim((string)($_GET['table_name'] ?? ''));
+$recordFilter = isset($_GET['record_id']) ? (int)$_GET['record_id'] : 0;
 
 $conditions = [];
 $params = [];
@@ -23,6 +25,14 @@ if ($securityOnly) {
 if ($regionFilter > 0) {
     $conditions[] = 'al.region_id = ?';
     $params[] = $regionFilter;
+}
+if ($tableFilter !== '') {
+    $conditions[] = 'al.table_name = ?';
+    $params[] = $tableFilter;
+}
+if ($recordFilter > 0) {
+    $conditions[] = 'al.record_id = ?';
+    $params[] = $recordFilter;
 }
 if ($search !== '') {
     $conditions[] = '(al.table_name LIKE ? OR al.operation LIKE ? OR u.full_name LIKE ? OR u.username LIKE ? OR CAST(al.record_id AS CHAR) LIKE ?)';

@@ -50,6 +50,15 @@ async function initializeApp() {
     window.setupAutocomplete?.('searchEvents', () =>
       (store.events || []).flatMap((e) => [e.title, e.location]));
 
+    if (typeof window.initCalendar === 'function') window.initCalendar();
+    if (typeof window.refreshCalendar === 'function') window.refreshCalendar();
+
+    setTimeout(() => {
+      if (typeof window.checkDeadlineNotifications === 'function') {
+        window.checkDeadlineNotifications();
+      }
+    }, 3000);
+
     window.hideLoading?.();
     window.showSuccess?.(window.AppI18n?.t('app.loaded', 'Данные успешно загружены'));
   } catch (error) {
@@ -210,7 +219,10 @@ function initRealtime() {
         if (data?.action) {
           const typeText = data.type === 'incoming' ? 'Входящее письмо' : 'Исходящее письмо';
           const actionText = data.action === 'create' ? 'добавлено' : data.action === 'update' ? 'обновлено' : 'удалено';
-          window.showInfo?.(`${typeText} ${actionText} другим пользователем`);
+          const msg = `${typeText} ${actionText} другим пользователем`;
+          window.showInfo?.(msg);
+          window.showBrowserNotification?.('Журнал ОС', msg);
+          if (typeof window.refreshCalendar === 'function') window.refreshCalendar();
         }
       });
     pusherClient.subscribe(window.PUSHER_CHANNEL_EVENTS || 'council-events')

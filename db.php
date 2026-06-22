@@ -308,6 +308,150 @@ function ensureMemberI18nColumns(PDO $db): void
     }
 }
 
+function ensurePasswordResetTokens(\PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    try {
+        if (DB_DRIVER === 'sqlite') {
+            $db->exec("
+                CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INT NOT NULL,
+                    token CHAR(64) NOT NULL UNIQUE,
+                    expires_at DATETIME NOT NULL,
+                    used_at DATETIME NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ");
+            return;
+        }
+
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                token CHAR(64) NOT NULL,
+                expires_at DATETIME NOT NULL,
+                used_at DATETIME NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_prt_token (token),
+                INDEX idx_prt_expires (expires_at),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (\Throwable $e) {
+        error_log('ensurePasswordResetTokens: ' . $e->getMessage());
+    }
+}
+
+function ensureTelegramTables(\PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    try {
+        if (DB_DRIVER === 'sqlite') {
+            $db->exec("
+                CREATE TABLE IF NOT EXISTS telegram_login_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INT NOT NULL,
+                    token VARCHAR(64) NOT NULL UNIQUE,
+                    expires_at DATETIME NOT NULL,
+                    used_at DATETIME NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS telegram_link_codes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INT NOT NULL,
+                    code VARCHAR(6) NOT NULL,
+                    expires_at DATETIME NOT NULL,
+                    used_at DATETIME NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            ");
+            return;
+        }
+
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS telegram_login_tokens (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                token VARCHAR(64) NOT NULL,
+                expires_at DATETIME NOT NULL,
+                used_at DATETIME NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_tlt_token (token),
+                INDEX idx_tlt_expires (expires_at),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS telegram_link_codes (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                code VARCHAR(6) NOT NULL,
+                expires_at DATETIME NOT NULL,
+                used_at DATETIME NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_tlc_code (code),
+                INDEX idx_tlc_expires (expires_at),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (\Throwable $e) {
+        error_log('ensureTelegramTables: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Добавляет колонку для хранения хэшей резервных кодов 2FA (если отсутствует).
+ */
+function ensureTotpBackupColumn(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    try {
+        if (DB_DRIVER === 'sqlite') {
+            $names = array_column($db->query('PRAGMA table_info(users)')->fetchAll(), 'name');
+            if (!in_array('totp_backup_codes', $names, true)) {
+                $db->exec('ALTER TABLE users ADD COLUMN totp_backup_codes TEXT NULL');
+            }
+            return;
+        }
+        if (DB_DRIVER === 'pgsql') {
+            $stmt = $db->prepare("SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'totp_backup_codes'");
+            $stmt->execute();
+            if (!$stmt->fetchColumn()) {
+                $db->exec('ALTER TABLE users ADD COLUMN totp_backup_codes TEXT NULL');
+            }
+            return;
+        }
+        // mysql
+        $cols = [];
+        foreach ($db->query('SHOW COLUMNS FROM users') as $row) {
+            $cols[$row['Field']] = true;
+        }
+        if (!isset($cols['totp_backup_codes'])) {
+            $db->exec("ALTER TABLE users ADD COLUMN totp_backup_codes TEXT NULL COMMENT 'JSON: хэши резервных кодов 2FA' AFTER totp_enabled");
+        }
+    } catch (Throwable $e) {
+        error_log('ensureTotpBackupColumn: ' . $e->getMessage());
+    }
+}
+
 /**
  * Создание соединения с БД (PDO singleton).
  */
@@ -340,7 +484,10 @@ function getDBConnection(): PDO
             if ($schema) {
                 $db->exec($schema);
             }
-        } elseif (DB_DRIVER === 'sqlite') {
+        }
+        if (DB_DRIVER === 'sqlite') {
+            // Гарантируем наличие базовых таблиц даже если файл схемы отсутствует
+            // или БД создаётся впервые (CREATE TABLE IF NOT EXISTS — идемпотентно).
             ensureSqliteSchema($db);
         }
         
@@ -354,6 +501,9 @@ function getDBConnection(): PDO
         ensureAuditLogsSchema($db);
         ensureTranslationSchema($db);
         ensureMemberI18nColumns($db);
+        ensurePasswordResetTokens($db);
+        ensureTelegramTables($db);
+        ensureTotpBackupColumn($db);
         
         return $db;
     } catch (PDOException $e) {

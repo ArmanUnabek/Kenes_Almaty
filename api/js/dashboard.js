@@ -178,7 +178,7 @@ async function renderKpiExtra() {
     const ordered = [...kpi.commissions].sort((a, b) => (b.outgoing_count - a.outgoing_count) || (b.incoming_count - a.incoming_count));
     tbodyComms.innerHTML = ordered.map(c => `
       <tr>
-        <td><span class="badge" style="background:${c.color || '#1D4ED8'}">${escapeHtml(c.name || '')}</span></td>
+        <td><span class="badge" style="background:${escapeHtml(c.color || '#1D4ED8')}">${escapeHtml(c.name || '')}</span></td>
         <td class="text-end">${Number(c.outgoing_count || 0)}</td>
         <td class="text-end">${Number(c.incoming_count || 0)}</td>
         <td class="text-end">${Number(c.events_count || 0)}</td>

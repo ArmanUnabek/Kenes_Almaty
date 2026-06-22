@@ -1185,6 +1185,7 @@ function renderIncoming() {
 
       return `
         <tr>
+          <td class="batch-checkbox-col"><input type="checkbox" class="form-check-input batch-check-incoming" data-id="${i.id}"></td>
           <td class="text-nowrap" data-label="Рег. №">Вх.${i.seq}</td>
           <td data-label="Дата">${formatDateISOtoRus(i.date)}</td>
           <td data-label="Организация">${escapeHtml(i.organization)}</td>
@@ -1197,6 +1198,8 @@ function renderIncoming() {
           <td data-label="Сканы" id="${scansCellId}"></td>
           <td data-label="Ответ">${linkHtml}</td>
           <td class="text-end table-actions" data-label="">
+            <button class="btn btn-sm btn-outline-info" data-action="detail-incoming" data-id="${i.id}" title="Детали / Комментарии"><i class="bi bi-chat-dots"></i></button>
+            <button class="btn btn-sm btn-outline-secondary" data-action="print-incoming" data-id="${i.id}" title="Печать"><i class="bi bi-printer"></i></button>
             <button class="btn btn-sm btn-outline-primary" data-action="edit-incoming" data-id="${i.id}" title="Изменить"><i class="bi bi-pencil"></i></button>
             ${canDelete() ? `<button class="btn btn-sm btn-outline-danger" data-action="del-incoming" data-id="${i.id}" title="Удалить"><i class="bi bi-trash"></i></button>` : ''}
           </td>
@@ -1204,7 +1207,7 @@ function renderIncoming() {
     });
   tableIncomingBody.innerHTML = rowsData.length
     ? rowsData.join("")
-    : '<tr><td colspan="12" class="text-center text-muted py-4">По выбранным фильтрам писем не найдено</td></tr>';
+    : '<tr><td colspan="13" class="text-center text-muted py-4">По выбранным фильтрам писем не найдено</td></tr>';
   
   // Рендерим дополнительные ячейки после создания строк
   pageItems.forEach((i) => {
@@ -1222,18 +1225,31 @@ function renderIncoming() {
     }
   });
   
+  tableIncomingBody.querySelectorAll("[data-action='detail-incoming']").forEach((btn) => {
+    btn.addEventListener('click', () => openLetterDetailTabs('incoming', btn.dataset.id));
+  });
   tableIncomingBody.querySelectorAll("[data-action='del-incoming']").forEach((btn) => {
     btn.addEventListener("click", () => deleteIncoming(btn.dataset.id));
   });
-  // обработчики редактирования
   tableIncomingBody.querySelectorAll("[data-action='edit-incoming']").forEach((btn) => {
     btn.addEventListener("click", () => editIncoming(btn.dataset.id));
+  });
+  tableIncomingBody.querySelectorAll("[data-action='print-incoming']").forEach((btn) => {
+    btn.addEventListener("click", () => window.open(`/api/letter_print.php?type=incoming&id=${btn.dataset.id}`, '_blank'));
   });
   tableIncomingBody.querySelectorAll("[data-action='respond-incoming']").forEach((btn) => {
     btn.addEventListener("click", () => startOutgoingResponse(btn.dataset.id));
   });
   tableIncomingBody.querySelectorAll("[data-action='attach-outgoing']").forEach((btn) => {
     btn.addEventListener("click", () => openLinkOutgoingModal({ type: 'incoming-table', incomingId: btn.dataset.id }));
+  });
+  // Batch checkboxes
+  tableIncomingBody.querySelectorAll('.batch-check-incoming').forEach((cb) => {
+    cb.addEventListener('change', () => updateBatchBar('incoming'));
+  });
+  document.getElementById('selectAllIncoming')?.addEventListener('change', (e) => {
+    tableIncomingBody.querySelectorAll('.batch-check-incoming').forEach((cb) => { cb.checked = e.target.checked; });
+    updateBatchBar('incoming');
   });
 
   if (typeof window.renderTableFooter === 'function') {
@@ -1484,6 +1500,7 @@ function renderOutgoing() {
       const recipientsCellId = `recipients-outgoing-${i.id}`;
       return `
         <tr>
+          <td class="batch-checkbox-col"><input type="checkbox" class="form-check-input batch-check-outgoing" data-id="${i.id}"></td>
           <td class="text-nowrap" data-label="Порядк. №">Исх.${i.seq}</td>
           <td data-label="Дата">${formatDateISOtoRus(i.date)}</td>
           <td class="text-nowrap" data-label="Исходящий №"><span class="badge badge-outgoing">${numberLabel}</span></td>
@@ -1495,6 +1512,12 @@ function renderOutgoing() {
           <td data-label="Ответственные" id="${membersCellId}"></td>
           <td data-label="Сканы" id="${scansCellId}"></td>
           <td class="text-end table-actions" data-label="">
+            <button class="btn btn-sm btn-outline-info" title="Детали / Комментарии" data-action="detail-outgoing" data-id="${i.id}">
+              <i class="bi bi-chat-dots"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" title="Печать" data-action="print-outgoing" data-id="${i.id}">
+              <i class="bi bi-printer"></i>
+            </button>
             <button class="btn btn-sm btn-outline-primary" title="Изменить" data-action="edit-outgoing" data-id="${i.id}">
               <i class="bi bi-pencil"></i>
             </button>
@@ -1522,11 +1545,25 @@ function renderOutgoing() {
     }
   });
   
+  tableOutgoingBody.querySelectorAll("[data-action='detail-outgoing']").forEach((btn) => {
+    btn.addEventListener('click', () => openLetterDetailTabs('outgoing', btn.dataset.id));
+  });
   tableOutgoingBody.querySelectorAll("[data-action='del-outgoing']").forEach((btn) => {
     btn.addEventListener("click", () => deleteOutgoing(btn.dataset.id));
   });
   tableOutgoingBody.querySelectorAll("[data-action='edit-outgoing']").forEach((btn) => {
     btn.addEventListener("click", () => editOutgoing(btn.dataset.id));
+  });
+  tableOutgoingBody.querySelectorAll("[data-action='print-outgoing']").forEach((btn) => {
+    btn.addEventListener("click", () => window.open(`/api/letter_print.php?type=outgoing&id=${btn.dataset.id}`, '_blank'));
+  });
+  // Batch checkboxes
+  tableOutgoingBody.querySelectorAll('.batch-check-outgoing').forEach((cb) => {
+    cb.addEventListener('change', () => updateBatchBar('outgoing'));
+  });
+  document.getElementById('selectAllOutgoing')?.addEventListener('change', (e) => {
+    tableOutgoingBody.querySelectorAll('.batch-check-outgoing').forEach((cb) => { cb.checked = e.target.checked; });
+    updateBatchBar('outgoing');
   });
 
   if (typeof window.renderTableFooter === 'function') {
@@ -1857,6 +1894,78 @@ async function deleteOutgoing(id) {
     if (filterRecipientOutgoing) filterRecipientOutgoing.addEventListener('change', resetOutgoing);
   }
 
+  // ── Batch operations ──────────────────────────────────────────────────────
+
+  function getSelectedIds(type) {
+    const sel = type === 'incoming' ? '.batch-check-incoming' : '.batch-check-outgoing';
+    return Array.from(document.querySelectorAll(sel + ':checked')).map((cb) => Number(cb.dataset.id));
+  }
+
+  function updateBatchBar(type) {
+    const ids = getSelectedIds(type);
+    const bar = document.getElementById(type === 'incoming' ? 'batchBarIncoming' : 'batchBarOutgoing');
+    const count = document.getElementById(type === 'incoming' ? 'batchCountIncoming' : 'batchCountOutgoing');
+    if (!bar) return;
+    bar.classList.toggle('d-none', ids.length === 0);
+    if (count) count.textContent = `${ids.length} выбрано`;
+  }
+
+  function batchExportSelected(type) {
+    const ids = getSelectedIds(type);
+    if (!ids.length) return;
+    const items = type === 'incoming'
+      ? store.incoming.filter((i) => ids.includes(Number(i.id)))
+      : store.outgoing.filter((i) => ids.includes(Number(i.id)));
+    const payload = type === 'incoming'
+      ? { incoming: items, outgoing: [] }
+      : { incoming: [], outgoing: items };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${type}_selected_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function batchArchiveSelected(type) {
+    const ids = getSelectedIds(type);
+    if (!ids.length) return;
+    if (!confirm(`Переместить ${ids.length} писем(а) в архив?`)) return;
+    try {
+      const res = await fetch(`letters.php?type=${type}&action=bulk`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка архивации');
+      window.showSuccess(`Архивировано: ${data.archived ?? ids.length}`);
+      clearBatchSelection(type);
+      refreshLetters();
+    } catch (e) {
+      window.showError(e.message);
+    }
+  }
+
+  function clearBatchSelection(type) {
+    const cls = type === 'incoming' ? '.batch-check-incoming' : '.batch-check-outgoing';
+    const allId = type === 'incoming' ? 'selectAllIncoming' : 'selectAllOutgoing';
+    document.querySelectorAll(cls).forEach((cb) => { cb.checked = false; });
+    const all = document.getElementById(allId);
+    if (all) all.checked = false;
+    updateBatchBar(type);
+  }
+
+  function bindBatchActions() {
+    document.getElementById('batchExportIncoming')?.addEventListener('click', () => batchExportSelected('incoming'));
+    document.getElementById('batchExportOutgoing')?.addEventListener('click', () => batchExportSelected('outgoing'));
+    document.getElementById('batchArchiveIncoming')?.addEventListener('click', () => batchArchiveSelected('incoming'));
+    document.getElementById('batchArchiveOutgoing')?.addEventListener('click', () => batchArchiveSelected('outgoing'));
+    document.getElementById('batchClearIncoming')?.addEventListener('click', () => clearBatchSelection('incoming'));
+    document.getElementById('batchClearOutgoing')?.addEventListener('click', () => clearBatchSelection('outgoing'));
+  }
+
   function initLettersUI() {
     if (incDate) incDate.value = todayISO;
     if (outDate) outDate.value = todayISO;
@@ -1864,6 +1973,7 @@ async function deleteOutgoing(id) {
     updateIncomingSeqPlaceholder();
     bindLettersEventListeners();
     bindLettersFilters();
+    bindBatchActions();
   }
 
   window.editIncoming = editIncoming;
@@ -1878,4 +1988,407 @@ async function deleteOutgoing(id) {
   window.populateMemberSelects = populateMemberSelects;
   window.renderIncomingRecipients = renderIncomingRecipients;
   window.renderOutgoingRecipients = renderOutgoingRecipients;
+
+  // ── Letter Detail Tabs Modal (Comments + History) ─────────────────────────
+
+  let _detailModal = null;
+  let _detailType = null;
+  let _detailId = null;
+
+  function getDetailModal() {
+    if (!_detailModal) {
+      const el = document.getElementById('letterDetailTabsModal');
+      if (el) _detailModal = new bootstrap.Modal(el);
+    }
+    return _detailModal;
+  }
+
+  async function openLetterDetailTabs(type, id) {
+    _detailType = type;
+    _detailId = id;
+
+    const items = type === 'incoming' ? (store.incoming || []) : (store.outgoing || []);
+    const letter = items.find((x) => String(x.id) === String(id));
+
+    const titleEl = document.getElementById('letterDetailTabsTitle');
+    if (titleEl) {
+      const prefix = type === 'incoming' ? 'Вх.' : 'Исх.';
+      titleEl.textContent = letter
+        ? `${prefix}${letter.seq} — ${letter.organization || ''}`.trim()
+        : `${prefix}${id}`;
+    }
+
+    // Info pane
+    const infoEl = document.getElementById('ldInfoBody');
+    if (infoEl && letter) {
+      const members = (letter.members || []).map((m) => m.full_name).join(', ') || '—';
+      infoEl.innerHTML = `
+        <dl class="row mb-0">
+          <dt class="col-sm-4">Дата</dt><dd class="col-sm-8">${formatDateISOtoRus(letter.date)}</dd>
+          <dt class="col-sm-4">Организация</dt><dd class="col-sm-8">${escapeHtml(letter.organization || '—')}</dd>
+          <dt class="col-sm-4">Тема</dt><dd class="col-sm-8">${escapeHtml(letter.subject || '—')}</dd>
+          <dt class="col-sm-4">Ответственные</dt><dd class="col-sm-8">${escapeHtml(members)}</dd>
+          ${letter.note ? `<dt class="col-sm-4">Примечание</dt><dd class="col-sm-8">${escapeHtml(letter.note)}</dd>` : ''}
+        </dl>`;
+    }
+
+    getDetailModal()?.show();
+
+    // Reset to info tab
+    const infoTab = document.getElementById('ldtab-info');
+    if (infoTab) bootstrap.Tab.getOrCreateInstance(infoTab).show();
+
+    // Bind comment submit once per open
+    const submitBtn = document.getElementById('ldCommentSubmit');
+    if (submitBtn) {
+      submitBtn.onclick = () => submitComment();
+    }
+
+    // Bind tab switches for lazy loading
+    const commentsTabBtn = document.getElementById('ldtab-comments');
+    if (commentsTabBtn) {
+      commentsTabBtn.onclick = () => loadComments(_detailType, _detailId);
+    }
+    const historyTabBtn = document.getElementById('ldtab-history');
+    if (historyTabBtn) {
+      historyTabBtn.onclick = () => loadHistory(_detailType, _detailId);
+    }
+  }
+
+  async function loadComments(type, id) {
+    const el = document.getElementById('ldCommentsList');
+    if (!el) return;
+    el.innerHTML = '<div class="text-muted small text-center py-3">Загрузка...</div>';
+    try {
+      const data = await apiFetch(`${API_BASE}/comments.php?letter_type=${encodeURIComponent(type)}&letter_id=${encodeURIComponent(id)}`);
+      const comments = data.comments || data || [];
+      const badge = document.getElementById('ldCommentsBadge');
+      if (badge) badge.textContent = comments.length;
+
+      if (!comments.length) {
+        el.innerHTML = '<p class="text-muted small text-center py-3">Комментариев пока нет.</p>';
+        return;
+      }
+      el.innerHTML = comments.map((c) => {
+        const canDel = window.sessionUser?.role === 'admin' || window.sessionUser?.role === 'manager'
+          || String(c.user_id) === String(window.sessionUser?.id);
+        return `<div class="border rounded p-2 mb-2 comment-item" data-comment-id="${c.id}">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <strong class="small">${escapeHtml(c.user_name || '—')}</strong>
+              <span class="text-muted small ms-2">${formatDateISOtoRus((c.created_at || '').slice(0,10))}</span>
+            </div>
+            ${canDel ? `<button class="btn btn-sm btn-link text-danger p-0 ms-1 delete-comment-btn" data-id="${c.id}" title="Удалить"><i class="bi bi-x-lg"></i></button>` : ''}
+          </div>
+          <div class="small mt-1">${escapeHtml(c.comment)}</div>
+        </div>`;
+      }).join('');
+
+      el.querySelectorAll('.delete-comment-btn').forEach((btn) => {
+        btn.addEventListener('click', () => deleteComment(btn.dataset.id, type, id));
+      });
+    } catch (err) {
+      el.innerHTML = `<div class="text-danger small py-2">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function submitComment() {
+    const input = document.getElementById('ldCommentInput');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    try {
+      await apiFetch(`${API_BASE}/comments.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ letter_type: _detailType, letter_id: _detailId, comment: text }),
+      });
+      input.value = '';
+      await loadComments(_detailType, _detailId);
+    } catch (err) {
+      window.showError?.(err.message);
+    }
+  }
+
+  async function deleteComment(commentId, type, id) {
+    if (!confirm('Удалить комментарий?')) return;
+    try {
+      await apiFetch(`${API_BASE}/comments.php?id=${encodeURIComponent(commentId)}`, { method: 'DELETE' });
+      await loadComments(type, id);
+    } catch (err) {
+      window.showError?.(err.message);
+    }
+  }
+
+  async function loadHistory(type, id) {
+    const el = document.getElementById('ldHistoryBody');
+    if (!el) return;
+    el.innerHTML = '<div class="text-muted small text-center py-3">Загрузка...</div>';
+    try {
+      const tableName = type === 'incoming' ? 'incoming_letters' : 'outgoing_letters';
+      const data = await apiFetch(`${API_BASE}/audit_logs.php?table_name=${encodeURIComponent(tableName)}&record_id=${encodeURIComponent(id)}&limit=100`);
+      const items = data.items || [];
+      if (!items.length) {
+        el.innerHTML = '<p class="text-muted small text-center py-3">История изменений отсутствует.</p>';
+        return;
+      }
+      el.innerHTML = items.map((row) => {
+        const op = row.operation || row.action || '';
+        const opColor = op === 'DELETE' ? 'text-danger' : op === 'INSERT' || op === 'CREATE' ? 'text-success' : 'text-primary';
+        const dt = row.created_at ? formatDateISOtoRus(row.created_at.slice(0, 10)) : '—';
+        const user = row.user_name || row.user_login || '—';
+        let diffHtml = '';
+        if (row.old_values || row.new_values) {
+          const oldV = typeof row.old_values === 'object' ? row.old_values : {};
+          const newV = typeof row.new_values === 'object' ? row.new_values : {};
+          const keys = Array.from(new Set([...Object.keys(oldV || {}), ...Object.keys(newV || {})]));
+          const changed = keys.filter((k) => String(oldV[k] ?? '') !== String(newV[k] ?? ''));
+          if (changed.length) {
+            diffHtml = '<ul class="list-unstyled mb-0 mt-1 small">' + changed.map((k) =>
+              `<li><code>${escapeHtml(k)}</code>: <span class="text-muted">${escapeHtml(String(oldV[k] ?? ''))}</span> → <strong>${escapeHtml(String(newV[k] ?? ''))}</strong></li>`
+            ).join('') + '</ul>';
+          }
+        }
+        return `<div class="border-start border-3 ps-3 mb-3 ${opColor.replace('text-', 'border-')}">
+          <div class="small fw-semibold ${opColor}">${escapeHtml(op)}</div>
+          <div class="small text-muted">${escapeHtml(dt)} · ${escapeHtml(user)}</div>
+          ${diffHtml}
+        </div>`;
+      }).join('');
+    } catch (err) {
+      el.innerHTML = `<div class="text-danger small py-2">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  window.openLetterDetailTabs = openLetterDetailTabs;
+
+  // ── My Letters ────────────────────────────────────────────────────────────
+
+  function renderMyLetters() {
+    const tbody = document.getElementById('myLettersBody');
+    const badge = document.getElementById('myLettersBadge');
+    if (!tbody) return;
+
+    const memberId = window.sessionUser?.member_id;
+    if (!memberId) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Нет привязки к члену ОС</td></tr>';
+      if (badge) badge.textContent = '0';
+      return;
+    }
+
+    const filterByMember = (letters) => (letters || []).filter((l) =>
+      (l.members || []).some((m) => m.member_id === memberId || m.id === memberId)
+    );
+
+    const mine = [
+      ...filterByMember(store.incoming).map((l) => ({ ...l, _type: 'incoming' })),
+      ...filterByMember(store.outgoing).map((l) => ({ ...l, _type: 'outgoing' })),
+    ].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+    if (badge) badge.textContent = mine.length;
+
+    if (!mine.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Нет писем</td></tr>';
+      return;
+    }
+
+    const today = new Date();
+    tbody.innerHTML = mine.map((l) => {
+      const isInc = l._type === 'incoming';
+      const typeBadge = isInc
+        ? '<span class="badge badge-incoming">Вх.</span>'
+        : '<span class="badge badge-outgoing">Исх.</span>';
+      const seq = isInc ? `Вх.${l.seq}` : `Исх.${l.seq}`;
+      const due = isInc ? window.AppUtils?.getLetterDueDate?.(l.date) : null;
+      let statusHtml = '';
+      if (due) {
+        const overdue = window.AppUtils?.isLetterOverdue?.(l, today);
+        const soon = window.AppUtils?.isLetterDueSoon?.(l, today);
+        statusHtml = overdue
+          ? '<span class="badge bg-danger">Просрочено</span>'
+          : soon
+            ? '<span class="badge bg-warning text-dark">Скоро срок</span>'
+            : '<span class="badge bg-success">В срок</span>';
+      }
+      return `<tr style="cursor:pointer" onclick="openLetterDetailTabs('${l._type}', '${l.id}')">
+        <td>${typeBadge}</td>
+        <td class="text-nowrap">${escapeHtml(seq)}</td>
+        <td class="text-nowrap">${formatDateISOtoRus(l.date)}</td>
+        <td>${escapeHtml(l.organization || '—')}</td>
+        <td class="text-truncate" style="max-width:200px">${escapeHtml(l.subject || '—')}</td>
+        <td>${statusHtml}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  window.renderMyLetters = renderMyLetters;
+
+  document.addEventListener('shown.bs.tab', (e) => {
+    if (e.target?.id === 'tab-my-letters') renderMyLetters();
+  });
+
+  // ── Archive ───────────────────────────────────────────────────────────────
+
+  let _archiveType = 'incoming';
+
+  async function loadArchive(type) {
+    _archiveType = type || _archiveType;
+    const tbody = document.getElementById('archiveBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Загрузка...</td></tr>';
+
+    document.querySelectorAll('[data-archive-type]').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.archiveType === _archiveType);
+      btn.classList.toggle('btn-outline-primary', btn.dataset.archiveType === 'incoming');
+      btn.classList.toggle('btn-outline-success', btn.dataset.archiveType === 'outgoing');
+    });
+
+    try {
+      const data = await apiFetch(`${API_BASE}/letters.php?type=${_archiveType}&archived=1&limit=200`);
+      const items = data.items || data || [];
+      if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Архив пуст</td></tr>';
+        return;
+      }
+      const isAdmin = window.sessionUser?.role === 'admin';
+      tbody.innerHTML = items.map((l) => `
+        <tr>
+          <td class="text-nowrap">${_archiveType === 'incoming' ? 'Вх.' : 'Исх.'}${escapeHtml(String(l.seq || ''))}</td>
+          <td class="text-nowrap">${formatDateISOtoRus(l.date)}</td>
+          <td>${escapeHtml(l.organization || '—')}</td>
+          <td class="text-truncate" style="max-width:200px">${escapeHtml(l.subject || '—')}</td>
+          <td class="text-end">${isAdmin ? `<button class="btn btn-sm btn-outline-success restore-btn" data-id="${l.id}" data-type="${_archiveType}"><i class="bi bi-arrow-counterclockwise"></i> Восстановить</button>` : ''}</td>
+        </tr>`).join('');
+      tbody.querySelectorAll('.restore-btn').forEach((btn) => {
+        btn.addEventListener('click', () => restoreArchived(btn.dataset.type, btn.dataset.id));
+      });
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="5" class="text-danger py-2">${escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
+  async function restoreArchived(type, id) {
+    if (!confirm('Восстановить письмо из архива?')) return;
+    try {
+      await apiFetch(`${API_BASE}/letters.php?type=${type}&action=restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: Number(id) }),
+      });
+      window.showSuccess?.('Письмо восстановлено');
+      await loadArchive(_archiveType);
+      await refreshLetters();
+    } catch (err) {
+      window.showError?.(err.message);
+    }
+  }
+
+  window.loadArchive = loadArchive;
+
+  document.addEventListener('shown.bs.tab', (e) => {
+    if (e.target?.id === 'tab-archive') loadArchive(_archiveType);
+  });
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-archive-type]');
+    if (btn && document.getElementById('pane-archive')?.classList.contains('active')) {
+      loadArchive(btn.dataset.archiveType);
+    }
+  });
+
+  // ── Templates ─────────────────────────────────────────────────────────────
+
+  let _templatePickerModal = null;
+  let _templateTargetType = null;
+
+  function getTemplatePickerModal() {
+    if (!_templatePickerModal) {
+      const el = document.getElementById('templatePickerModal');
+      if (el) _templatePickerModal = new bootstrap.Modal(el);
+    }
+    return _templatePickerModal;
+  }
+
+  async function openTemplatePicker(type) {
+    _templateTargetType = type;
+    const listEl = document.getElementById('templatePickerList');
+    if (!listEl) return;
+    listEl.innerHTML = '<div class="text-muted text-center py-3">Загрузка шаблонов...</div>';
+    getTemplatePickerModal()?.show();
+    try {
+      const data = await apiFetch(`${API_BASE}/templates.php?letter_type=${encodeURIComponent(type)}`);
+      const templates = data.templates || data || [];
+      if (!templates.length) {
+        listEl.innerHTML = '<div class="text-muted text-center py-3">Шаблоны не найдены</div>';
+        return;
+      }
+      listEl.innerHTML = templates.map((tpl) =>
+        `<button class="list-group-item list-group-item-action" data-tpl-id="${tpl.id}">
+          <div class="fw-semibold">${escapeHtml(tpl.name)}</div>
+          <div class="small text-muted">${escapeHtml(tpl.organization || '')}${tpl.subject ? ` · ${escapeHtml(tpl.subject)}` : ''}</div>
+        </button>`
+      ).join('');
+      listEl.querySelectorAll('[data-tpl-id]').forEach((btn) => {
+        const tplId = btn.dataset.tplId;
+        btn.addEventListener('click', () => {
+          const tpl = templates.find((t) => String(t.id) === String(tplId));
+          if (tpl) applyTemplate(tpl, _templateTargetType);
+          getTemplatePickerModal()?.hide();
+        });
+      });
+    } catch (err) {
+      listEl.innerHTML = `<div class="text-danger py-2">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  function applyTemplate(tpl, type) {
+    if (type === 'incoming') {
+      const orgEl = document.getElementById('incOrg');
+      const subjEl = document.getElementById('incSubject');
+      const noteEl = document.getElementById('incNote');
+      const catEl = document.getElementById('incType');
+      if (orgEl && tpl.organization) orgEl.value = tpl.organization;
+      if (subjEl && tpl.subject) subjEl.value = tpl.subject;
+      if (noteEl && tpl.note) noteEl.value = tpl.note;
+      if (catEl && tpl.category) catEl.value = tpl.category;
+    } else {
+      const orgEl = document.getElementById('outOrg');
+      const subjEl = document.getElementById('outSubject');
+      const noteEl = document.getElementById('outNote');
+      if (orgEl && tpl.organization) orgEl.value = tpl.organization;
+      if (subjEl && tpl.subject) subjEl.value = tpl.subject;
+      if (noteEl && tpl.note) noteEl.value = tpl.note;
+    }
+    window.showSuccess?.('Шаблон применён');
+  }
+
+  async function saveCurrentFormAsTemplate(type) {
+    const name = prompt('Название шаблона:');
+    if (!name || !name.trim()) return;
+    let organization, subject, note, category;
+    if (type === 'incoming') {
+      organization = document.getElementById('incOrg')?.value.trim() || '';
+      subject = document.getElementById('incSubject')?.value.trim() || '';
+      note = document.getElementById('incNote')?.value.trim() || '';
+      category = document.getElementById('incType')?.value || 'KK';
+    } else {
+      organization = document.getElementById('outOrg')?.value.trim() || '';
+      subject = document.getElementById('outSubject')?.value.trim() || '';
+      note = document.getElementById('outNote')?.value.trim() || '';
+      category = 'KK';
+    }
+    try {
+      await apiFetch(`${API_BASE}/templates.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), letter_type: type, organization, subject, note, category }),
+      });
+      window.showSuccess?.('Шаблон сохранён');
+    } catch (err) {
+      window.showError?.(err.message);
+    }
+  }
+
+  window.openTemplatePicker = openTemplatePicker;
+  window.saveCurrentFormAsTemplate = saveCurrentFormAsTemplate;
 })(window);

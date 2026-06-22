@@ -22,6 +22,8 @@ class LettersController extends ApiController
             $this->type = $this->getQueryParam('type', 'incoming');
             $this->table = $this->type === 'incoming' ? 'incoming_letters' : 'outgoing_letters';
 
+            $this->ensureSoftDeleteColumns();
+
             switch ($_SERVER['REQUEST_METHOD']) {
                 case 'GET':
                     $this->handleGet();
@@ -29,7 +31,16 @@ class LettersController extends ApiController
                 case 'POST':
                     $this->requireWriteAccess();
                     $this->requireCsrf();
-                    $this->handleCreate();
+                    $action = $this->getQueryParam('action', '');
+                    if ($action === 'restore') {
+                        $this->requireDeleteAccess();
+                        $this->handleRestore();
+                    } elseif ($action === 'bulk_restore') {
+                        $this->requireDeleteAccess();
+                        $this->handleBulkRestore();
+                    } else {
+                        $this->handleCreate();
+                    }
                     break;
                 case 'PUT':
                     $this->requireWriteAccess();
@@ -39,7 +50,11 @@ class LettersController extends ApiController
                 case 'DELETE':
                     $this->requireDeleteAccess();
                     $this->requireCsrf();
-                    $this->handleDelete();
+                    if ($this->getQueryParam('action') === 'bulk') {
+                        $this->handleBulkDelete();
+                    } else {
+                        $this->handleDelete();
+                    }
                     break;
                 default:
                     $this->error('Метод не поддерживается', 405);
@@ -73,9 +88,11 @@ class LettersController extends ApiController
         $limit = max(1, min(500, (int)$this->getQueryParam('limit', 50)));
         $page = max(1, (int)$this->getQueryParam('page', 1));
         $offset = ($page - 1) * $limit;
+        $archived = $this->getQueryParam('archived', '0') === '1';
+        $deletedFilter = $archived ? 'AND deleted_at IS NOT NULL' : 'AND (deleted_at IS NULL OR deleted_at = \'0000-00-00 00:00:00\')';
 
         if ($regionId) {
-            $sql = "SELECT * FROM {$this->table} WHERE region_id = ? ORDER BY date DESC, seq DESC";
+            $sql = "SELECT * FROM {$this->table} WHERE region_id = ? {$deletedFilter} ORDER BY date DESC, seq DESC";
             if ($hasPagination) {
                 $sql .= ' LIMIT ? OFFSET ?';
             }
@@ -87,7 +104,7 @@ class LettersController extends ApiController
             }
             $stmt->execute();
         } else {
-            $sql = "SELECT * FROM {$this->table} ORDER BY date DESC, seq DESC";
+            $sql = "SELECT * FROM {$this->table} WHERE 1=1 {$deletedFilter} ORDER BY date DESC, seq DESC";
             if ($hasPagination) {
                 $sql .= ' LIMIT ? OFFSET ?';
             }
@@ -100,14 +117,27 @@ class LettersController extends ApiController
         }
 
         $letters = $stmt->fetchAll();
+        $letterIds = array_column($letters, 'id');
+
+        // Счётчики сканов одним запросом вместо N+1
+        $scansCount = [];
+        if ($letterIds) {
+            $placeholders = implode(',', array_fill(0, count($letterIds), '?'));
+            $stmtScans = $this->db->prepare(
+                "SELECT letter_id, COUNT(*) AS cnt FROM letter_scans
+                 WHERE letter_type = ? AND letter_id IN ($placeholders)
+                 GROUP BY letter_id"
+            );
+            $stmtScans->execute(array_merge([$this->type], $letterIds));
+            foreach ($stmtScans->fetchAll() as $row) {
+                $scansCount[$row['letter_id']] = (int)$row['cnt'];
+            }
+        }
         foreach ($letters as &$letter) {
-            $stmt2 = $this->db->prepare('SELECT COUNT(*) as count FROM letter_scans WHERE letter_type = ? AND letter_id = ?');
-            $stmt2->execute([$this->type, $letter['id']]);
-            $letter['scans_count'] = (int)$stmt2->fetchColumn();
+            $letter['scans_count'] = $scansCount[$letter['id']] ?? 0;
         }
         unset($letter);
 
-        $letterIds = array_column($letters, 'id');
         $members = LetterPersistenceService::fetchLetterMembers($this->db, $this->type, $letterIds);
         $recipients = LetterPersistenceService::fetchLetterRecipients($this->db, $this->type, $letterIds);
         foreach ($letters as &$letter) {
@@ -232,41 +262,138 @@ class LettersController extends ApiController
             $this->error('ID не указан', 400);
         }
 
-        $stmt = $this->db->prepare("SELECT region_id FROM {$this->table} WHERE id = ?");
+        $stmt = $this->db->prepare("SELECT region_id, deleted_at FROM {$this->table} WHERE id = ?");
         $stmt->execute([$id]);
         $letterRow = $stmt->fetch();
         if (!$letterRow) {
             $this->error('Письмо не найдено', 404);
         }
         LetterService::assertRegionAccess($letterRow);
-        $regionId = (int)$letterRow['region_id'];
 
-        try {
-            $this->db->beginTransaction();
-            if ($this->type === 'outgoing') {
-                $this->db->prepare('UPDATE incoming_letters SET linked_outgoing_id = NULL WHERE linked_outgoing_id = ?')->execute([$id]);
-            } else {
-                $this->db->prepare('UPDATE outgoing_letters SET incoming_ref_id = NULL WHERE incoming_ref_id = ?')->execute([$id]);
-            }
-            $this->db->prepare('DELETE FROM letter_members WHERE letter_type = ? AND letter_id = ?')->execute([$this->type, $id]);
-            $this->db->prepare('DELETE FROM letter_recipients WHERE letter_type = ? AND letter_id = ?')->execute([$this->type, $id]);
-            LetterService::deleteScansForLetter($this->db, $this->type, $id);
-            $this->db->prepare("DELETE FROM {$this->table} WHERE id = ?")->execute([$id]);
-            $this->logAction($this->table, $id, 'DELETE', ['id' => $id], null);
-            $this->db->commit();
-        } catch (\Throwable $e) {
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
-            }
-            throw $e;
-        }
+        // Soft delete — move to archive
+        $deletedBy = (int)($_SESSION['user_id'] ?? 0);
+        $this->db->prepare("UPDATE {$this->table} SET deleted_at = NOW(), deleted_by = ? WHERE id = ?")
+            ->execute([$deletedBy, $id]);
+        $this->logAction($this->table, $id, 'DELETE', ['id' => $id], null);
 
         pusherTrigger('council-documents', 'documents-updated', [
             'action' => 'delete',
             'type' => $this->type,
             'id' => $id,
         ]);
-        $this->json(['message' => 'Письмо успешно удалено']);
+        $this->json(['message' => 'Письмо перемещено в архив']);
+    }
+
+    private function handleRestore(): void
+    {
+        $data = $this->getJsonInput() ?? [];
+        $id   = (int)($data['id'] ?? $this->getQueryParam('id') ?? 0);
+        if ($id <= 0) {
+            $this->error('ID не указан', 400);
+        }
+
+        $stmt = $this->db->prepare("SELECT region_id, deleted_at FROM {$this->table} WHERE id = ?");
+        $stmt->execute([$id]);
+        $letterRow = $stmt->fetch();
+        if (!$letterRow) {
+            $this->error('Письмо не найдено', 404);
+        }
+        LetterService::assertRegionAccess($letterRow);
+        if (!$letterRow['deleted_at']) {
+            $this->error('Письмо не находится в архиве', 400);
+        }
+
+        $this->db->prepare("UPDATE {$this->table} SET deleted_at = NULL, deleted_by = NULL WHERE id = ?")
+            ->execute([$id]);
+        $this->logAction($this->table, $id, 'UPDATE', ['deleted_at' => $letterRow['deleted_at']], ['deleted_at' => null]);
+
+        pusherTrigger('council-documents', 'documents-updated', [
+            'action' => 'restore',
+            'type' => $this->type,
+            'id' => $id,
+        ]);
+        $this->json(['message' => 'Письмо восстановлено из архива']);
+    }
+
+    private function handleBulkDelete(): void
+    {
+        $data = $this->getJsonInput() ?? [];
+        $ids  = array_values(array_filter(array_map('intval', $data['ids'] ?? [])));
+        if (empty($ids) || count($ids) > 100) {
+            $this->error('ids должен содержать от 1 до 100 элементов', 400);
+        }
+
+        $deletedBy   = (int)($_SESSION['user_id'] ?? 0);
+        $regionId    = $this->resolveRegionIdForRead();
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        if ($regionId) {
+            $params = array_merge($ids, [$deletedBy, $deletedBy], $ids, [$regionId]);
+            $stmt   = $this->db->prepare(
+                "UPDATE {$this->table} SET deleted_at = NOW(), deleted_by = ? WHERE id IN ({$placeholders}) AND region_id = ? AND deleted_at IS NULL"
+            );
+            $params = array_merge([$deletedBy], $ids, [$regionId]);
+        } else {
+            $params = array_merge([$deletedBy], $ids);
+            $stmt   = $this->db->prepare(
+                "UPDATE {$this->table} SET deleted_at = NOW(), deleted_by = ? WHERE id IN ({$placeholders}) AND deleted_at IS NULL"
+            );
+        }
+        $stmt->execute($params);
+        $affected = $stmt->rowCount();
+
+        pusherTrigger('council-documents', 'documents-updated', ['action' => 'bulk_delete', 'type' => $this->type]);
+        $this->json(['archived' => $affected, 'message' => "Перемещено в архив: {$affected}"]);
+    }
+
+    private function handleBulkRestore(): void
+    {
+        $data = $this->getJsonInput() ?? [];
+        $ids  = array_values(array_filter(array_map('intval', $data['ids'] ?? [])));
+        if (empty($ids) || count($ids) > 100) {
+            $this->error('ids должен содержать от 1 до 100 элементов', 400);
+        }
+
+        $regionId     = $this->resolveRegionIdForRead();
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        if ($regionId) {
+            $params = array_merge($ids, [$regionId]);
+            $stmt   = $this->db->prepare(
+                "UPDATE {$this->table} SET deleted_at = NULL, deleted_by = NULL WHERE id IN ({$placeholders}) AND region_id = ? AND deleted_at IS NOT NULL"
+            );
+        } else {
+            $params = $ids;
+            $stmt   = $this->db->prepare(
+                "UPDATE {$this->table} SET deleted_at = NULL, deleted_by = NULL WHERE id IN ({$placeholders}) AND deleted_at IS NOT NULL"
+            );
+        }
+        $stmt->execute($params);
+        $affected = $stmt->rowCount();
+
+        pusherTrigger('council-documents', 'documents-updated', ['action' => 'bulk_restore', 'type' => $this->type]);
+        $this->json(['restored' => $affected, 'message' => "Восстановлено: {$affected}"]);
+    }
+
+    private function ensureSoftDeleteColumns(): void
+    {
+        static $checked = [];
+        if (isset($checked[$this->table])) {
+            return;
+        }
+        $checked[$this->table] = true;
+        try {
+            $driver = $this->db->getAttribute(\PDO::ATTR_DRIVER_NAME);
+            if ($driver !== 'mysql') {
+                return;
+            }
+            $col = $this->db->query("SHOW COLUMNS FROM {$this->table} LIKE 'deleted_at'")->fetch();
+            if (!$col) {
+                $this->db->exec("ALTER TABLE {$this->table} ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL, ADD COLUMN deleted_by INT NULL DEFAULT NULL");
+            }
+        } catch (\Throwable $e) {
+            error_log('ensureSoftDeleteColumns failed: ' . $e->getMessage());
+        }
     }
 
     private function validateLetter(array $data): void

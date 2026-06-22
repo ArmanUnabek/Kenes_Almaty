@@ -198,4 +198,53 @@
   });
 
   window.openNotifyModal = openNotifyModal;
+
+  // ── Browser Push Notifications ────────────────────────────────────────────
+
+  function requestNotificationPermission() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }
+
+  function showBrowserNotification(title, body, icon) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    try {
+      new Notification(title, { body: body || '', icon: icon || '/api/icon-192.png' });
+    } catch (e) {
+      console.warn('Notification failed', e);
+    }
+  }
+
+  function checkDeadlineNotifications() {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (!window.store?.incoming) return;
+    const today = new Date();
+    const overdue = (window.store.incoming || []).filter((l) =>
+      window.AppUtils?.isLetterOverdue?.(l, today)
+    );
+    const soon = (window.store.incoming || []).filter((l) =>
+      window.AppUtils?.isLetterDueSoon?.(l, today) && !window.AppUtils?.isLetterOverdue?.(l, today)
+    );
+    if (overdue.length > 0) {
+      showBrowserNotification(
+        'Журнал ОС — Просроченные письма',
+        `${overdue.length} письм(а) просрочены`
+      );
+    } else if (soon.length > 0) {
+      showBrowserNotification(
+        'Журнал ОС — Срок истекает',
+        `${soon.length} письм(а) требуют ответа в ближайшее время`
+      );
+    }
+  }
+
+  window.requestNotificationPermission = requestNotificationPermission;
+  window.showBrowserNotification = showBrowserNotification;
+  window.checkDeadlineNotifications = checkDeadlineNotifications;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(requestNotificationPermission, 2000);
+  });
 })(window);

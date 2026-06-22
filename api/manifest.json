@@ -1,0 +1,26 @@
+{
+  "name": "Журнал ОС — Кенес Алматы",
+  "short_name": "Журнал ОС",
+  "description": "Система учёта обращений Общественного Совета",
+  "start_url": "/api/",
+  "scope": "/api/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0F1B33",
+  "theme_color": "#0F1B33",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "/api/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/api/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -53,19 +53,23 @@ class PhotoUploadController extends ApiController
 
             $extension = $this->getFileExtension($file['tmp_name']);
             $filename = 'member_' . $member_id . '_' . time() . '.' . $extension;
-            $filepath = UPLOAD_DIR . $filename;
+            $absPath = UPLOAD_DIR . $filename;              // абсолютный, для записи/удаления
+            $dbPath  = 'uploads/photos/' . $filename;      // относительный, хранится в БД
 
             $oldPhoto = $this->memberRepo->getPhotoPath($member_id);
-            if ($oldPhoto && file_exists($oldPhoto)) {
-                @unlink($oldPhoto);
+            if ($oldPhoto) {
+                $oldAbsPath = APP_ROOT . '/' . ltrim($oldPhoto, '/');
+                if (file_exists($oldAbsPath)) {
+                    @unlink($oldAbsPath);
+                }
             }
 
-            if (!move_uploaded_file($file['tmp_name'], $filepath)) {
+            if (!move_uploaded_file($file['tmp_name'], $absPath)) {
                 $this->error('Ошибка сохранения файла', 500);
             }
 
-            $this->memberRepo->updatePhotoPath($member_id, $filepath);
-            $this->logAction('os_members', $member_id, 'UPDATE_PHOTO', null, ['photo_path' => $filepath]);
+            $this->memberRepo->updatePhotoPath($member_id, $dbPath);
+            $this->logAction('os_members', $member_id, 'UPDATE_PHOTO', null, ['photo_path' => $dbPath]);
 
             $this->success([
                 'photo_url' => MemberRepository::photoApiUrl($member_id, (string)time()),
