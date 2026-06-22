@@ -117,26 +117,27 @@ class LettersController extends ApiController
         }
 
         $letters = $stmt->fetchAll();
+        $letterIds = array_column($letters, 'id');
 
-        // Batch-fetch scan counts to avoid N+1 queries
-        $scanCounts = [];
-        if ($letters) {
-            $ids = array_column($letters, 'id');
-            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        // Счётчики сканов одним запросом вместо N+1
+        $scansCount = [];
+        if ($letterIds) {
+            $placeholders = implode(',', array_fill(0, count($letterIds), '?'));
             $stmtScans = $this->db->prepare(
-                "SELECT letter_id, COUNT(*) AS cnt FROM letter_scans WHERE letter_type = ? AND letter_id IN ({$placeholders}) GROUP BY letter_id"
+                "SELECT letter_id, COUNT(*) AS cnt FROM letter_scans
+                 WHERE letter_type = ? AND letter_id IN ($placeholders)
+                 GROUP BY letter_id"
             );
-            $stmtScans->execute(array_merge([$this->type], $ids));
+            $stmtScans->execute(array_merge([$this->type], $letterIds));
             foreach ($stmtScans->fetchAll() as $row) {
-                $scanCounts[(int)$row['letter_id']] = (int)$row['cnt'];
+                $scansCount[$row['letter_id']] = (int)$row['cnt'];
             }
         }
         foreach ($letters as &$letter) {
-            $letter['scans_count'] = $scanCounts[(int)$letter['id']] ?? 0;
+            $letter['scans_count'] = $scansCount[$letter['id']] ?? 0;
         }
         unset($letter);
 
-        $letterIds = array_column($letters, 'id');
         $members = LetterPersistenceService::fetchLetterMembers($this->db, $this->type, $letterIds);
         $recipients = LetterPersistenceService::fetchLetterRecipients($this->db, $this->type, $letterIds);
         foreach ($letters as &$letter) {

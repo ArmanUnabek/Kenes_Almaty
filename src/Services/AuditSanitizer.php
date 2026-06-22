@@ -7,7 +7,7 @@ namespace App\Services;
  */
 class AuditSanitizer
 {
-    private const REDACTED_KEYS = ['password', 'password_hash', 'password_confirm', 'token', 'csrf_token'];
+    private const REDACTED_KEYS = ['password', 'password_hash', 'password_confirm', 'token', 'csrf_token', 'totp_secret', 'totp_backup_codes'];
 
     public static function sanitize(?array $data): ?array
     {

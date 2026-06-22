@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS users (
     last_login TIMESTAMP NULL COMMENT 'Последний вход',
     totp_secret VARCHAR(64) NULL COMMENT 'Base32 секрет TOTP (2FA)',
     totp_enabled BOOLEAN DEFAULT FALSE COMMENT 'Включена ли двухфакторная аутентификация',
+    totp_backup_codes TEXT NULL COMMENT 'JSON: хэши резервных кодов 2FA',
+    telegram_chat_id VARCHAR(50) NULL DEFAULT NULL COMMENT 'Telegram chat_id для уведомлений',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE SET NULL,

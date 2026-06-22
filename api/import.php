@@ -143,6 +143,7 @@ foreach ($lines as $line) {
                 $category = 'KK';
             }
 
+            $db->beginTransaction();
             $seq = LetterService::computeNextSeq($db, 'incoming_letters', $regionId);
 
             $stmt = $db->prepare("
@@ -166,6 +167,7 @@ foreach ($lines as $line) {
             AuditLogger::log($db, 'incoming_letters', $letterId, 'IMPORT_CSV', null, [
                 'seq' => $seq, 'organization' => $organization,
             ], $userId);
+            $db->commit();
 
         } else {
             // date;outgoing_number;organization;subject;note;outgoing_type
@@ -189,6 +191,7 @@ foreach ($lines as $line) {
                 continue;
             }
 
+            $db->beginTransaction();
             $seq = LetterService::computeNextSeq($db, 'outgoing_letters', $regionId);
 
             $stmt = $db->prepare("
@@ -212,11 +215,15 @@ foreach ($lines as $line) {
             AuditLogger::log($db, 'outgoing_letters', $letterId, 'IMPORT_CSV', null, [
                 'seq' => $seq, 'organization' => $organization,
             ], $userId);
+            $db->commit();
         }
 
         $imported++;
 
     } catch (\Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
         $errors[] = ['row' => $rowNum, 'message' => 'Ошибка вставки: ' . $e->getMessage()];
         $skipped++;
         error_log('import.php row ' . $rowNum . ': ' . $e->getMessage());
