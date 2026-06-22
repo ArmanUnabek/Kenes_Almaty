@@ -6,11 +6,26 @@ require_once __DIR__ . '/../src/Middleware/CsrfMiddleware.php';
 use App\Middleware\CsrfMiddleware;
 use App\Middleware\RateLimiter;
 use App\Services\TotpService;
+use App\Services\SecurityAuditService;
+use App\Services\EmailService;
 use App\Services\FileCache;
 
-header('Content-Type: application/json; charset=utf-8');
-
 $action = $_GET['action'] ?? $_POST['action'] ?? 'check';
+
+// tg_login redirects to the app rather than returning JSON — handle it first
+if ($action === 'tg_login') {
+    try {
+        $db = getDBConnection();
+        handleTgLogin($db);
+    } catch (\Throwable $e) {
+        error_log('tg_login failed: ' . $e->getMessage());
+        http_response_code(500);
+        echo 'Internal error';
+    }
+    exit;
+}
+
+header('Content-Type: application/json; charset=utf-8');
 
 try {
     $db = getDBConnection();
@@ -42,6 +57,18 @@ try {
 
         case 'totp_disable':
             handleTotpDisable($db);
+            break;
+
+        case 'tg_link_code':
+            handleTgLinkCode($db);
+            break;
+
+        case 'forgot_password':
+            handleForgotPassword($db);
+            break;
+
+        case 'reset_password':
+            handleResetPassword($db);
             break;
 
         case 'check':
@@ -93,6 +120,10 @@ function handleLogin($db) {
         } catch (\Throwable $e) {
             error_log('Failed to log login attempt: ' . $e->getMessage());
         }
+        try {
+            SecurityAuditService::log($db, 'LOGIN_FAILED', 'security_events', 0,
+                ['username' => $username, 'ip' => $ip], null);
+        } catch (\Throwable $e) {}
         http_response_code(401);
         echo json_encode(['error' => 'Неверный логин или пароль'], JSON_ENCODE_FLAGS);
         return;
@@ -137,6 +168,17 @@ function handleLogin($db) {
         }
     }
 
+    // Enforce TOTP for admin accounts
+    $isAdminRole = normalizeRole($user['role'] ?? '') === 'admin';
+    if ($isAdminRole && empty($user['totp_enabled'])) {
+        http_response_code(403);
+        echo json_encode([
+            'error'               => 'Администратор обязан настроить двухфакторную аутентификацию перед входом. Обратитесь к другому администратору.',
+            'totp_setup_required' => true,
+        ], JSON_ENCODE_FLAGS);
+        return;
+    }
+
     session_regenerate_id(true);
 
     $_SESSION['user_id'] = $user['id'];
@@ -145,7 +187,7 @@ function handleLogin($db) {
     $_SESSION['region_id'] = $user['region_id'];
     $_SESSION['last_activity_at'] = time();
 
-    if (normalizeRole($user['role'] ?? '') === 'admin') {
+    if ($isAdminRole) {
         $defaultRegion = $user['region_id'] ? (int)$user['region_id'] : 1;
         $_SESSION['active_region_id'] = $defaultRegion;
     }
@@ -348,6 +390,193 @@ function handleSwitchRegion($db) {
         'user' => $user,
         'message' => 'Регион переключён'
     ], JSON_ENCODE_FLAGS);
+}
+
+function handleTgLogin(\PDO $db): void
+{
+    $token = $_GET['token'] ?? '';
+    if ($token === '' || strlen($token) !== 64) {
+        http_response_code(400);
+        echo 'Invalid token';
+        return;
+    }
+
+    // Delete stale expired tokens while we're here
+    try {
+        $db->exec("DELETE FROM telegram_login_tokens WHERE expires_at < NOW()");
+    } catch (\Throwable $e) {}
+
+    $stmt = $db->prepare('SELECT * FROM telegram_login_tokens WHERE token = ? AND expires_at > NOW() AND used_at IS NULL');
+    $stmt->execute([$token]);
+    $row = $stmt->fetch();
+
+    if (!$row) {
+        http_response_code(403);
+        echo 'Ссылка недействительна или уже была использована';
+        return;
+    }
+
+    $stmt2 = $db->prepare('SELECT id, username, full_name, role, region_id FROM users WHERE id = ? AND is_active = TRUE');
+    $stmt2->execute([$row['user_id']]);
+    $user = $stmt2->fetch();
+
+    if (!$user) {
+        http_response_code(403);
+        echo 'Пользователь не найден';
+        return;
+    }
+
+    // Mark token as used
+    $db->prepare('UPDATE telegram_login_tokens SET used_at = NOW() WHERE id = ?')->execute([$row['id']]);
+
+    // Start session
+    if (function_exists('configureSessionCookie')) {
+        configureSessionCookie();
+    }
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    session_regenerate_id(true);
+
+    $_SESSION['user_id']          = $user['id'];
+    $_SESSION['username']         = $user['username'];
+    $_SESSION['role']             = $user['role'];
+    $_SESSION['region_id']        = $user['region_id'];
+    $_SESSION['last_activity_at'] = time();
+
+    $db->prepare('UPDATE users SET last_login = ? WHERE id = ?')->execute([date('Y-m-d H:i:s'), $user['id']]);
+    try {
+        $db->prepare('INSERT INTO activity_logs (user_id, action, entity_type, ip_address) VALUES (?, ?, ?, ?)')
+           ->execute([$user['id'], 'tg_login', 'user', $_SERVER['REMOTE_ADDR'] ?? '']);
+    } catch (\Throwable $e) {}
+
+    header('Location: /api/');
+}
+
+function handleTgLinkCode(\PDO $db): void
+{
+    checkAuth();
+    CsrfMiddleware::requireVerification();
+
+    $userId = (int)($_SESSION['user_id'] ?? 0);
+    if ($userId <= 0) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Требуется авторизация'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
+    // Delete old unused codes for this user
+    try {
+        $db->prepare('DELETE FROM telegram_link_codes WHERE user_id = ? AND used_at IS NULL')->execute([$userId]);
+    } catch (\Throwable $e) {}
+
+    $code      = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    $expiresAt = date('Y-m-d H:i:s', time() + 600); // 10 minutes
+
+    $db->prepare('INSERT INTO telegram_link_codes (user_id, code, expires_at) VALUES (?, ?, ?)')
+       ->execute([$userId, $code, $expiresAt]);
+
+    echo json_encode([
+        'code'       => $code,
+        'expires_in' => 600,
+        'bot'        => defined('TELEGRAM_BOT_USERNAME') ? TELEGRAM_BOT_USERNAME : '',
+    ], JSON_ENCODE_FLAGS);
+}
+
+function handleForgotPassword(\PDO $db): void
+{
+    $data = json_decode(file_get_contents('php://input'), true) ?: [];
+    $email = trim($data['email'] ?? $_POST['email'] ?? '');
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Укажите корректный email'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    if (!RateLimiter::check('forgot_' . $ip, 5, 900)) {
+        http_response_code(429);
+        echo json_encode(['error' => 'Слишком много попыток. Подождите 15 минут.'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
+    $stmt = $db->prepare('SELECT id, full_name, username FROM users WHERE email = ? AND is_active = TRUE');
+    $stmt->execute([$email]);
+    $user = $stmt->fetch();
+
+    // Always respond OK to avoid user enumeration
+    if ($user) {
+        // Invalidate old tokens
+        $db->prepare('DELETE FROM password_reset_tokens WHERE user_id = ?')->execute([$user['id']]);
+
+        $token     = bin2hex(random_bytes(32));
+        $expiresAt = date('Y-m-d H:i:s', time() + 3600); // 1 hour
+        $db->prepare('INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)')
+           ->execute([$user['id'], $token, $expiresAt]);
+
+        $appUrl   = defined('APP_URL') ? rtrim(APP_URL, '/') : '';
+        $resetUrl = $appUrl . '/login.html?action=reset&token=' . $token;
+        $name     = htmlspecialchars($user['full_name'] ?? $user['username'], ENT_QUOTES, 'UTF-8');
+
+        $bodyHtml = "
+            <p>Здравствуйте, <strong>{$name}</strong>!</p>
+            <p>Вы запросили сброс пароля для учётной записи <em>{$user['username']}</em>.</p>
+            <p><a href=\"{$resetUrl}\">Нажмите здесь для сброса пароля</a></p>
+            <p>Ссылка действительна <strong>1 час</strong>. Если вы не запрашивали сброс — проигнорируйте это письмо.</p>
+        ";
+
+        try {
+            EmailService::enqueue($db, $email, 'Сброс пароля — Журнал ОС', $bodyHtml);
+        } catch (\Throwable $e) {
+            error_log('handleForgotPassword: email enqueue failed: ' . $e->getMessage());
+        }
+    }
+
+    echo json_encode(['message' => 'Если указанный email зарегистрирован, вы получите письмо со ссылкой для сброса пароля.'], JSON_ENCODE_FLAGS);
+}
+
+function handleResetPassword(\PDO $db): void
+{
+    $data  = json_decode(file_get_contents('php://input'), true) ?: [];
+    $token = trim($data['token'] ?? '');
+    $pass  = $data['password'] ?? '';
+
+    if ($token === '' || strlen($token) !== 64) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Недействительная ссылка для сброса пароля'], JSON_ENCODE_FLAGS);
+        return;
+    }
+    if (strlen($pass) < 8) {
+        http_response_code(422);
+        echo json_encode(['error' => 'Пароль должен содержать минимум 8 символов'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
+    // Clean expired tokens
+    try { $db->exec("DELETE FROM password_reset_tokens WHERE expires_at < NOW()"); } catch (\Throwable $e) {}
+
+    $stmt = $db->prepare('SELECT * FROM password_reset_tokens WHERE token = ? AND used_at IS NULL');
+    $stmt->execute([$token]);
+    $row = $stmt->fetch();
+
+    if (!$row) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Ссылка недействительна или уже использована'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
+    $hash = password_hash($pass, PASSWORD_DEFAULT);
+    $db->prepare('UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?')
+       ->execute([$hash, $row['user_id']]);
+    $db->prepare('UPDATE password_reset_tokens SET used_at = NOW() WHERE id = ?')
+       ->execute([$row['id']]);
+
+    // Invalidate all sessions for this user
+    try {
+        $db->prepare('DELETE FROM password_reset_tokens WHERE user_id = ?')->execute([$row['user_id']]);
+    } catch (\Throwable $e) {}
+
+    echo json_encode(['message' => 'Пароль успешно изменён. Теперь вы можете войти.'], JSON_ENCODE_FLAGS);
 }
 
 function handleCheck($db) {

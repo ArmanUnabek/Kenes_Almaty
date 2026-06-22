@@ -123,12 +123,12 @@ abstract class ApiController
         return is_array($decoded) ? $decoded : null;
     }
 
-    protected function getQueryParam(string $key, $default = null)
+    protected function getQueryParam(string $key, mixed $default = null): mixed
     {
         return $_GET[$key] ?? $default;
     }
 
-    protected function getPostParam(string $key, $default = null)
+    protected function getPostParam(string $key, mixed $default = null): mixed
     {
         return $_POST[$key] ?? $default;
     }

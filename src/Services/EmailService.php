@@ -16,8 +16,9 @@ class EmailService
     }
 
     /**
-     * Send email via SMTP using raw socket (no external library needed).
-     * Supports STARTTLS on port 587, plain SMTP on port 25, SSL on port 465.
+     * Send email via PHPMailer when available, with fallback to raw SMTP socket.
+     * PHPMailer handles TLS certificate verification, AUTH PLAIN/LOGIN, and proper
+     * RFC compliance. The raw socket fallback is used when PHPMailer is not installed.
      */
     public static function sendSmtp(
         string $to,
@@ -37,6 +38,60 @@ class EmailService
             return false;
         }
 
+        // Use PHPMailer if available (preferred: proper TLS, DKIM-ready, RFC-compliant)
+        if (class_exists(\PHPMailer\PHPMailer\PHPMailer::class)) {
+            return self::sendWithPhpMailer($to, $subject, $bodyHtml, $bodyText ?? strip_tags($bodyHtml),
+                                           $host, $port, $user, $pass, $from, $fromName);
+        }
+
+        return self::sendWithRawSocket($to, $subject, $bodyHtml, $bodyText, $host, $port, $user, $pass, $from, $fromName);
+    }
+
+    private static function sendWithPhpMailer(
+        string $to, string $subject, string $bodyHtml, string $bodyText,
+        string $host, int $port, string $user, string $pass, string $from, string $fromName
+    ): bool {
+        try {
+            $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+            $mail->isSMTP();
+            $mail->Host       = $host;
+            $mail->Port       = $port;
+            $mail->CharSet    = 'UTF-8';
+            $mail->Encoding   = 'base64';
+
+            if (!empty($user)) {
+                $mail->SMTPAuth   = true;
+                $mail->Username   = $user;
+                $mail->Password   = $pass;
+            }
+
+            if ($port === 465) {
+                $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
+            } elseif ($port === 587) {
+                $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+            }
+
+            $mail->setFrom($from, $fromName);
+            $mail->addAddress($to);
+            $mail->Subject = $subject;
+            $mail->Body    = $bodyHtml;
+            $mail->AltBody = $bodyText;
+            $mail->isHTML(true);
+
+            return $mail->send();
+        } catch (\Throwable $e) {
+            error_log('EmailService PHPMailer: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Legacy raw socket SMTP (fallback when PHPMailer is not installed).
+     */
+    private static function sendWithRawSocket(
+        string $to, string $subject, string $bodyHtml, ?string $bodyText,
+        string $host, int $port, string $user, string $pass, string $from, string $fromName
+    ): bool {
         // Build multipart message
         $boundary = md5(uniqid((string)time(), true));
         $textPart = $bodyText ?? strip_tags($bodyHtml);

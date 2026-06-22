@@ -61,7 +61,10 @@ foreach ($dirs as $dir) {
     }
     // Ensure writable
     if (is_dir($dir) && !is_writable($dir)) {
-        @chmod($dir, 0750);
+        if (!@chmod($dir, 0750)) {
+            error_log("setup.php: chmod(0750) failed for directory: {$dir}");
+            $dirResults[$dir] = 'ОШИБКА прав доступа (chmod не выполнен)';
+        }
     }
 }
 
