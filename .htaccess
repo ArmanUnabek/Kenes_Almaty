@@ -12,11 +12,11 @@
 </IfModule>
 
 <IfModule mod_headers.c>
-  Header set Content-Security-Policy "default-src 'self' https:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:;"
   Header set X-Content-Type-Options "nosniff"
   Header set X-Frame-Options "SAMEORIGIN"
-  Header set X-XSS-Protection "1; mode=block"
   Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  Header set Content-Security-Policy "default-src 'self' https:; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:;"
 </IfModule>
 
 Options -Indexes
@@ -29,48 +29,37 @@ RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_URI} !^/api/
 RewriteRule ^.*$ index.php [L]
 
-RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule ^(.*)$ $1 [R=200,L]
-
-<IfModule mod_headers.c>
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-CSRF-Token"
-    Header always set X-Content-Type-Options "nosniff"
-    Header always set X-Frame-Options "SAMEORIGIN"
-    Header always set Referrer-Policy "strict-origin-when-cross-origin"
-    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+# PHP-лимиты загрузки заданы в .user.ini (php_value в .htaccess ломает FPM/CGI → 500).
+# Если PHP всё же работает как модуль Apache — применим их и здесь.
+<IfModule mod_php.c>
+  php_value upload_max_filesize 20M
+  php_value post_max_size 20M
+  php_value max_execution_time 300
+  php_value max_input_time 300
 </IfModule>
 
-php_value upload_max_filesize 20M
-php_value post_max_size 20M
-php_value max_execution_time 300
-php_value max_input_time 300
-
-<FilesMatch "^(config\.php|\.htaccess|\.env.*)$">
+# Запрет доступа к чувствительным файлам (совместимо с Apache 2.2 и 2.4)
+<FilesMatch "^(config\.php|\.htaccess|\.env.*|composer\.(json|lock))$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
     Order allow,deny
     Deny from all
+  </IfModule>
 </FilesMatch>
 
 <FilesMatch "^(db_check\.php|check_db\.php|install_db\.php|setup_local\.php|seed_users\.php)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
     Order allow,deny
     Deny from all
+  </IfModule>
 </FilesMatch>
 
-# Block setup.php if lock file exists (after initial setup)
-<Files "setup.php">
-    <IfModule mod_rewrite.c>
-        RewriteCond %{DOCUMENT_ROOT}/.setup_complete -f
-        RewriteRule ^ - [F,L]
-    </IfModule>
-</Files>
-
-# Запрет доступа к лог-файлам отладки
-<FilesMatch "^debug-.*\.log$">
-    Order allow,deny
-    Deny from all
-</FilesMatch>
-
-# Запрет доступа к служебным каталогам (кэш, rate limit) и их содержимому
-RedirectMatch 404 (?i)/(cache|\.rate_limit)(/.*)?$
+# Запрет служебных каталогов (кэш, rate limit, логи) и их содержимого
+RedirectMatch 404 (?i)/(cache|\.rate_limit|logs)(/.*)?$
 
 AddDefaultCharset UTF-8
