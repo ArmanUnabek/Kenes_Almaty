@@ -75,6 +75,52 @@ class TotpService
         return 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' . rawurlencode($uri);
     }
 
+    // ── Backup codes ──────────────────────────────────────────────────────────
+
+    /**
+     * Генерирует список одноразовых резервных кодов (открытый текст, показывается один раз).
+     */
+    public static function generateBackupCodes(int $count = 10): array
+    {
+        $codes = [];
+        for ($i = 0; $i < $count; $i++) {
+            // 10 hex-символов, сгруппированных дефисом для удобства ввода: XXXXX-XXXXX
+            $raw = strtoupper(bin2hex(random_bytes(5)));
+            $codes[] = substr($raw, 0, 5) . '-' . substr($raw, 5);
+        }
+        return $codes;
+    }
+
+    /**
+     * Возвращает хэши кодов для хранения в БД.
+     */
+    public static function hashBackupCodes(array $codes): array
+    {
+        return array_map(static fn(string $c): string => password_hash(self::normalizeBackupCode($c), PASSWORD_DEFAULT), $codes);
+    }
+
+    /**
+     * Проверяет введённый код против списка хэшей. Возвращает индекс совпавшего хэша или -1.
+     */
+    public static function matchBackupCode(string $input, array $hashes): int
+    {
+        $normalized = self::normalizeBackupCode($input);
+        if ($normalized === '') {
+            return -1;
+        }
+        foreach ($hashes as $i => $hash) {
+            if (is_string($hash) && $hash !== '' && password_verify($normalized, $hash)) {
+                return (int)$i;
+            }
+        }
+        return -1;
+    }
+
+    private static function normalizeBackupCode(string $code): string
+    {
+        return strtoupper(preg_replace('/[^0-9A-Za-z]/', '', $code));
+    }
+
     // ── Internal ──────────────────────────────────────────────────────────────
 
     private static function hotp(string $secret, int $counter): string

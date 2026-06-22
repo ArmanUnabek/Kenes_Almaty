@@ -286,6 +286,16 @@
                                     </div>
                                 </div>
                             </div>
+                            <!-- Backup codes (показываются один раз после включения 2FA) -->
+                            <div id="totpBackupCodes" class="d-none mt-3">
+                                <div class="alert alert-warning mb-2">
+                                    <strong>Сохраните резервные коды!</strong> Каждый код одноразовый и поможет войти, если приложение-аутентификатор недоступно. Они показываются только один раз.
+                                </div>
+                                <pre id="totpBackupCodesList" class="font-monospace bg-light border rounded p-2 mb-2"></pre>
+                                <button class="btn btn-sm btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('totpBackupCodesList').textContent)">
+                                    <i class="bi bi-clipboard me-1"></i>Копировать
+                                </button>
+                            </div>
                             <!-- Disable form -->
                             <div id="totpDisableForm" class="d-none mt-3">
                                 <p class="small text-muted">Введите текущий код из приложения для отключения 2FA:</p>

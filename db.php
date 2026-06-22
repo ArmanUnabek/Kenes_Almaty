@@ -308,6 +308,46 @@ function ensureMemberI18nColumns(PDO $db): void
 }
 
 /**
+ * Добавляет колонку для хранения хэшей резервных кодов 2FA (если отсутствует).
+ */
+function ensureTotpBackupColumn(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    try {
+        if (DB_DRIVER === 'sqlite') {
+            $names = array_column($db->query('PRAGMA table_info(users)')->fetchAll(), 'name');
+            if (!in_array('totp_backup_codes', $names, true)) {
+                $db->exec('ALTER TABLE users ADD COLUMN totp_backup_codes TEXT NULL');
+            }
+            return;
+        }
+        if (DB_DRIVER === 'pgsql') {
+            $stmt = $db->prepare("SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'totp_backup_codes'");
+            $stmt->execute();
+            if (!$stmt->fetchColumn()) {
+                $db->exec('ALTER TABLE users ADD COLUMN totp_backup_codes TEXT NULL');
+            }
+            return;
+        }
+        // mysql
+        $cols = [];
+        foreach ($db->query('SHOW COLUMNS FROM users') as $row) {
+            $cols[$row['Field']] = true;
+        }
+        if (!isset($cols['totp_backup_codes'])) {
+            $db->exec("ALTER TABLE users ADD COLUMN totp_backup_codes TEXT NULL COMMENT 'JSON: хэши резервных кодов 2FA' AFTER totp_enabled");
+        }
+    } catch (Throwable $e) {
+        error_log('ensureTotpBackupColumn: ' . $e->getMessage());
+    }
+}
+
+/**
  * Создание соединения с БД (PDO singleton).
  */
 function getDBConnection(): PDO
@@ -356,6 +396,7 @@ function getDBConnection(): PDO
         ensureAuditLogsSchema($db);
         ensureTranslationSchema($db);
         ensureMemberI18nColumns($db);
+        ensureTotpBackupColumn($db);
         
         return $db;
     } catch (PDOException $e) {

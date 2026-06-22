@@ -755,7 +755,7 @@ document.getElementById('totpConfirmBtn')?.addEventListener('click', async () =>
   const code = document.getElementById('totpVerifyCode')?.value?.trim() || '';
   if (!code) { showError('Введите код из приложения'); return; }
   try {
-    await apiFetch(`${API}/auth.php?action=totp_enable`, {
+    const res = await apiFetch(`${API}/auth.php?action=totp_enable`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ totp_code: code }),
@@ -763,6 +763,15 @@ document.getElementById('totpConfirmBtn')?.addEventListener('click', async () =>
     showSuccess('2FA успешно включена');
     document.getElementById('totpSetupForm')?.classList.add('d-none');
     document.getElementById('totpVerifyCode').value = '';
+    // Показать резервные коды один раз
+    if (Array.isArray(res?.backup_codes) && res.backup_codes.length) {
+      const listEl = document.getElementById('totpBackupCodesList');
+      const wrapEl = document.getElementById('totpBackupCodes');
+      if (listEl && wrapEl) {
+        listEl.textContent = res.backup_codes.join('\n');
+        wrapEl.classList.remove('d-none');
+      }
+    }
     load2faStatus();
   } catch (err) {
     showError(err.message);
