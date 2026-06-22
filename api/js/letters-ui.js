@@ -1161,7 +1161,7 @@ function renderIncoming() {
   const rowsData = pageItems.map((i) => {
       const linked = i.linkedOutgoingId ? store.outgoing.find(o => o.id === i.linkedOutgoingId) : null;
       const linkHtml = linked
-        ? `<span class="badge badge-outgoing rounded-pill">${t('letters.linked_reply', 'Ответ')}: ${linked.outgoingNumber || 'Исх.' + linked.seq}</span>`
+        ? `<span class="badge badge-outgoing rounded-pill">${t('letters.linked_reply', 'Ответ')}: ${linked.outgoingNumber ? escapeHtml(linked.outgoingNumber) : 'Исх.' + escapeHtml(String(linked.seq))}</span>`
         : `<div class="d-flex flex-column gap-1 align-items-start">
              <span class="badge badge-status-pending rounded-pill">Нет ответа</span>
              <div class="d-flex flex-wrap gap-2">

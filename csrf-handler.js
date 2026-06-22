@@ -46,6 +46,9 @@ window.fetch = async function(...args) {
     return response;
 };
 
+// Reset cached token (call on logout or session change)
+window.resetCsrfToken = function () { csrfToken = null; };
+
 // Fetch initial CSRF token on page load
 document.addEventListener('DOMContentLoaded', () => {
     getCsrfToken();
