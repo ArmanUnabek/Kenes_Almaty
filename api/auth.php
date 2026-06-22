@@ -168,9 +168,11 @@ function handleLogin($db) {
         }
     }
 
-    // Enforce TOTP for admin accounts
+    // Enforce TOTP for admin accounts (opt-in via ENFORCE_ADMIN_2FA, чтобы свежий
+    // деплой с дефолтным админом не блокировал первый вход «замкнутым кругом»).
     $isAdminRole = normalizeRole($user['role'] ?? '') === 'admin';
-    if ($isAdminRole && empty($user['totp_enabled'])) {
+    $enforceAdmin2fa = filter_var(envValue('ENFORCE_ADMIN_2FA', 'false'), FILTER_VALIDATE_BOOLEAN);
+    if ($enforceAdmin2fa && $isAdminRole && empty($user['totp_enabled'])) {
         http_response_code(403);
         echo json_encode([
             'error'               => 'Администратор обязан настроить двухфакторную аутентификацию перед входом. Обратитесь к другому администратору.',
