@@ -185,7 +185,7 @@
     }
 
     grid.innerHTML = list.map((member) => {
-      const color = member.commission_color || '#1D4ED8';
+      const color = escapeHtml(member.commission_color || '#1D4ED8');
       const commissionBadge = member.commission_name
         ? `<span class="badge commission-badge" style="background:${color}20;color:${color}">${escapeHtml(member.commission_name)}</span>`
         : '';
@@ -288,7 +288,7 @@
     });
 
     grid.innerHTML = catalog.map((commission) => {
-      const color = commission.color || '#1D4ED8';
+      const color = escapeHtml(commission.color || '#1D4ED8');
       const count = memberCounts[commission.id] || 0;
       return `
         <div class="col-12 col-md-6 col-xl-4">
