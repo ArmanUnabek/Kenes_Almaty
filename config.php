@@ -38,6 +38,9 @@ Logger::init();
 // База данных вынесена в отдельный файл (удобно для переноса на другой хостинг)
 require_once __DIR__ . '/db.php';
 
+// Timezone must be set after db.php loads the .env file so APP_TIMEZONE is available
+date_default_timezone_set(envValue('APP_TIMEZONE') ?? 'Asia/Almaty');
+
 // Pusher realtime settings (fill with your credentials)
 define('PUSHER_APP_ID', getenv('PUSHER_APP_ID') ?: '');
 define('PUSHER_KEY', getenv('PUSHER_KEY') ?: '');
@@ -52,8 +55,13 @@ define('SMTP_PASS',      getenv('SMTP_PASS')      ?: '');
 define('SMTP_FROM',      getenv('SMTP_FROM')      ?: 'noreply@example.com');
 define('SMTP_FROM_NAME', getenv('SMTP_FROM_NAME') ?: 'Журнал ОС');
 
-// Telegram Bot (опционально — для уведомлений о дедлайнах)
-define('TELEGRAM_BOT_TOKEN', getenv('TELEGRAM_BOT_TOKEN') ?: '');
+// URL приложения (используется для генерации ссылок в письмах/боте)
+define('APP_URL', rtrim(envValue('APP_URL') ?? '', '/'));
+
+// Telegram Bot (опционально — для уведомлений и webhook-команд)
+define('TELEGRAM_BOT_TOKEN',      envValue('TELEGRAM_BOT_TOKEN')      ?? '');
+define('TELEGRAM_BOT_USERNAME',   envValue('TELEGRAM_BOT_USERNAME')   ?? '');
+define('TELEGRAM_WEBHOOK_SECRET', envValue('TELEGRAM_WEBHOOK_SECRET') ?? '');
 
 // Настройки для загрузки фото
 define('UPLOAD_DIR', APP_ROOT . '/uploads/photos/');

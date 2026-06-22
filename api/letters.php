@@ -35,6 +35,9 @@ class LettersController extends ApiController
                     if ($action === 'restore') {
                         $this->requireDeleteAccess();
                         $this->handleRestore();
+                    } elseif ($action === 'bulk_restore') {
+                        $this->requireDeleteAccess();
+                        $this->handleBulkRestore();
                     } else {
                         $this->handleCreate();
                     }
@@ -47,7 +50,11 @@ class LettersController extends ApiController
                 case 'DELETE':
                     $this->requireDeleteAccess();
                     $this->requireCsrf();
-                    $this->handleDelete();
+                    if ($this->getQueryParam('action') === 'bulk') {
+                        $this->handleBulkDelete();
+                    } else {
+                        $this->handleDelete();
+                    }
                     break;
                 default:
                     $this->error('Метод не поддерживается', 405);
@@ -110,14 +117,27 @@ class LettersController extends ApiController
         }
 
         $letters = $stmt->fetchAll();
+        $letterIds = array_column($letters, 'id');
+
+        // Счётчики сканов одним запросом вместо N+1
+        $scansCount = [];
+        if ($letterIds) {
+            $placeholders = implode(',', array_fill(0, count($letterIds), '?'));
+            $stmtScans = $this->db->prepare(
+                "SELECT letter_id, COUNT(*) AS cnt FROM letter_scans
+                 WHERE letter_type = ? AND letter_id IN ($placeholders)
+                 GROUP BY letter_id"
+            );
+            $stmtScans->execute(array_merge([$this->type], $letterIds));
+            foreach ($stmtScans->fetchAll() as $row) {
+                $scansCount[$row['letter_id']] = (int)$row['cnt'];
+            }
+        }
         foreach ($letters as &$letter) {
-            $stmt2 = $this->db->prepare('SELECT COUNT(*) as count FROM letter_scans WHERE letter_type = ? AND letter_id = ?');
-            $stmt2->execute([$this->type, $letter['id']]);
-            $letter['scans_count'] = (int)$stmt2->fetchColumn();
+            $letter['scans_count'] = $scansCount[$letter['id']] ?? 0;
         }
         unset($letter);
 
-        $letterIds = array_column($letters, 'id');
         $members = LetterPersistenceService::fetchLetterMembers($this->db, $this->type, $letterIds);
         $recipients = LetterPersistenceService::fetchLetterRecipients($this->db, $this->type, $letterIds);
         foreach ($letters as &$letter) {
@@ -293,6 +313,66 @@ class LettersController extends ApiController
             'id' => $id,
         ]);
         $this->json(['message' => 'Письмо восстановлено из архива']);
+    }
+
+    private function handleBulkDelete(): void
+    {
+        $data = $this->getJsonInput() ?? [];
+        $ids  = array_values(array_filter(array_map('intval', $data['ids'] ?? [])));
+        if (empty($ids) || count($ids) > 100) {
+            $this->error('ids должен содержать от 1 до 100 элементов', 400);
+        }
+
+        $deletedBy   = (int)($_SESSION['user_id'] ?? 0);
+        $regionId    = $this->resolveRegionIdForRead();
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        if ($regionId) {
+            $params = array_merge($ids, [$deletedBy, $deletedBy], $ids, [$regionId]);
+            $stmt   = $this->db->prepare(
+                "UPDATE {$this->table} SET deleted_at = NOW(), deleted_by = ? WHERE id IN ({$placeholders}) AND region_id = ? AND deleted_at IS NULL"
+            );
+            $params = array_merge([$deletedBy], $ids, [$regionId]);
+        } else {
+            $params = array_merge([$deletedBy], $ids);
+            $stmt   = $this->db->prepare(
+                "UPDATE {$this->table} SET deleted_at = NOW(), deleted_by = ? WHERE id IN ({$placeholders}) AND deleted_at IS NULL"
+            );
+        }
+        $stmt->execute($params);
+        $affected = $stmt->rowCount();
+
+        pusherTrigger('council-documents', 'documents-updated', ['action' => 'bulk_delete', 'type' => $this->type]);
+        $this->json(['archived' => $affected, 'message' => "Перемещено в архив: {$affected}"]);
+    }
+
+    private function handleBulkRestore(): void
+    {
+        $data = $this->getJsonInput() ?? [];
+        $ids  = array_values(array_filter(array_map('intval', $data['ids'] ?? [])));
+        if (empty($ids) || count($ids) > 100) {
+            $this->error('ids должен содержать от 1 до 100 элементов', 400);
+        }
+
+        $regionId     = $this->resolveRegionIdForRead();
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        if ($regionId) {
+            $params = array_merge($ids, [$regionId]);
+            $stmt   = $this->db->prepare(
+                "UPDATE {$this->table} SET deleted_at = NULL, deleted_by = NULL WHERE id IN ({$placeholders}) AND region_id = ? AND deleted_at IS NOT NULL"
+            );
+        } else {
+            $params = $ids;
+            $stmt   = $this->db->prepare(
+                "UPDATE {$this->table} SET deleted_at = NULL, deleted_by = NULL WHERE id IN ({$placeholders}) AND deleted_at IS NOT NULL"
+            );
+        }
+        $stmt->execute($params);
+        $affected = $stmt->rowCount();
+
+        pusherTrigger('council-documents', 'documents-updated', ['action' => 'bulk_restore', 'type' => $this->type]);
+        $this->json(['restored' => $affected, 'message' => "Восстановлено: {$affected}"]);
     }
 
     private function ensureSoftDeleteColumns(): void

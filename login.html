@@ -82,8 +82,8 @@
                     </div>
                     <div class="form-group d-none" id="totpGroup">
                         <label for="totpCode" class="form-label">Код 2FA (Google Authenticator)</label>
-                        <input type="text" class="form-control" id="totpCode" name="totp_code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="000000" />
-                        <small class="text-muted">Введите 6-значный код из приложения-аутентификатора.</small>
+                        <input type="text" class="form-control" id="totpCode" name="totp_code" autocomplete="one-time-code" maxlength="14" placeholder="000000" />
+                        <small class="text-muted">Введите 6-значный код из приложения-аутентификатора или резервный код.</small>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="rememberMe" name="rememberMe" />
@@ -100,8 +100,56 @@
                         <span class="loading-spinner"></span>
                         <span class="btn-text" id="loginSubmitText">Войти</span>
                     </button>
+                    <div class="text-center mt-3">
+                        <a href="#" id="forgotPasswordLink" style="font-size:.8125rem;color:var(--text-secondary)">Забыли пароль?</a>
+                    </div>
+                </form>
+
+                <!-- Forgot password form (hidden by default) -->
+                <form id="forgotForm" class="d-none">
+                    <div id="forgotAlert" class="alert d-none" role="alert"></div>
+                    <p style="font-size:.875rem;color:var(--text-secondary);margin-bottom:16px">Введите email, привязанный к вашему аккаунту. Мы вышлем ссылку для сброса пароля.</p>
+                    <div class="form-group">
+                        <label for="forgotEmail" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="forgotEmail" required />
+                    </div>
+                    <button type="submit" class="btn btn-login">Отправить ссылку</button>
+                    <div class="text-center mt-3">
+                        <a href="#" id="backToLoginLink" style="font-size:.8125rem;color:var(--text-secondary)">← Вернуться ко входу</a>
+                    </div>
+                </form>
+
+                <!-- Reset password form (shown when ?action=reset&token=... in URL) -->
+                <form id="resetForm" class="d-none">
+                    <div id="resetAlert" class="alert d-none" role="alert"></div>
+                    <p style="font-size:.875rem;color:var(--text-secondary);margin-bottom:16px">Введите новый пароль для вашего аккаунта.</p>
+                    <div class="form-group">
+                        <label for="newPassword" class="form-label">Новый пароль</label>
+                        <input type="password" class="form-control" id="newPassword" minlength="8" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword" class="form-label">Повторите пароль</label>
+                        <input type="password" class="form-control" id="confirmPassword" minlength="8" required />
+                    </div>
+                    <button type="submit" class="btn btn-login">Сохранить пароль</button>
                 </form>
             </div>
+        </div>
+    </div>
+
+    <div class="login-container" id="tgLoginSection" style="display:none;margin-top:16px">
+        <div style="background:rgba(255,255,255,.07);border-radius:12px;padding:16px 20px;text-align:center;border:1px solid rgba(255,255,255,.12)">
+            <div style="color:rgba(255,255,255,.85);font-size:.875rem;margin-bottom:10px">
+                <i class="bi bi-telegram" style="font-size:1.25rem;vertical-align:middle;margin-right:6px;color:#29b6f6"></i>
+                Войти через Telegram
+            </div>
+            <p style="color:rgba(255,255,255,.55);font-size:.8rem;margin-bottom:10px">
+                Откройте бота, отправьте <code style="background:rgba(255,255,255,.1);padding:1px 5px;border-radius:4px">/login</code> и перейдите по ссылке.
+            </p>
+            <a id="tgBotLink" href="#" target="_blank" rel="noopener"
+               style="display:inline-flex;align-items:center;gap:6px;background:#0088cc;color:#fff;border-radius:8px;padding:8px 16px;font-size:.875rem;font-weight:600;text-decoration:none">
+                <i class="bi bi-telegram"></i> Открыть бота
+            </a>
         </div>
     </div>
 
@@ -221,6 +269,114 @@
         [usernameInput, passwordInput].forEach(el => {
             el.addEventListener('input', () => errorAlert.classList.add('d-none'));
         });
+
+        // Password reset flow
+        const loginFormEl   = form;
+        const forgotFormEl  = document.getElementById('forgotForm');
+        const resetFormEl   = document.getElementById('resetForm');
+        const loginBody     = document.querySelector('.login-body h2');
+
+        document.getElementById('forgotPasswordLink').addEventListener('click', (e) => {
+            e.preventDefault();
+            loginFormEl.classList.add('d-none');
+            document.getElementById('forgotPasswordLink').classList.add('d-none');
+            forgotFormEl.classList.remove('d-none');
+            if (loginBody) loginBody.textContent = 'Сброс пароля';
+        });
+
+        document.getElementById('backToLoginLink').addEventListener('click', (e) => {
+            e.preventDefault();
+            forgotFormEl.classList.add('d-none');
+            loginFormEl.classList.remove('d-none');
+            document.getElementById('forgotPasswordLink').classList.remove('d-none');
+            if (loginBody) loginBody.textContent = 'Вход в систему';
+        });
+
+        forgotFormEl.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const alertEl = document.getElementById('forgotAlert');
+            const email   = document.getElementById('forgotEmail').value.trim();
+            try {
+                const res  = await fetch('api/auth.php?action=forgot_password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email }),
+                });
+                const data = await res.json();
+                alertEl.className = 'alert alert-info';
+                alertEl.textContent = data.message || 'Письмо отправлено.';
+                alertEl.classList.remove('d-none');
+            } catch (_) {
+                alertEl.className = 'alert alert-danger';
+                alertEl.textContent = t('err.network');
+                alertEl.classList.remove('d-none');
+            }
+        });
+
+        // Check for reset token in URL
+        (() => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('action') === 'reset' && params.get('token')) {
+                loginFormEl.classList.add('d-none');
+                forgotFormEl.classList.add('d-none');
+                resetFormEl.classList.remove('d-none');
+                if (loginBody) loginBody.textContent = 'Новый пароль';
+
+                resetFormEl.addEventListener('submit', async (ev) => {
+                    ev.preventDefault();
+                    const alertEl = document.getElementById('resetAlert');
+                    const pass    = document.getElementById('newPassword').value;
+                    const conf    = document.getElementById('confirmPassword').value;
+                    if (pass !== conf) {
+                        alertEl.className = 'alert alert-danger';
+                        alertEl.textContent = 'Пароли не совпадают';
+                        alertEl.classList.remove('d-none');
+                        return;
+                    }
+                    try {
+                        const res  = await fetch('api/auth.php?action=reset_password', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ token: params.get('token'), password: pass }),
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            alertEl.className = 'alert alert-success';
+                            alertEl.textContent = data.message;
+                            alertEl.classList.remove('d-none');
+                            resetFormEl.querySelectorAll('input, button').forEach(el => el.disabled = true);
+                            setTimeout(() => { window.location.href = '/login.html'; }, 2000);
+                        } else {
+                            alertEl.className = 'alert alert-danger';
+                            alertEl.textContent = data.error || 'Ошибка сброса пароля';
+                            alertEl.classList.remove('d-none');
+                        }
+                    } catch (_) {
+                        alertEl.className = 'alert alert-danger';
+                        alertEl.textContent = t('err.network');
+                        alertEl.classList.remove('d-none');
+                    }
+                });
+            }
+        })();
+
+        // Show Telegram login option if bot is configured
+        (async () => {
+            try {
+                const res = await fetch('api/config_public.php');
+                if (!res.ok) return;
+                const js = await res.text();
+                const m = js.match(/window\.TELEGRAM_BOT_USERNAME\s*=\s*"([^"]+)"/);
+                if (m && m[1]) {
+                    const section = document.getElementById('tgLoginSection');
+                    const link    = document.getElementById('tgBotLink');
+                    if (section && link) {
+                        link.href = 'https://t.me/' + encodeURIComponent(m[1]);
+                        section.style.display = '';
+                    }
+                }
+            } catch (e) {}
+        })();
     </script>
 </body>
 </html>

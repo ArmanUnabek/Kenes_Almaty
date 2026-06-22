@@ -5,6 +5,8 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../auth_middleware.php';
 
+use App\Middleware\CsrfMiddleware;
+
 header('Content-Type: application/json; charset=utf-8');
 
 checkAuth();
@@ -12,10 +14,31 @@ checkAuth();
 $db  = getDBConnection();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-// Ensure letter_comments table exists (runtime migration)
-static $tableChecked = false;
-if (!$tableChecked) {
-    $tableChecked = true;
+// Ensure letter_comments table exists (runtime migration, driver-aware)
+$driver = $db->getAttribute(\PDO::ATTR_DRIVER_NAME);
+if ($driver === 'sqlite') {
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS letter_comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            letter_type TEXT NOT NULL,
+            letter_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            comment TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ");
+} elseif ($driver === 'pgsql') {
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS letter_comments (
+            id SERIAL PRIMARY KEY,
+            letter_type VARCHAR(20) NOT NULL,
+            letter_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            comment TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ");
+} else {
     $db->exec("
         CREATE TABLE IF NOT EXISTS letter_comments (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -37,17 +60,38 @@ switch ($method) {
         break;
     case 'POST':
         requireWriteAccess();
-        \App\Middleware\CsrfMiddleware::requireVerification();
+        CsrfMiddleware::requireVerification();
         handlePostComment($db);
         break;
     case 'DELETE':
-        requireWriteAccess();
-        \App\Middleware\CsrfMiddleware::requireVerification();
+        CsrfMiddleware::requireVerification();
         handleDeleteComment($db);
         break;
     default:
         http_response_code(405);
         echo json_encode(['error' => 'Метод не поддерживается'], JSON_ENCODE_FLAGS);
+}
+
+/**
+ * Проверяет, что письмо существует и принадлежит доступному пользователю региону.
+ * Прерывает выполнение с 404/403 при отсутствии доступа.
+ */
+function assertLetterAccess(\PDO $db, string $letterType, int $letterId): void
+{
+    $table = $letterType === 'incoming' ? 'incoming_letters' : 'outgoing_letters';
+    $stmt = $db->prepare("SELECT region_id FROM {$table} WHERE id = ?");
+    $stmt->execute([$letterId]);
+    $regionId = $stmt->fetchColumn();
+    if ($regionId === false) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Письмо не найдено'], JSON_ENCODE_FLAGS);
+        exit;
+    }
+    if ((int)$regionId > 0 && !canAccessRegion((int)$regionId)) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Доступ к письму запрещён'], JSON_ENCODE_FLAGS);
+        exit;
+    }
 }
 
 function handleGetComments(\PDO $db): void
@@ -60,6 +104,8 @@ function handleGetComments(\PDO $db): void
         echo json_encode(['error' => 'Укажите letter_type и letter_id'], JSON_ENCODE_FLAGS);
         return;
     }
+
+    assertLetterAccess($db, $letterType, $letterId);
 
     $stmt = $db->prepare("
         SELECT c.id, c.letter_type, c.letter_id, c.comment, c.created_at,
@@ -92,6 +138,8 @@ function handlePostComment(\PDO $db): void
         return;
     }
 
+    assertLetterAccess($db, $letterType, $letterId);
+
     $userId = (int)($_SESSION['user_id'] ?? 0);
     $stmt = $db->prepare("
         INSERT INTO letter_comments (letter_type, letter_id, user_id, comment)
@@ -121,7 +169,7 @@ function handleDeleteComment(\PDO $db): void
         return;
     }
 
-    $stmt = $db->prepare('SELECT user_id FROM letter_comments WHERE id = ?');
+    $stmt = $db->prepare('SELECT user_id, letter_type, letter_id FROM letter_comments WHERE id = ?');
     $stmt->execute([$id]);
     $row = $stmt->fetch();
     if (!$row) {
@@ -130,6 +178,8 @@ function handleDeleteComment(\PDO $db): void
         return;
     }
 
+    assertLetterAccess($db, (string)$row['letter_type'], (int)$row['letter_id']);
+
     $currentUserId = (int)($_SESSION['user_id'] ?? 0);
     $isAdmin       = isAdmin();
 
@@ -137,22 +187,6 @@ function handleDeleteComment(\PDO $db): void
         http_response_code(403);
         echo json_encode(['error' => 'Нет прав на удаление этого комментария'], JSON_ENCODE_FLAGS);
         return;
-    }
-
-    // Region access check: verify user can access the letter this comment belongs to
-    $stmtFull = $db->prepare('SELECT letter_type, letter_id FROM letter_comments WHERE id = ?');
-    $stmtFull->execute([$id]);
-    $commentRow = $stmtFull->fetch();
-    if ($commentRow) {
-        $table = $commentRow['letter_type'] === 'incoming' ? 'incoming_letters' : 'outgoing_letters';
-        $stmtRegion = $db->prepare("SELECT region_id FROM {$table} WHERE id = ?");
-        $stmtRegion->execute([$commentRow['letter_id']]);
-        $letterRow = $stmtRegion->fetch();
-        if ($letterRow && !canAccessRegion((int)($letterRow['region_id'] ?? 0))) {
-            http_response_code(403);
-            echo json_encode(['error' => 'Доступ запрещён'], JSON_ENCODE_FLAGS);
-            return;
-        }
     }
 
     $db->prepare('DELETE FROM letter_comments WHERE id = ?')->execute([$id]);

@@ -82,7 +82,12 @@ $allowedInline = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'applica
 if ($inline && !in_array($contentType, $allowedInline, true)) {
     $inline = false;
 }
-$disposition = ($inline ? 'inline' : 'attachment') . '; filename="' . $filename . '"';
+// Защита от инъекции в заголовок: ASCII-фолбэк без кавычек/переводов строк
+// + RFC 5987 filename* с UTF-8 для корректного отображения кириллицы.
+$asciiName = preg_replace('/[\r\n"\\\\]/', '_', preg_replace('/[^\x20-\x7E]/', '_', $filename));
+$disposition = ($inline ? 'inline' : 'attachment')
+    . '; filename="' . $asciiName . '"'
+    . "; filename*=UTF-8''" . rawurlencode($filename);
 
 if (!empty($scan['file_path'])) {
     $uploadsRoot = realpath(APP_ROOT . '/uploads');

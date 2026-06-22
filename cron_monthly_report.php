@@ -16,9 +16,11 @@ $isCli = php_sapi_name() === 'cli';
 
 if (!$isCli) {
     header('Content-Type: application/json; charset=utf-8');
-    $expectedToken = getenv('CRON_TOKEN') ?: '';
+    $expectedToken = envValue('CRON_TOKEN');
     $providedToken = $_GET['token'] ?? '';
-    if ($expectedToken === '' || !hash_equals($expectedToken, $providedToken)) {
+    if (!is_string($expectedToken) || $expectedToken === ''
+        || !is_string($providedToken)
+        || !hash_equals($expectedToken, $providedToken)) {
         http_response_code(403);
         echo json_encode(['error' => 'Доступ запрещён'], JSON_ENCODE_FLAGS);
         exit;
@@ -78,6 +80,7 @@ try {
         $topMembers = $stmtMembers->fetchAll();
 
         // Build HTML email
+        $regionNameEsc = htmlspecialchars($regionName, ENT_QUOTES, 'UTF-8');
         $orgRows = array_map(fn($r) => "<tr><td style='padding:4px 8px'>" . htmlspecialchars($r['organization'], ENT_QUOTES) . "</td><td style='padding:4px 8px;text-align:center'>{$r['cnt']}</td></tr>", $topOrgs);
         $orgTable = $orgRows ? implode('', $orgRows) : '<tr><td colspan="2" style="padding:4px 8px;color:#999">Нет данных</td></tr>';
 
@@ -87,7 +90,7 @@ try {
         $html = "
 <html><body style='font-family:Arial,sans-serif;font-size:14px;color:#333;max-width:600px;margin:0 auto'>
 <h2 style='color:#0d6efd;border-bottom:2px solid #0d6efd;padding-bottom:8px'>
-  Ежемесячный отчёт — {$regionName}
+  Ежемесячный отчёт — {$regionNameEsc}
 </h2>
 <p style='color:#666'>Период: {$firstOfMonth->format('d.m.Y')} — {$lastOfMonth->format('d.m.Y')}</p>
 
@@ -131,16 +134,16 @@ try {
             continue;
         }
 
-        // Send to all managers/admins of this region
-        $stmtRec = $db->prepare("
+        // Send to all moderators/admins of this region
+        $stmtRecip = $db->prepare("
             SELECT DISTINCT email FROM users
             WHERE is_active = TRUE
               AND email IS NOT NULL AND email != ''
               AND (region_id = ? OR role = 'admin')
               AND role IN ('admin', 'manager')
         ");
-        $stmtRec->execute([$regionId]);
-        $recipients = $stmtRec->fetchAll(\PDO::FETCH_COLUMN);
+        $stmtRecip->execute([$regionId]);
+        $recipients = $stmtRecip->fetchAll(\PDO::FETCH_COLUMN);
 
         $subject = "Отчёт за " . $firstOfMonth->format('m.Y') . " — {$regionName}";
         foreach ($recipients as $email) {

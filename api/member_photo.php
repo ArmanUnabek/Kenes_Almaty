@@ -53,7 +53,8 @@ if (!isset($mimeMap[$ext])) {
 
 header('Content-Type: ' . $contentType);
 header('Content-Length: ' . filesize($fullPath));
-header('Content-Disposition: inline; filename="' . basename($fullPath) . '"');
+$safeName = preg_replace('/[\r\n"\\\\]/', '_', basename($fullPath));
+header('Content-Disposition: inline; filename="' . $safeName . '"');
 header('Cache-Control: private, max-age=3600');
 header('X-Content-Type-Options: nosniff');
 readfile($fullPath);
