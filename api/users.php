@@ -94,7 +94,7 @@ class UsersController extends ApiController
             'username' => 'required|string|min:3|max:100',
             'email' => 'required|email|max:255',
             'full_name' => 'required|string|min:2|max:255',
-            'password' => 'required|string|min:6|max:255',
+            'password' => 'required|string|min:8|max:255',
             'role' => 'required|in:admin,moderator,viewer',
         ]);
 
@@ -150,8 +150,8 @@ class UsersController extends ApiController
         }
 
         if (!empty($data['password'])) {
-            if (strlen($data['password']) < 6) {
-                $this->error('Пароль должен быть не менее 6 символов', 400);
+            if (strlen($data['password']) < 8) {
+                $this->error('Пароль должен быть не менее 8 символов', 400);
             }
         }
 

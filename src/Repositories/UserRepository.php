@@ -151,6 +151,22 @@ class UserRepository
         if (self::$telegramColChecked) return;
         self::$telegramColChecked = true;
         try {
+            $driver = $this->db->getAttribute(\PDO::ATTR_DRIVER_NAME);
+            if ($driver === 'sqlite') {
+                $names = array_column($this->db->query('PRAGMA table_info(users)')->fetchAll(), 'name');
+                if (!in_array('telegram_chat_id', $names, true)) {
+                    $this->db->exec('ALTER TABLE users ADD COLUMN telegram_chat_id VARCHAR(50) NULL DEFAULT NULL');
+                }
+                return;
+            }
+            if ($driver === 'pgsql') {
+                $stmt = $this->db->prepare("SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'telegram_chat_id'");
+                $stmt->execute();
+                if (!$stmt->fetchColumn()) {
+                    $this->db->exec('ALTER TABLE users ADD COLUMN telegram_chat_id VARCHAR(50) NULL DEFAULT NULL');
+                }
+                return;
+            }
             $cols = $this->db->query("SHOW COLUMNS FROM users LIKE 'telegram_chat_id'")->fetchAll();
             if (empty($cols)) {
                 $this->db->exec("ALTER TABLE users ADD COLUMN telegram_chat_id VARCHAR(50) NULL DEFAULT NULL");

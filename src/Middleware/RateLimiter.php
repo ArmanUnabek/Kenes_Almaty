@@ -42,7 +42,7 @@ class RateLimiter
 
         // Добавляем новый запрос
         $data['requests'][] = $now;
-        file_put_contents($file, json_encode($data));
+        file_put_contents($file, json_encode($data), LOCK_EX);
 
         return true;
     }

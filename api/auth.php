@@ -6,6 +6,7 @@ require_once __DIR__ . '/../src/Middleware/CsrfMiddleware.php';
 use App\Middleware\CsrfMiddleware;
 use App\Middleware\RateLimiter;
 use App\Services\TotpService;
+use App\Services\FileCache;
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -73,6 +74,14 @@ function handleLogin($db) {
         return;
     }
 
+    // Доп. лимит против распределённого перебора одного аккаунта (с многих IP).
+    // Порог выше IP-лимита, чтобы не давать легко «залочить» легитимного пользователя.
+    if (!RateLimiter::check('login_user_' . strtolower($username), 30, 900)) {
+        http_response_code(429);
+        echo json_encode(['error' => 'Слишком много попыток входа в этот аккаунт. Попробуйте позже.'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
     $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, password_hash, totp_secret, totp_enabled FROM users WHERE username = ? AND is_active = TRUE');
     $stmt->execute([$username]);
     $user = $stmt->fetch();
@@ -108,7 +117,20 @@ function handleLogin($db) {
             echo json_encode(['error' => 'Слишком много попыток. Подождите 5 минут.'], JSON_ENCODE_FLAGS);
             return;
         }
-        if (!TotpService::verify($user['totp_secret'], $totpCode)) {
+        $matchedCounter = null;
+        if (TotpService::verify($user['totp_secret'], $totpCode, $matchedCounter)) {
+            // Защита от повтора: один и тот же код (интервал) нельзя использовать дважды.
+            $replayKey = 'totp_used_' . (int)$user['id'] . '_' . (int)$matchedCounter;
+            $cache = new FileCache();
+            if ($cache->get($replayKey)) {
+                http_response_code(401);
+                echo json_encode(['error' => 'Этот код уже был использован. Дождитесь следующего.'], JSON_ENCODE_FLAGS);
+                return;
+            }
+            // TTL покрывает окно дрейфа (±1 шаг) с запасом.
+            $cache->set($replayKey, 1, 120);
+        } elseif (!consumeBackupCode($db, (int)$user['id'], $totpCode)) {
+            // Ни TOTP, ни резервный код не подошли.
             http_response_code(401);
             echo json_encode(['error' => 'Неверный код двухфакторной аутентификации'], JSON_ENCODE_FLAGS);
             return;
@@ -141,6 +163,45 @@ function handleLogin($db) {
         'authenticated' => true,
         'user' => $user
     ], JSON_ENCODE_FLAGS);
+}
+
+/**
+ * Проверяет и «расходует» одноразовый резервный код 2FA. Возвращает true при успехе.
+ * Безопасно деградирует, если колонка totp_backup_codes недоступна.
+ */
+function consumeBackupCode($db, int $userId, string $input): bool
+{
+    $input = trim($input);
+    if ($input === '') {
+        return false;
+    }
+    try {
+        $stmt = $db->prepare('SELECT totp_backup_codes FROM users WHERE id = ?');
+        $stmt->execute([$userId]);
+        $raw = $stmt->fetchColumn();
+    } catch (\Throwable $e) {
+        return false;
+    }
+    if (!$raw) {
+        return false;
+    }
+    $hashes = json_decode((string)$raw, true);
+    if (!is_array($hashes) || !$hashes) {
+        return false;
+    }
+    $idx = TotpService::matchBackupCode($input, $hashes);
+    if ($idx < 0) {
+        return false;
+    }
+    unset($hashes[$idx]);
+    $remaining = array_values($hashes);
+    try {
+        $db->prepare('UPDATE users SET totp_backup_codes = ? WHERE id = ?')
+            ->execute([json_encode($remaining, JSON_ENCODE_FLAGS), $userId]);
+    } catch (\Throwable $e) {
+        error_log('consumeBackupCode update failed: ' . $e->getMessage());
+    }
+    return true;
 }
 
 function handleTotpSetup($db) {
@@ -184,10 +245,26 @@ function handleTotpEnable($db) {
         echo json_encode(['error' => 'Неверный код. Проверьте время на устройстве.'], JSON_ENCODE_FLAGS);
         return;
     }
-    $db->prepare('UPDATE users SET totp_secret = ?, totp_enabled = TRUE WHERE id = ?')
-        ->execute([$secret, $userId]);
+    // Генерируем одноразовые резервные коды и сохраняем их хэши.
+    $plainCodes = TotpService::generateBackupCodes(10);
+    $hashes = TotpService::hashBackupCodes($plainCodes);
+    try {
+        $db->prepare('UPDATE users SET totp_secret = ?, totp_enabled = TRUE, totp_backup_codes = ? WHERE id = ?')
+            ->execute([$secret, json_encode($hashes, JSON_ENCODE_FLAGS), $userId]);
+        $backupCodes = $plainCodes;
+    } catch (\Throwable $e) {
+        // Колонка резервных кодов недоступна — включаем 2FA без них, не ломая поток.
+        error_log('totp backup codes unavailable: ' . $e->getMessage());
+        $db->prepare('UPDATE users SET totp_secret = ?, totp_enabled = TRUE WHERE id = ?')
+            ->execute([$secret, $userId]);
+        $backupCodes = [];
+    }
     unset($_SESSION['totp_provisioning']);
-    echo json_encode(['success' => true, 'message' => '2FA успешно включена'], JSON_ENCODE_FLAGS);
+    echo json_encode([
+        'success' => true,
+        'message' => '2FA успешно включена',
+        'backup_codes' => $backupCodes,
+    ], JSON_ENCODE_FLAGS);
 }
 
 function handleTotpDisable($db) {

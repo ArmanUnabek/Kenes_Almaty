@@ -31,7 +31,7 @@
       const totalLetters = (Number(c.incoming_count) || 0) + (Number(c.outgoing_count) || 0)
         || Number(c.total_letters) || 0;
       const pct = Math.round((totalLetters / maxLoad) * 100);
-      const color = c.color || '#1D4ED8';
+      const color = escapeHtml(c.color || '#1D4ED8');
       return `
         <div class="commission-kpi-row mb-3">
           <div class="d-flex justify-content-between align-items-center mb-1">

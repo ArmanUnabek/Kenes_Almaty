@@ -77,10 +77,12 @@ class CommissionsController extends ApiController
     private function handleCreate(?int $regionId): void
     {
         $data = $this->getJsonInput() ?? [];
-        $this->validateInput($data, [
-            'name' => 'required|string|min:2|max:255',
-            'color' => 'string|max:20',
-        ]);
+        $rules = ['name' => 'required|string|min:2|max:255'];
+        if (!empty($data['color'])) {
+            // Только hex-цвет — иначе значение попадает в style="..." (XSS).
+            $rules['color'] = 'string|max:20|regex:/^#[0-9A-Fa-f]{3,8}$/';
+        }
+        $this->validateInput($data, $rules);
 
         $targetRegion = (int)($data['region_id'] ?? $regionId ?? 1);
         $this->requireRegionAccess($targetRegion);
@@ -108,10 +110,11 @@ class CommissionsController extends ApiController
             $this->error('Комиссия не найдена', 404);
         }
 
-        $this->validateInput($data, [
-            'name' => 'required|string|min:2|max:255',
-            'color' => 'string|max:20',
-        ]);
+        $rules = ['name' => 'required|string|min:2|max:255'];
+        if (!empty($data['color'])) {
+            $rules['color'] = 'string|max:20|regex:/^#[0-9A-Fa-f]{3,8}$/';
+        }
+        $this->validateInput($data, $rules);
 
         $this->repo->update($id, $data, $regionId);
         $this->logAction('commissions', $id, 'UPDATE', $existing, $data);

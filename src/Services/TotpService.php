@@ -31,9 +31,11 @@ class TotpService
 
     /**
      * Проверяет введённый код с допуском ±DRIFT шагов.
+     * При совпадении в $matchedCounter возвращается номер интервала (для защиты от повтора).
      */
-    public static function verify(string $secret, string $code): bool
+    public static function verify(string $secret, string $code, ?int &$matchedCounter = null): bool
     {
+        $matchedCounter = null;
         $code = preg_replace('/\s+/', '', $code);
         if (!preg_match('/^\d{6}$/', $code)) return false;
         // Reject empty or corrupt secrets before any HMAC is computed
@@ -42,6 +44,7 @@ class TotpService
         // Check current window first (most common case), then ±DRIFT
         foreach ([0, -1, 1] as $i) {
             if (abs($i) <= self::DRIFT && hash_equals(self::hotp($secret, $counter + $i), $code)) {
+                $matchedCounter = $counter + $i;
                 return true;
             }
         }
@@ -63,11 +66,59 @@ class TotpService
     }
 
     /**
-     * URL Google Charts для QR-кода (не отправляет секрет на сервер — только данные URI).
+     * URL внешнего сервиса для QR-кода (не отправляет секрет на сервер — только данные URI).
+     * Google Image Charts (chart.googleapis.com) отключён Google, поэтому используем
+     * api.qrserver.com (goqr.me), отдающий PNG напрямую — подходит для <img src>.
      */
     public static function getQrUrl(string $uri): string
     {
-        return 'https://chart.googleapis.com/chart?chs=200x200&chld=M|0&cht=qr&chl=' . rawurlencode($uri);
+        return 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' . rawurlencode($uri);
+    }
+
+    // ── Backup codes ──────────────────────────────────────────────────────────
+
+    /**
+     * Генерирует список одноразовых резервных кодов (открытый текст, показывается один раз).
+     */
+    public static function generateBackupCodes(int $count = 10): array
+    {
+        $codes = [];
+        for ($i = 0; $i < $count; $i++) {
+            // 10 hex-символов, сгруппированных дефисом для удобства ввода: XXXXX-XXXXX
+            $raw = strtoupper(bin2hex(random_bytes(5)));
+            $codes[] = substr($raw, 0, 5) . '-' . substr($raw, 5);
+        }
+        return $codes;
+    }
+
+    /**
+     * Возвращает хэши кодов для хранения в БД.
+     */
+    public static function hashBackupCodes(array $codes): array
+    {
+        return array_map(static fn(string $c): string => password_hash(self::normalizeBackupCode($c), PASSWORD_DEFAULT), $codes);
+    }
+
+    /**
+     * Проверяет введённый код против списка хэшей. Возвращает индекс совпавшего хэша или -1.
+     */
+    public static function matchBackupCode(string $input, array $hashes): int
+    {
+        $normalized = self::normalizeBackupCode($input);
+        if ($normalized === '') {
+            return -1;
+        }
+        foreach ($hashes as $i => $hash) {
+            if (is_string($hash) && $hash !== '' && password_verify($normalized, $hash)) {
+                return (int)$i;
+            }
+        }
+        return -1;
+    }
+
+    private static function normalizeBackupCode(string $code): string
+    {
+        return strtoupper(preg_replace('/[^0-9A-Za-z]/', '', $code));
     }
 
     // ── Internal ──────────────────────────────────────────────────────────────

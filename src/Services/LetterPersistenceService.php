@@ -122,15 +122,16 @@ class LetterPersistenceService
             INSERT INTO letter_members (letter_type, letter_id, member_id, is_lead)
             VALUES (?, ?, ?, ?)
         ');
+        // Регион письма постоянен в пределах вызова — читаем один раз, а не на каждого участника.
+        $letterRegion = self::getLetterRegionId($db, $type, $letterId);
+        $check = $db->prepare('SELECT region_id FROM os_members WHERE id = ?');
         foreach ($members as $member) {
             $memberId = (int)($member['member_id'] ?? 0);
             if ($memberId <= 0) {
                 continue;
             }
-            $check = $db->prepare('SELECT region_id FROM os_members WHERE id = ?');
             $check->execute([$memberId]);
             $memberRegion = (int)$check->fetchColumn();
-            $letterRegion = self::getLetterRegionId($db, $type, $letterId);
             if ($letterRegion > 0 && $memberRegion > 0 && $memberRegion !== $letterRegion) {
                 continue;
             }
