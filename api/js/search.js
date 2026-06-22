@@ -7,7 +7,15 @@
     return window.AppI18n?.t(key, fallback) ?? fallback;
   }
 
-  function sourceLabel(source) {
+  function getSelectedScope() {
+    return document.querySelector('input[name="searchScope"]:checked')?.value ?? 'all';
+  }
+
+  function sourceLabel(source, archived) {
+    if (archived) {
+      if (source === 'incoming') return t('search.source.archive_incoming', 'Архив · Входящее');
+      if (source === 'outgoing') return t('search.source.archive_outgoing', 'Архив · Исходящее');
+    }
     if (source === 'incoming') return t('search.source.incoming', 'Входящее');
     if (source === 'outgoing') return t('search.source.outgoing', 'Исходящее');
     if (source === 'member') return t('search.source.member', 'Член ОС');
@@ -42,6 +50,13 @@
   }
 
   function navigateToResult(item) {
+    if (item._archived && (item.source === 'incoming' || item.source === 'outgoing')) {
+      document.getElementById('tab-archive')?.click();
+      // Switch the archive type toggle to match the result's source
+      const toggleId = item.source === 'outgoing' ? 'archiveTypeOutgoing' : 'archiveTypeIncoming';
+      setTimeout(() => document.getElementById(toggleId)?.click(), 150);
+      return;
+    }
     if (item.source === 'incoming' || item.source === 'outgoing') {
       openLetterFromSearch(item.source, item.id);
       return;
@@ -75,7 +90,7 @@
         <span class="global-search-item__body">
           <span class="global-search-item__title">${escapeHtml(item.subject || item.organization || '—')}</span>
           <span class="global-search-item__meta">
-            ${escapeHtml(sourceLabel(item.source))}
+            ${escapeHtml(sourceLabel(item.source, item._archived))}
             ${item.number_label ? ' · ' + escapeHtml(item.number_label) : ''}
             ${item.date ? ' · ' + escapeHtml(item.date) : ''}
           </span>
@@ -93,6 +108,7 @@
 
   async function runSearch(query) {
     const q = query.trim();
+    const scope = getSelectedScope();
     const body = document.getElementById('globalSearchResults');
     if (!q) {
       renderResults([], '');
@@ -100,9 +116,10 @@
     }
     if (body) body.innerHTML = `<div class="text-muted small p-3">${t('search.searching', 'Поиск...')}</div>`;
     try {
-      const resp = await fetch(`${API}/search.php?q=${encodeURIComponent(q)}&limit=20`);
+      const resp = await fetch(`${API}/search.php?q=${encodeURIComponent(q)}&limit=20&scope=${encodeURIComponent(scope)}`);
       const data = await resp.json();
-      renderResults(data.items || [], q);
+      const items = (data.items || []).map((item) => ({ ...item, _archived: scope === 'archived' }));
+      renderResults(items, q);
     } catch (err) {
       if (body) body.innerHTML = `<div class="text-danger small p-3">${t('search.error', 'Ошибка поиска')}</div>`;
     }
@@ -136,6 +153,12 @@
     input?.addEventListener('input', () => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => runSearch(input.value), 250);
+    });
+
+    document.querySelectorAll('input[name="searchScope"]').forEach((radio) => {
+      radio.addEventListener('change', () => {
+        if (input?.value.trim()) runSearch(input.value);
+      });
     });
 
     modalEl?.addEventListener('shown.bs.modal', () => input?.focus());
