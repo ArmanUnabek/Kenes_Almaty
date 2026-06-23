@@ -119,14 +119,11 @@
 
   async function loadMembersCatalog() {
     try {
-      const response = await fetch(`${api()}/members.php?limit=500`);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      // members.php returns a paginated object ({items, pagination}) when a
-      // limit/page is set, but a bare array otherwise — normalize to an array
-      // defensively so consumers can always iterate it safely.
-      const data = await response.json();
-      const list = Array.isArray(data) ? data : (data.items ?? data.data ?? []);
-      window.membersCatalog = Array.isArray(list) ? list : Object.values(list || {});
+      // members.php отдаёт {items} при наличии limit/page, иначе массив —
+      // asList нормализует оба формата.
+      window.membersCatalog = window.AppUtils.asList(
+        await window.AppUtils.fetchJson(`${api()}/members.php?limit=500`)
+      );
     } catch (error) {
       console.error('Ошибка загрузки списка членов ОС', error);
       window.membersCatalog = [];
@@ -135,9 +132,9 @@
 
   async function loadCommissionsCatalog() {
     try {
-      const response = await fetch(`${api()}/commissions.php`);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      window.commissionsCatalog = await response.json();
+      window.commissionsCatalog = window.AppUtils.asList(
+        await window.AppUtils.fetchJson(`${api()}/commissions.php`)
+      );
     } catch (error) {
       console.error('Ошибка загрузки комиссий', error);
       window.commissionsCatalog = [];

@@ -516,10 +516,8 @@ async function refreshLetters() {
 }
 
 async function fetchLetters(type) {
-  const response = await fetch(`${API_BASE}/letters.php?type=${type}`);
-  if (!response.ok) throw new Error(`Не удалось загрузить ${type} письма`);
-  const data = await response.json();
-  return data.map(mapLetterFromApi(type));
+  const data = await window.AppUtils.fetchJson(`${API_BASE}/letters.php?type=${type}`);
+  return window.AppUtils.asList(data).map(mapLetterFromApi(type));
 }
 
 function mapLetterFromApi(type) {

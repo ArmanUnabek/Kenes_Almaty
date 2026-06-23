@@ -29,10 +29,9 @@
   store.events = store.events || [];
 
   async function refreshEvents() {
-    const resp = await fetch(`${API_BASE}/events.php?limit=500`);
-    if (!resp.ok) throw new Error('Не удалось загрузить мероприятия');
-    const data = await resp.json();
-    store.events = Array.isArray(data) ? data : (data.items || []);
+    store.events = window.AppUtils.asList(
+      await window.AppUtils.fetchJson(`${API_BASE}/events.php?limit=500`)
+    );
   }
 
   function kpiFromForm() {
