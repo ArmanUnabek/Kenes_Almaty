@@ -121,7 +121,10 @@
     try {
       const response = await fetch(`${api()}/members.php?limit=500`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      window.membersCatalog = await response.json();
+      // members.php returns a paginated object ({items, pagination}) when a
+      // limit/page is set, but a bare array otherwise — normalize to an array.
+      const data = await response.json();
+      window.membersCatalog = Array.isArray(data) ? data : (data.items || []);
     } catch (error) {
       console.error('Ошибка загрузки списка членов ОС', error);
       window.membersCatalog = [];
