@@ -143,14 +143,7 @@ if ($scope === 'all' || $scope === 'members') {
     }
 }
 
-usort($items, static function (array $a, array $b): int {
-    $dateA = $a['date'] ?? '';
-    $dateB = $b['date'] ?? '';
-    if ($dateA === $dateB) {
-        return strcmp((string)($b['subject'] ?? ''), (string)($a['subject'] ?? ''));
-    }
-    return strcmp($dateB, $dateA);
-});
+$items = \App\Services\SearchRanker::sort($items);
 
 echo json_encode([
     'items' => array_slice($items, 0, $limit),
