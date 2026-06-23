@@ -30,15 +30,7 @@ function denyWithStatus(int $status, string $message): void
 
 function normalizeRole(?string $role): string
 {
-    $role = strtolower((string)$role);
-    // Backward compatibility: old "manager" behaves like "moderator".
-    if ($role === 'manager') {
-        return 'moderator';
-    }
-    if (in_array($role, ['admin', 'moderator', 'viewer'], true)) {
-        return $role;
-    }
-    return 'viewer';
+    return \App\Auth\AccessPolicy::normalizeRole($role);
 }
 
 function checkAuth(): void
@@ -80,8 +72,7 @@ function requireRole(array $allowedRoles): void
     if (!$user) {
         denyWithStatus(401, 'Пользователь не найден');
     }
-    $role = normalizeRole($user['role'] ?? 'viewer');
-    if (!in_array($role, $allowedRoles, true)) {
+    if (!\App\Auth\AccessPolicy::hasAnyRole($user['role'] ?? 'viewer', $allowedRoles)) {
         denyWithStatus(403, 'Недостаточно прав');
     }
 }
@@ -99,14 +90,14 @@ function requireDeleteAccess(): void
 function isAdmin(): bool
 {
     $user = getCurrentUser();
-    return (bool)$user && normalizeRole($user['role'] ?? '') === 'admin';
+    return (bool)$user && \App\Auth\AccessPolicy::isAdmin($user['role'] ?? '');
 }
 
 function isManager(): bool
 {
     // Backward compatibility with old function name.
     $user = getCurrentUser();
-    return (bool)$user && in_array(normalizeRole($user['role'] ?? ''), ['admin', 'moderator'], true);
+    return (bool)$user && \App\Auth\AccessPolicy::canWrite($user['role'] ?? '');
 }
 
 function canWrite(): bool
@@ -140,22 +131,11 @@ function resolveRegionIdForWrite(?int $requestedRegionId = null): int
         denyWithStatus(401, 'Требуется авторизация');
     }
 
-    if (isAdmin()) {
-        $regionId = $requestedRegionId ?? getCurrentRegionId() ?? ($user['region_id'] ?? null);
-        if (!$regionId || (int)$regionId <= 0) {
-            denyWithStatus(400, 'Укажите регион (region_id) для операции');
-        }
-        return (int)$regionId;
+    try {
+        return \App\Auth\AccessPolicy::resolveRegionIdForWrite($user, $requestedRegionId, getCurrentRegionId());
+    } catch (\App\Auth\AccessDenied $e) {
+        denyWithStatus($e->getStatus(), $e->getMessage());
     }
-
-    $ownRegion = (int)($user['region_id'] ?? 0);
-    if ($ownRegion <= 0) {
-        denyWithStatus(403, 'У пользователя не назначен регион');
-    }
-    if ($requestedRegionId !== null && (int)$requestedRegionId !== $ownRegion) {
-        denyWithStatus(403, 'Нельзя создавать данные в другом регионе');
-    }
-    return $ownRegion;
 }
 
 function assertEventRegionAccess(?array $event): void
@@ -176,15 +156,11 @@ function getCurrentRegionId(): ?int
         return null;
     }
 
-    if (isAdmin()) {
-        if (isset($_SESSION['active_region_id']) && $_SESSION['active_region_id'] !== '' && $_SESSION['active_region_id'] !== null) {
-            return (int)$_SESSION['active_region_id'];
-        }
-        return null;
-    }
+    $activeRegionId = (isset($_SESSION['active_region_id']) && $_SESSION['active_region_id'] !== '' && $_SESSION['active_region_id'] !== null)
+        ? (int)$_SESSION['active_region_id']
+        : null;
 
-    $regionId = $user['region_id'] ?? null;
-    return $regionId ? (int)$regionId : null;
+    return \App\Auth\AccessPolicy::currentRegionId($user, $activeRegionId);
 }
 
 /**
@@ -197,14 +173,11 @@ function resolveRegionIdForRead(): ?int
     if (!$user) {
         denyWithStatus(401, 'Требуется авторизация');
     }
-    if (isAdmin()) {
-        return getCurrentRegionId();
+    try {
+        return \App\Auth\AccessPolicy::resolveRegionIdForRead($user, getCurrentRegionId());
+    } catch (\App\Auth\AccessDenied $e) {
+        denyWithStatus($e->getStatus(), $e->getMessage());
     }
-    $regionId = (int)($user['region_id'] ?? 0);
-    if ($regionId <= 0) {
-        denyWithStatus(403, 'У пользователя не назначен регион');
-    }
-    return $regionId;
 }
 
 function setActiveRegionId(?int $regionId): void
@@ -227,12 +200,12 @@ function getActiveRegionId(): ?int
 function enrichUserPayload(array $user): array
 {
     global $db;
-    $role = normalizeRole($user['role'] ?? 'viewer');
+    $role = \App\Auth\AccessPolicy::normalizeRole($user['role'] ?? 'viewer');
     $user['role'] = $role;
-    $user['is_admin'] = ($role === 'admin');
-    $user['can_write'] = in_array($role, ['admin', 'moderator'], true);
-    $user['can_delete'] = ($role === 'admin');
-    $user['can_export'] = ($role === 'admin');
+    $user['is_admin'] = \App\Auth\AccessPolicy::isAdmin($role);
+    $user['can_write'] = \App\Auth\AccessPolicy::canWrite($role);
+    $user['can_delete'] = \App\Auth\AccessPolicy::canDelete($role);
+    $user['can_export'] = \App\Auth\AccessPolicy::canExport($role);
     $user['active_region_id'] = getActiveRegionId();
 
     $regionId = $user['region_id'] ?? getActiveRegionId();
@@ -272,9 +245,6 @@ function canAccessRegion($regionId): bool
     if (!$user) {
         return false;
     }
-    if (normalizeRole($user['role'] ?? '') === 'admin') {
-        return true;
-    }
-    return (int)$regionId === (int)($user['region_id'] ?? 0);
+    return \App\Auth\AccessPolicy::canAccessRegion($user, $regionId);
 }
 

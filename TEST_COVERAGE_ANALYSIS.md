@@ -120,3 +120,21 @@ A high-value, low-effort starting point:
 
 Together these close the riskiest gap (authorization) and make all future
 coverage measurable.
+
+## 5. Implemented in this PR (first step)
+
+This PR ships the suggested first step:
+
+- **Coverage is now observable** — CI runs with the **PCOV** driver
+  (`coverage: pcov`) plus a non-blocking `--coverage-text` summary step, and
+  `phpunit.xml` gained a `<source>` section scoping coverage to `src/`.
+- **Authorization logic is now tested** — the pure decision logic was extracted
+  from `auth_middleware.php` into `App\Auth\AccessPolicy` (with an
+  `App\Auth\AccessDenied` exception for deny paths). `auth_middleware.php` now
+  delegates to it, so production and tests share one source of truth. The new
+  `tests/AccessPolicyTest.php` adds **23 tests** covering role normalization, the
+  write/delete/export capability matrix, `canAccessRegion`, and every
+  region-resolution branch for read and write (admin vs. non-admin, missing
+  region, cross-region write attempts). Suite grew from **54 → 77 tests**.
+
+Remaining priorities (2–7 above) are still open follow-ups.
