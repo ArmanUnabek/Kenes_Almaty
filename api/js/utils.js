@@ -98,6 +98,29 @@
     return { pending, overdue, warning };
   }
 
+  /**
+   * Нормализует ответ API к массиву. List-эндпоинты отдают то «голый массив»,
+   * то объект `{items, pagination}` (или `{data}`) в зависимости от параметров —
+   * этот хелпер делает потребителей устойчивыми к обоим форматам.
+   */
+  function asList(data) {
+    const list = Array.isArray(data) ? data : (data?.items ?? data?.data ?? []);
+    return Array.isArray(list) ? list : Object.values(list || {});
+  }
+
+  /**
+   * fetch + разбор JSON с единой обработкой ошибок. Идёт через пропатченный
+   * `window.fetch` из csrf-handler.js, поэтому CSRF-токен подставляется как обычно.
+   */
+  async function fetchJson(url, opts) {
+    const response = await fetch(url, opts);
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || body.message || `HTTP ${response.status}`);
+    }
+    return response.json().catch(() => ({}));
+  }
+
   window.AppUtils = {
     escapeHtml,
     formatDateISOtoRus,
@@ -110,6 +133,8 @@
     isLetterDueSoon,
     syncUserToStorage,
     getPendingLettersSummary,
+    asList,
+    fetchJson,
     RESPONSE_WORKING_DAYS,
     WARN_WORKING_DAYS_BEFORE,
   };
@@ -118,4 +143,8 @@
   window.addWorkingDays = addWorkingDays;
   window.subtractWorkingDays = subtractWorkingDays;
   window.syncUserToStorage = syncUserToStorage;
+  window.asList = asList;
+  // Глобальный apiFetch: ряд панелей (комментарии/аудит/архив/шаблоны) в
+  // letters-ui.js вызывают apiFetch, который ранее нигде не был определён.
+  window.apiFetch = fetchJson;
 })(window);
