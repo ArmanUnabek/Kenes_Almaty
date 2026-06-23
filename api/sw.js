@@ -1,4 +1,4 @@
-const CACHE_NAME = 'os-journal-v1';
+const CACHE_NAME = 'os-journal-v2';
 const OFFLINE_URL = '/api/offline.html';
 
 self.addEventListener('install', (event) => {

@@ -579,4 +579,4 @@
   });
 
   AppI18n.applyDom = applyDom;
-})();
+})(window);

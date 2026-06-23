@@ -489,7 +489,8 @@ function populateMemberSelect(selectEl) {
   const previousSelection = Array.from(selectEl.selectedOptions).map(opt => Number(opt.value));
   selectEl.innerHTML = '';
   const fragment = document.createDocumentFragment();
-  (window.membersCatalog || []).forEach(member => {
+  const catalog = Array.isArray(window.membersCatalog) ? window.membersCatalog : [];
+  catalog.forEach(member => {
     const option = document.createElement('option');
     option.value = member.id;
     option.textContent = member.full_name + (member.commission_name ? ` — ${member.commission_name}` : '');
