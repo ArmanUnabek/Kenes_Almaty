@@ -24,6 +24,14 @@ jobs:
       - name: Check asset version consistency
         run: bash scripts/check-asset-versions.sh
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check frontend bundles are fresh
+        run: bash scripts/check-frontend-build.sh
+
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
 

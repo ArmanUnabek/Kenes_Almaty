@@ -51,8 +51,8 @@ vendor/
 
 # Node / Vite frontend build
 node_modules/
-# dist/ is a build artifact, not source — regenerate with `npm run build`.
-dist/
+# dist/ bundles ARE committed (deployed via File Manager / git ls-files allowlist;
+# CI checks they are fresh via scripts/check-frontend-build.sh).
 # package-lock.json IS committed (reproducible installs for the frontend build).
 
 # Временные файлы
