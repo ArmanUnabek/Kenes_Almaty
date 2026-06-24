@@ -21,6 +21,9 @@ jobs:
       - name: Validate PHP syntax
         run: find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
 
+      - name: Check asset version consistency
+        run: bash scripts/check-asset-versions.sh
+
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
 
