@@ -22,6 +22,8 @@ require_once __DIR__ . '/src/Services/AuditSanitizer.php';
 require_once __DIR__ . '/src/Services/NotificationRecipientPolicy.php';
 require_once __DIR__ . '/src/Services/TotpService.php';
 require_once __DIR__ . '/src/Services/TelegramService.php';
+require_once __DIR__ . '/src/Services/HealthReport.php';
+require_once __DIR__ . '/src/Services/SearchRanker.php';
 require_once __DIR__ . '/src/Auth/AccessDenied.php';
 require_once __DIR__ . '/src/Auth/AccessPolicy.php';
 

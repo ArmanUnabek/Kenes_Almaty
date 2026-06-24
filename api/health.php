@@ -130,13 +130,5 @@ if (file_exists($cronStamp)) {
     $metrics['cron_last_run'] = null;
 }
 
-$healthy = $checks['database'] && $checks['uploads_writable'];
-
-http_response_code($healthy ? 200 : 503);
-echo json_encode([
-    'status'   => $healthy ? 'ok' : 'degraded',
-    'checks'   => $checks,
-    'metrics'  => $metrics,
-    'messages' => $messages,
-    'timestamp' => date('c'),
-], JSON_ENCODE_FLAGS);
+http_response_code(\App\Services\HealthReport::httpStatus($checks));
+echo json_encode(\App\Services\HealthReport::build($checks, $metrics, $messages), JSON_ENCODE_FLAGS);
