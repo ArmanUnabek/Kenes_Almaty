@@ -57,9 +57,29 @@
 
 ## 7. Версии статики
 
-После изменений CSS/JS обновите `?v=` в `api/index.html`, `login.html`, `admin/index.html` для сброса кэша браузера.
+Версия ассетов `?v=N` едина для всех HTML-страниц (`api/index.html`,
+`login.html`, `admin/index.html`, `help/*`, `legal/*`). После изменений CSS/JS
+**не правьте файлы вручную** — выполните один бамп:
 
-Текущая версия статики: **?v=15** (CSS, JS). `csrf-handler.js` — **?v=5** (меняется редко).
+```bash
+bash scripts/bump-assets.sh 27   # подставит ?v=27 во все HTML сразу
+```
+
+CI проверяет единство версии (`scripts/check-asset-versions.sh`) и упадёт, если
+страницы разъехались. Текущая версия: **?v=26**.
+
+## 7a. Деплой одной командой
+
+```bash
+# preview (без заливки):
+DEPLOY_TARGET="user@host:~/www/<домен>" bash scripts/deploy.sh --dry-run
+# реальная заливка (rsync, исключает tests/.github/scripts/*.md):
+DEPLOY_TARGET="user@host:~/www/<домен>" bash scripts/deploy.sh
+```
+
+Перед реальным деплоем соберите зависимости без dev: `composer install --no-dev`.
+При первом заходе после деплоя может потребоваться один раз «Clear site data»
+(DevTools → Application), чтобы сбросить старый Service Worker/кэш.
 
 ## 8. SaaS: юридические страницы и реквизиты
 

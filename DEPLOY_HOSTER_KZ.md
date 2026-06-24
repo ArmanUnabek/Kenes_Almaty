@@ -2,9 +2,15 @@
 
 Пошаговый чек-лист, чтобы «залить файлы и всё работало».
 
+> **Если есть SSH/rsync** — весь чек-лист по файлам автоматизирован:
+> `DEPLOY_TARGET="user@host:~/www/<домен>" bash scripts/deploy.sh --dry-run`
+> (затем без `--dry-run`). Скрипт сам исключает `tests/.github/scripts/*.md`
+> и проверяет единство версии ассетов. Версию статики меняйте одним бампом:
+> `bash scripts/bump-assets.sh <N>`. Ниже — ручной вариант для панели без SSH.
+
 ## 1. Файлы
 Залей в корень сайта (`~/www/<домен>` или `public_html`) **всё, кроме**:
-`.git/`, `vendor/`, `tests/`, `.github/`, `phpunit.xml`, `*.md`, `.env.local`.
+`.git/`, `vendor/`, `tests/`, `.github/`, `scripts/`, `phpunit.xml`, `*.md`, `.env.local`.
 
 > `vendor/` нужен только для PHPMailer (корректный TLS у почты). Если есть SSH —
 > `composer install --no-dev`. Если нет — не заливай; почта пойдёт через встроенный
