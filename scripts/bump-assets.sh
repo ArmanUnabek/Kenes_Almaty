@@ -17,7 +17,9 @@ cd "$(dirname "$0")/.."
 
 show_current() {
   echo "Asset versions currently in use:"
-  grep -rhoE '\?v=[0-9]+' --include='*.html' . | sort | uniq -c
+  # `|| true`: with `set -o pipefail`, grep exiting non-zero on no matches
+  # would otherwise abort the script instead of printing an empty summary.
+  { grep -rhoE '\?v=[0-9]+' --include='*.html' . || true; } | sort | uniq -c
 }
 
 NEW="${1:-}"

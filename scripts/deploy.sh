@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Deploy the app to a shared host via rsync over SSH, excluding dev/test files.
-# Runs the asset-version consistency gate first so a deploy never ships a stale
-# CSS/JS mix. Formalizes the manual checklist in DEPLOY_HOSTER_KZ.md.
+# Deploy the app to a shared host via rsync over SSH. Runs the asset-version
+# consistency gate first so a deploy never ships a stale CSS/JS mix.
+# Formalizes the manual checklist in DEPLOY_HOSTER_KZ.md.
 #
 # Configure the target (env var or a gitignored .deploy.env file):
 #   DEPLOY_TARGET="user@host:~/www/zhurnal.zhasylumit.kz"
@@ -23,14 +23,14 @@ DRY=""
 # 1. Gate: all HTML entry points must use a single asset version.
 scripts/check-asset-versions.sh
 
-# 2. Files that must never be shipped to production.
-EXCLUDES=(
-  --exclude '.git/'            --exclude '.github/'
-  --exclude 'tests/'           --exclude 'phpunit.xml'
-  --exclude '.phpunit.cache/'  --exclude 'scripts/'
-  --exclude '*.md'             --exclude 'docker-compose.yml'
-  --exclude 'node_modules/'    --exclude '.deploy.env'
-  --exclude '.env'             --exclude '.env.local'
+# 2. Build the deployable file set from git — an ALLOWLIST of tracked files.
+#    This inherently excludes every gitignored local artifact (database.sqlite,
+#    logs/, cache/, .rate_limit/, local uploads, .env*), so a dev-machine deploy
+#    can never publish a SQLite DB or secrets into the web root. Dev-only tracked
+#    paths (tests, CI, scripts, docs) are filtered out too. Protective files like
+#    uploads/.htaccess are tracked, so they DO ship.
+mapfile -t FILES < <(
+  git ls-files | grep -vE '^(tests/|\.github/|scripts/|.*\.md$|phpunit\.xml|docker-compose\.yml)' || true
 )
 
 if [[ -z "${DEPLOY_TARGET:-}" ]]; then
@@ -38,19 +38,23 @@ if [[ -z "${DEPLOY_TARGET:-}" ]]; then
 DEPLOY_TARGET is not set — printing the deployable file set instead of syncing.
 Set it (e.g. in .deploy.env):  DEPLOY_TARGET="user@host:~/www/<domain>"
 
-Deployable files:
+Deployable files (tracked only):
 EOF
-  git ls-files \
-    | grep -vE '^(tests/|\.github/|scripts/|.*\.md$|phpunit\.xml|docker-compose\.yml)' \
-    | sed 's/^/  /'
+  printf '  %s\n' "${FILES[@]}"
   echo
-  echo "Note: build vendor/ with 'composer install --no-dev' before a real deploy"
-  echo "(PHPMailer is needed for email; dev packages are not)."
+  echo "Plus vendor/ (build with 'composer install --no-dev' — PHPMailer is needed for email)."
   exit 0
 fi
 
-echo "Deploying to ${DEPLOY_TARGET} ${DRY:+(dry run)}…"
-rsync -avz ${DRY} "${EXCLUDES[@]}" ./ "${DEPLOY_TARGET}/"
+echo "Deploying ${#FILES[@]} tracked files to ${DEPLOY_TARGET} ${DRY:+(dry run)}…"
+rsync -avz ${DRY} --files-from=<(printf '%s\n' "${FILES[@]}") ./ "${DEPLOY_TARGET}/"
+
+# Production dependencies live in vendor/ (gitignored), so sync them separately.
+# Build with `composer install --no-dev` first so no dev packages are shipped.
+if [[ -d vendor ]]; then
+  echo "Syncing vendor/ …"
+  rsync -avz ${DRY} vendor/ "${DEPLOY_TARGET}/vendor/"
+fi
 
 echo
 echo "Done. On the FIRST load after deploy, a one-time 'Clear site data'"
