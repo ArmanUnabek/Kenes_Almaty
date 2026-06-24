@@ -58,9 +58,12 @@ class PhotoUploadController extends ApiController
 
             $oldPhoto = $this->memberRepo->getPhotoPath($member_id);
             if ($oldPhoto) {
-                $oldAbsPath = APP_ROOT . '/' . ltrim($oldPhoto, '/');
-                if (file_exists($oldAbsPath)) {
-                    @unlink($oldAbsPath);
+                // The stored path comes from the DB — confine deletion to the
+                // uploads directory so a tampered value can't unlink elsewhere.
+                $candidate = APP_ROOT . '/' . ltrim($oldPhoto, '/');
+                $safeOld = \App\Services\FileStorage::pathWithinBase(APP_ROOT . '/uploads', $candidate);
+                if ($safeOld !== null && is_file($safeOld)) {
+                    @unlink($safeOld);
                 }
             }
 

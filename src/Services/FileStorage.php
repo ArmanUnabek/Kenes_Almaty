@@ -44,5 +44,49 @@ class FileStorage
             'size' => strlen($binary),
         ];
     }
+
+    /**
+     * Confine a filesystem path to a base directory using purely lexical
+     * normalization (no filesystem access). Returns the normalized path if it
+     * stays within $baseDir, or null if it escapes via `..` / absolute jumps.
+     *
+     * Defends against path traversal (CWE-22) when a path originates from
+     * storage or user input — e.g. before unlink()ing a member's old photo
+     * whose path comes from the database.
+     */
+    public static function pathWithinBase(string $baseDir, string $path): ?string
+    {
+        $base = self::normalizeLexicalPath($baseDir);
+        $norm = self::normalizeLexicalPath($path);
+        if ($base === '' || $norm === '') {
+            return null;
+        }
+        if ($norm === $base || str_starts_with($norm, $base . '/')) {
+            return $norm;
+        }
+        return null;
+    }
+
+    /**
+     * Lexically resolve `.`/`..` segments and normalize separators without
+     * touching the filesystem (deterministic, unit-testable).
+     */
+    private static function normalizeLexicalPath(string $path): string
+    {
+        $path = str_replace('\\', '/', $path);
+        $isAbsolute = isset($path[0]) && $path[0] === '/';
+        $out = [];
+        foreach (explode('/', $path) as $seg) {
+            if ($seg === '' || $seg === '.') {
+                continue;
+            }
+            if ($seg === '..') {
+                array_pop($out);
+                continue;
+            }
+            $out[] = $seg;
+        }
+        return ($isAbsolute ? '/' : '') . implode('/', $out);
+    }
 }
 
