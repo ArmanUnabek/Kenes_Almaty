@@ -1,58 +1,48 @@
 # Frontend build (Vite) — «Журнал ОС»
 
-The SPA is historically a **no-build** vanilla-JS app: classic `<script>` tags
-loaded in a fixed order and cache-busted with `?v=N` (see `scripts/bump-assets.sh`).
-This adds an **opt-in** Vite build that bundles those scripts into a single
-minified, content-hashed asset, so a later cutover can drop the manual `?v=N`
-versioning entirely.
+The SPA was historically a **no-build** vanilla-JS app: classic `<script>` tags
+loaded in a fixed order and cache-busted with `?v=N`. It now ships **bundled**:
+each HTML entry point loads a single minified bundle built from those scripts.
+`?v=N` busting (`scripts/bump-assets.sh`) is retained on the bundle tag.
 
-> **Status: infrastructure only.** `npm run build` produces a parallel artifact
-> in `dist/`. The live HTML (`api/index.html`, `login.html`, `admin/index.html`)
-> still loads the raw `?v=N` files. The cutover to the hashed bundle is a
-> separate, verified step (below) so production is never at risk from this PR.
+## Pages → bundles
+
+| Page | Bundle | Sources (in load order) |
+|---|---|---|
+| `api/index.html` | `/dist/app.js` | `csrf-handler` → `api/js/utils,i18n,i18n-dom,core,members-ui,dashboard,letters-ui,events-ui,app-shell,session` → `api/app.js` → `api/js/search,dashboard-enhanced,notifications-ui,calendar,mobile-ui` |
+| `admin/index.html` | `/dist/admin.js` | `csrf-handler` → `api/js/utils` → `admin/admin-i18n` → `admin/admin.js` |
+| `login.html` | `/dist/login.js` | `csrf-handler` → `js/login-i18n` |
+
+The import order for each lives in `frontend/{app,login,admin}.entry.js` (side-effect
+imports — no ESM rewrite; the scripts keep attaching to `window`).
+
+**Still loaded as their own tags** (not bundled): `config_public.php`
+(server-rendered globals, must precede the bundle), `/js/site-config.js`,
+`/js/site-docs.js`, and the Bootstrap / Chart.js CDN bundles.
 
 ## Build
 
 ```bash
-npm install        # installs vite (dev dependency only)
-npm run build      # emits dist/assets/app.<hash>.js
-npm run dev        # optional: vite dev server
+npm install                  # installs vite (dev dependency only)
+npm run build                # rebuilds dist/{app,login,admin}.js
 ```
 
-`dist/` is git-ignored (a build artifact, not source). `package-lock.json` IS
-committed for reproducible installs.
+The built bundles in `dist/` **are committed** so deploys work via File Manager
+(no server-side build needed); `deploy.sh` ships them through its `git ls-files`
+allowlist. `package-lock.json` is committed for reproducible installs.
 
-## What the bundle contains
+> **After any change to `api/js/*.js`, `admin/*.js`, `js/login-i18n.js` or an
+> entry file, run `npm run build` and commit `dist/`.** CI enforces this:
+> `scripts/check-frontend-build.sh` rebuilds and fails if `dist/` is stale.
 
-`frontend/app.entry.js` imports the existing classic IIFE scripts **for their
-side effects, in the exact load order** of `api/index.html`:
+## Bumping the cache version
 
-```
-csrf-handler.js → api/js/utils.js → i18n.js → i18n-dom.js → core.js →
-members-ui.js → dashboard.js → letters-ui.js → events-ui.js → app-shell.js →
-session.js → api/app.js → search.js → dashboard-enhanced.js →
-notifications-ui.js → calendar.js → mobile-ui.js
-```
+`scripts/bump-assets.sh <N>` rewrites `?v=N` across all HTML, including the
+bundle tags — unchanged from before. The CI gate
+`scripts/check-asset-versions.sh` still enforces a single version everywhere.
 
-No ESM rewrite is required — the files keep attaching to `window`
-(`window.AppUtils`, `window.AppI18n`, `window.apiFetch`, …); the bundler just
-concatenates, minifies and hashes them.
+## Rollback
 
-**Deliberately NOT bundled** (must remain their own tags):
-
-- `config_public.php` — server-rendered globals (`API_BASE`, CSRF token); must
-  load **before** the bundle.
-- `/js/site-config.js`, `/js/site-docs.js` — served from the site root.
-- Bootstrap / Chart.js — loaded from the CDN.
-
-## Planned cutover (separate PR, after verification on staging)
-
-1. After `npm run build`, replace the 14 raw `api/js/*.js` + `api/app.js` +
-   `../csrf-handler.js` script tags in each HTML entry point with a single
-   `<script src="/dist/assets/app.<hash>.js"></script>`, keeping
-   `config_public.php` (before) and the CDN/site-root tags (as-is).
-2. Update `scripts/deploy.sh` to ship `dist/` and stop shipping the raw JS;
-   retire `scripts/bump-assets.sh` / `check-asset-versions.sh` (the content hash
-   replaces `?v=N`) or repurpose the CI gate to assert a fresh build.
-3. Keep a rollback path: the raw files still exist, so reverting the HTML tags
-   restores the no-build serving instantly.
+The raw `api/js/*.js` (and `admin/*`, `js/login-i18n.js`) sources remain in the
+repo. Reverting the `<script>` tags in the three HTML files back to the per-file
+list restores no-build serving instantly.

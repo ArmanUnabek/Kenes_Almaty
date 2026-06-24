@@ -44,11 +44,14 @@ DEPLOY_TARGET="ЛОГИН@ХОСТ:~/www/zhurnal.zhasylumit.kz" bash scripts/dep
 `scripts/`, `*.md`, локальные БД/логи/кеш/секреты, и проверяет единство версии ассетов.
 
 ### B. File Manager (без SSH) — перезалить изменённое
-- HTML: `api/index.html`, `login.html`, `admin/index.html`, `help/*`, `legal/*` (все `?v=26`)
-- JS: `api/js/utils.js`, `members-ui.js`, `letters-ui.js`, `events-ui.js`, `i18n-dom.js`
+> Фронт собран в бандлы. Локально один раз: `npm install && npm run build` (бандлы
+> уже закоммичены в `dist/`, так что обычно просто заливаете готовые файлы).
+- HTML: `api/index.html`, `login.html`, `admin/index.html`, `help/*`, `legal/*` (все `?v=N`)
+- **Бандлы:** `dist/app.js`, `dist/login.js`, `dist/admin.js` (в корень сайта)
 - PWA: `api/sw.js`, `api/icons/icon-192.png`, `api/icons/icon-512.png`
 - Прочее: `.htaccess`, `src/`, `config.php`
-- **Не заливать:** `tests/`, `.github/`, `scripts/`, `*.md`, `database.sqlite`, `logs/`, `cache/`, `.env.local` (если уже на сервере).
+- **Не заливать:** `tests/`, `.github/`, `scripts/`, `frontend/`, `node_modules/`,
+  `package*.json`, `*.md`, `database.sqlite`, `logs/`, `cache/`, `.env.local` (если уже на сервере).
 
 ## Шаг 3. После заливки
 - [ ] DevTools → **Application → Clear site data** → перезагрузка (сбрасывает старый Service Worker/кеш). Делается один раз.
