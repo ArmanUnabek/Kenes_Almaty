@@ -49,9 +49,11 @@ composer.lock
 vendor/
 .phpunit.cache/
 
-# Node (если используется)
+# Node / Vite frontend build
 node_modules/
-package-lock.json
+# dist/ is a build artifact, not source — regenerate with `npm run build`.
+dist/
+# package-lock.json IS committed (reproducible installs for the frontend build).
 
 # Временные файлы
 *.tmp

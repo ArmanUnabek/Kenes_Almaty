@@ -1,0 +1,15 @@
+{
+  "name": "kenes-almaty-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Frontend build tooling for «Журнал Общественного Совета». Bundles the vanilla-JS SPA scripts (currently served as raw ?v=N files) into a minified, content-hashed asset.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
