@@ -303,14 +303,14 @@ async function renderCommissionsHighlights(kpi) {
       const resp = await fetch(`${API_BASE}/commissions.php`);
       if (resp.ok) {
         const data = await resp.json();
-        collection = Array.isArray(data) ? data.map(c => ({
+        collection = (window.AppUtils?.asList(data) || []).map(c => ({
           name: c.name,
           outgoing_count: Number(c.outgoing_count || 0),
           incoming_count: Number(c.incoming_count || 0),
           members_count: Number(c.members_count || 0),
           lead_name: c.lead_name || null,
           color: c.color || '#4f46e5'
-        })) : [];
+        }));
       }
     } catch (err) {
       console.warn('Не удалось загрузить комиссии', err);

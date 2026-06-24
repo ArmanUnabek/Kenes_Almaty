@@ -66,12 +66,10 @@ class CommissionsController extends ApiController
             $this->json($commission);
         }
 
-        $hasPagination = isset($_GET['page']) || isset($_GET['limit']);
+        // List endpoints always return the paginated shape {items, pagination}
+        // for a consistent contract (the frontend normalizes via AppUtils.asList).
         $result = $this->repo->getAll($regionId, $page, $limit);
-        if ($hasPagination) {
-            $this->paginated($result['items'], $result['total'], $page, $limit);
-        }
-        $this->json($result['items']);
+        $this->paginated($result['items'], $result['total'], $page, $limit);
     }
 
     private function handleCreate(?int $regionId): void
