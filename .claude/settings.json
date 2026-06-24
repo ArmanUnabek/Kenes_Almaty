@@ -17,7 +17,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "verity intent capture"
+            "command": "verity intent capture",
+            "timeout": 30
           }
         ]
       }

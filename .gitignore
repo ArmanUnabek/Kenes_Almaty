@@ -56,3 +56,6 @@ package-lock.json
 # Временные файлы
 *.tmp
 *.temp
+
+# Verity: churn-heavy run log (per verity-setup it should not be committed)
+.verity/memory/log.md
