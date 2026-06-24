@@ -17,3 +17,13 @@ superseded — ignore them unless investigating history.
 <!-- Add binding, hand-curated guidance here; it survives Verity regeneration. -->
 <!-- /verity-memory:preserve -->
 <!-- verity-memory:end -->
+
+## Post-task reflection
+When a task is complete (you've created a PR, the user says "done" or "ship it",
+or the work is clearly finished), ask the user one question before moving on:
+
+> "Quick reflection for future agents: what's one thing you learned during this
+> task that would help next time? A decision, a gotcha, a pattern — anything
+> worth remembering. (Say 'skip' to skip.)"
+
+If the user responds (not "skip"), run `verity reflect --user-input "<their response>"`.

@@ -1,0 +1,167 @@
+version: "1.0.0"
+created_by: "verity-setup (Claude Code)"
+
+# Project metadata — detected from the codebase
+knowledge_spec:
+  project_name: "ArmanUnabek/Kenes_Almaty"
+  languages: [php, javascript]
+  frameworks: [phpmailer, "vanilla-js SPA (no build step)", pdo]
+  architecture: monolith
+  build_system: composer
+  test_framework: phpunit
+
+# Quality assessment dimensions (always 4)
+quality_dimensions:
+  - id: comprehensibility
+    description: "Code readable in one context load"
+    signals:
+      - metric: file_length
+        threshold: 400
+        unit: lines
+        rationale: "Several existing files (letters-ui.js, auth_middleware.php) are large; 400 is a realistic ceiling to push toward"
+      - metric: cyclomatic_complexity
+        threshold: 15
+        unit: per_function
+        rationale: "Complexity-aware feedback improves AI performance"
+      - metric: function_length
+        threshold: 60
+        unit: lines
+        rationale: "Short functions are easier for agents to modify safely"
+      - metric: naming_quality
+        tool: ai
+        rationale: "Descriptive names improve AI comprehension"
+
+  - id: modularity
+    description: "Modify one concern without touching 3+ files"
+    signals:
+      - metric: single_responsibility
+        tool: ai
+        rationale: "AI performance drops sharply at 3+ files per change"
+      - metric: shallow_abstractions
+        tool: ai
+        rationale: "Repositories/services should stay thin over PDO"
+
+  - id: type_safety
+    description: "Type system catches errors before runtime"
+    signals:
+      - metric: php_strict_types
+        tool: ai
+        rationale: "Prefer typed params/returns; PDO ATTR_EMULATE_PREPARES=false keeps types honest"
+      - metric: explicit_returns
+        tool: ai
+        rationale: "Typed return values reduce runtime surprises in PHP 8"
+
+  - id: test_adequacy
+    description: "Tests define expected behavior for agents"
+    signals:
+      - metric: test_coverage
+        threshold: 70
+        unit: percent
+        ai_threshold: 85
+        rationale: "PHPUnit suite exists (116 tests); repositories now covered via in-memory SQLite"
+      - metric: test_quality
+        tool: ai
+        rationale: "Tests are the primary safety net; avoid reimplementing prod logic inside tests"
+
+# Security patterns (CWE-mapped, always all 7)
+security_patterns:
+  - id: no-hardcoded-secrets
+    description: "No secrets, API keys, passwords, or tokens in source code"
+    severity: critical
+    cwe: [CWE-798]
+    enforced_by: [trivy, ai]
+  - id: input-sanitization
+    description: "All user input validated and sanitized before use"
+    severity: critical
+    cwe: [CWE-20, CWE-80, CWE-89, CWE-117]
+    enforced_by: [ai]   # App\Validator + escapeHtml/htmlspecialchars
+  - id: parameterized-queries
+    description: "Database queries use PDO prepared statements, never string concatenation"
+    severity: critical
+    cwe: [CWE-89]
+    enforced_by: [ai]   # PDO prepare/execute throughout src/Repositories
+  - id: dependency-verification
+    description: "No known-vulnerable dependencies"
+    severity: high
+    cwe: [CWE-1395]
+    enforced_by: [trivy]
+  - id: no-unsafe-deserialization
+    description: "No unsafe deserialization of untrusted data"
+    severity: high
+    cwe: [CWE-502]
+    enforced_by: [ai]
+  - id: access-control-checks
+    description: "Authorization verified on all sensitive operations"
+    severity: high
+    cwe: [CWE-639, CWE-862]
+    enforced_by: [ai]   # auth_middleware + App\Auth\AccessPolicy
+  - id: config-file-integrity
+    description: "Configuration files not manipulable by untrusted input"
+    severity: high
+    cwe: [CWE-15]
+    enforced_by: [ai]
+
+# Project-specific patterns (derived from this codebase)
+custom_patterns:
+  - id: api-auth-required
+    description: "Every endpoint under api/ that returns data must call checkAuth()/requireRole() (or a documented token gate) before touching the DB."
+    severity: high
+    enforced_by: [ai]
+    rationale: "auth_middleware.php is the single gate; an unguarded endpoint exposes journal data."
+  - id: region-scoping
+    description: "Reads/writes of region-owned data (members, letters, commissions, events) must pass a region_id or go through App\\Auth\\AccessPolicy; non-admins must never access another region."
+    severity: critical
+    enforced_by: [ai]
+    rationale: "Region isolation is the core multi-tenant boundary; AccessPolicy + repository region_id params enforce it (covered by AccessPolicyTest and the SQLite repository tests)."
+  - id: pdo-prepared-statements
+    description: "All SQL goes through PDO prepare()/execute() with bound parameters — never interpolate request input into SQL strings."
+    severity: critical
+    enforced_by: [ai]
+    rationale: "PDO with ATTR_EMULATE_PREPARES=false is the project's SQL-injection defense."
+  - id: output-escaping
+    description: "User-supplied data rendered into HTML must be escaped (frontend AppUtils.escapeHtml; PHP htmlspecialchars)."
+    severity: high
+    enforced_by: [ai]
+    rationale: "Prevents stored/reflected XSS in the SPA and server-rendered fragments."
+  - id: csrf-on-mutations
+    description: "State-changing requests (POST/PUT/DELETE) must be CSRF-protected: server via App\\Middleware\\CsrfMiddleware, frontend via the csrf-handler.js fetch wrapper (which AppUtils.fetchJson goes through)."
+    severity: high
+    enforced_by: [ai]
+    rationale: "CsrfMiddleware verifies a per-session token; bypassing the fetch wrapper drops the token."
+
+# Process constraints
+process_constraints:
+  self_healing_limit: 2
+  analysis_mode: balanced
+
+  compound_enabled: true
+  memory_graph_enabled: true
+  memory_graph_budget_tokens: 2000
+  knowledge_injection_budget_tokens: 2000
+  finding_autosuppress_threshold: 2
+
+  intent_fail_threshold: 4
+  intent_warn_threshold: 7
+
+  exclude_paths:
+    - vendor
+    - node_modules
+    - dist
+    - build
+    - .git
+    - uploads
+    - cache
+    - logs
+    - .rate_limit
+    - .phpunit.cache
+
+# Tool configuration.
+# NOTE: Verity's curated pattern catalog does not cover PHP (this project's
+# primary language). Trivy (dependency/secret/config scanning) is language-
+# agnostic and is the main automated tool here. PHP-specific static analysis
+# (phpstan / php_codesniffer) and JS linting should be wired up separately if
+# desired; most PHP enforcement relies on the AI reviewer + the custom_patterns
+# above.
+tool_configuration:
+  trivy:
+    enabled: true

@@ -57,5 +57,15 @@ package-lock.json
 *.tmp
 *.temp
 
-# Verity: churn-heavy run log (per verity-setup it should not be committed)
+# Verity — credentials, caches, transient state, and the churn-heavy run log.
+# Keep .verity/standard.yaml, .verity/memory/<domain>/ and VERITY.md committed.
+.verity/credentials
+.verity/.cache/
+.verity/.logs/
+.verity/.last-analysis
+.verity/.iteration-count
+.verity/.last-pass-hash
+.verity/.last-intent
+.verity/.memory-sync-state.json
 .verity/memory/log.md
+.claude/settings.local.json

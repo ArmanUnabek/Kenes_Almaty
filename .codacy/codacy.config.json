@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "metadata": {
+    "source": "local",
+    "languages": ["PHP", "JavaScript"]
+  },
+  "tools": [
+    {
+      "toolId": "Trivy",
+      "patterns": [
+        { "patternId": "trivy_vuln" },
+        { "patternId": "trivy_secret" },
+        { "patternId": "trivy_config" },
+        { "patternId": "trivy_license" }
+      ]
+    }
+  ],
+  "exclude": [
+    "**/vendor/**",
+    "**/node_modules/**",
+    "**/.git/**",
+    "**/uploads/**",
+    "**/cache/**",
+    "**/logs/**",
+    "**/.phpunit.cache/**"
+  ]
+}
