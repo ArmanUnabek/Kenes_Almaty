@@ -21,15 +21,11 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   }
 
-  const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-
   function formatMonthLabel(key) {
+    // Delegate to the single, language-aware implementation in i18n.js
+    // (AppI18n.MONTHS) instead of duplicating a RU-only month array here.
     if (window.AppI18n?.formatMonthLabel) return window.AppI18n.formatMonthLabel(key);
-    if (!key) return '';
-    const [y, mm] = String(key).split('-');
-    const m = Number(mm);
-    if (!y || !Number.isFinite(m) || m < 1 || m > 12) return String(key);
-    return `${MONTHS_RU[m - 1]} ${y}`;
+    return key ? String(key) : '';
   }
 
   function getMonthKeys(items) {
@@ -1417,10 +1413,11 @@ async function linkExistingOutgoing(outgoingId) {
     }
   } catch (error) {
     console.error('Ошибка привязки исходящего', error);
+    const msg = t('letters.link_error', 'Не удалось привязать исходящее письмо');
     if (window.showError) {
-      showError('Не удалось привязать исходящее письмо');
+      showError(msg);
     } else {
-      alert(t('letters.link_error', 'Не удалось привязать исходящее письмо'));
+      alert(msg);
     }
   }
 }
@@ -1578,57 +1575,61 @@ function renderOutgoing() {
 }
 
 async function deleteIncoming(id) {
+  const confirmMsg = t('letters.delete_incoming_confirm', 'Удалить входящее письмо?');
+  const errorMsg = t('letters.delete_incoming_error', 'Не удалось удалить входящее письмо');
   if (window.confirmDelete) {
-    confirmDelete('Вы уверены, что хотите удалить это входящее письмо?', async () => {
+    confirmDelete(confirmMsg, async () => {
       try {
         await deleteLetter('incoming', id);
         if (window.showSuccess) {
-          showSuccess('Входящее письмо успешно удалено');
+          showSuccess(t('letters.delete_incoming_ok', 'Входящее письмо успешно удалено'));
         }
       } catch (error) {
         console.error('Ошибка удаления входящего письма', error);
         if (window.showError) {
-          showError('Не удалось удалить входящее письмо');
+          showError(errorMsg);
         } else {
-          alert(t('letters.delete_incoming_error', 'Не удалось удалить входящее письмо'));
+          alert(errorMsg);
         }
       }
     });
   } else {
-    if (!confirm('Удалить входящее письмо?')) return;
+    if (!confirm(confirmMsg)) return;
     try {
       await deleteLetter('incoming', id);
     } catch (error) {
       console.error('Ошибка удаления входящего письма', error);
-      alert(t('letters.delete_incoming_error', 'Не удалось удалить входящее письмо'));
+      alert(errorMsg);
     }
   }
 }
 
 async function deleteOutgoing(id) {
+  const confirmMsg = t('letters.delete_outgoing_confirm', 'Удалить исходящее письмо?');
+  const errorMsg = t('letters.delete_outgoing_error', 'Не удалось удалить исходящее письмо');
   if (window.confirmDelete) {
-    confirmDelete('Вы уверены, что хотите удалить это исходящее письмо?', async () => {
+    confirmDelete(confirmMsg, async () => {
       try {
         await deleteLetter('outgoing', id);
         if (window.showSuccess) {
-          showSuccess('Исходящее письмо успешно удалено');
+          showSuccess(t('letters.delete_outgoing_ok', 'Исходящее письмо успешно удалено'));
         }
       } catch (error) {
         console.error('Ошибка удаления исходящего письма', error);
         if (window.showError) {
-          showError('Не удалось удалить исходящее письмо');
+          showError(errorMsg);
         } else {
-          alert(t('letters.delete_outgoing_error', 'Не удалось удалить исходящее письмо'));
+          alert(errorMsg);
         }
       }
     });
   } else {
-    if (!confirm('Удалить исходящее письмо?')) return;
+    if (!confirm(confirmMsg)) return;
     try {
       await deleteLetter('outgoing', id);
     } catch (error) {
       console.error('Ошибка удаления исходящего письма', error);
-      alert(t('letters.delete_outgoing_error', 'Не удалось удалить исходящее письмо'));
+      alert(errorMsg);
     }
   }
 }
@@ -1817,7 +1818,7 @@ async function deleteOutgoing(id) {
 
       const statusEl = document.createElement('div');
       statusEl.className = 'text-muted small mb-2';
-      statusEl.textContent = 'Обработка файлов...';
+      statusEl.textContent = t('letters.processing_files', 'Обработка файлов...');
       incScansPreview.appendChild(statusEl);
 
       for (const file of files) {
@@ -1844,7 +1845,7 @@ async function deleteOutgoing(id) {
 
       const statusEl = document.createElement('div');
       statusEl.className = 'text-muted small mb-2';
-      statusEl.textContent = 'Обработка файлов...';
+      statusEl.textContent = t('letters.processing_files', 'Обработка файлов...');
       outScansPreview.appendChild(statusEl);
 
       for (const file of files) {
@@ -1906,7 +1907,7 @@ async function deleteOutgoing(id) {
     const count = document.getElementById(type === 'incoming' ? 'batchCountIncoming' : 'batchCountOutgoing');
     if (!bar) return;
     bar.classList.toggle('d-none', ids.length === 0);
-    if (count) count.textContent = `${ids.length} выбрано`;
+    if (count) count.textContent = (window.AppI18n?.fmt('letters.selected_count', { n: ids.length })) ?? `${ids.length} выбрано`;
   }
 
   function batchExportSelected(type) {
@@ -1930,7 +1931,7 @@ async function deleteOutgoing(id) {
   async function batchArchiveSelected(type) {
     const ids = getSelectedIds(type);
     if (!ids.length) return;
-    if (!confirm(`Переместить ${ids.length} писем(а) в архив?`)) return;
+    if (!confirm((window.AppI18n?.fmt('letters.archive_confirm', { n: ids.length })) ?? `Переместить ${ids.length} писем(а) в архив?`)) return;
     try {
       const res = await fetch(`letters.php?type=${type}&action=bulk`, {
         method: 'DELETE',
@@ -1939,7 +1940,7 @@ async function deleteOutgoing(id) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Ошибка архивации');
-      window.showSuccess(`Архивировано: ${data.archived ?? ids.length}`);
+      window.showSuccess((window.AppI18n?.fmt('letters.archived_ok', { n: data.archived ?? ids.length })) ?? `Архивировано: ${data.archived ?? ids.length}`);
       clearBatchSelection(type);
       refreshLetters();
     } catch (e) {
@@ -2110,7 +2111,7 @@ async function deleteOutgoing(id) {
   }
 
   async function deleteComment(commentId, type, id) {
-    if (!confirm('Удалить комментарий?')) return;
+    if (!confirm(t('letters.delete_comment_confirm', 'Удалить комментарий?'))) return;
     try {
       await apiFetch(`${API_BASE}/comments.php?id=${encodeURIComponent(commentId)}`, { method: 'DELETE' });
       await loadComments(type, id);
@@ -2267,7 +2268,7 @@ async function deleteOutgoing(id) {
   }
 
   async function restoreArchived(type, id) {
-    if (!confirm('Восстановить письмо из архива?')) return;
+    if (!confirm(t('letters.restore_confirm', 'Восстановить письмо из архива?'))) return;
     try {
       await apiFetch(`${API_BASE}/letters.php?type=${type}&action=restore`, {
         method: 'POST',
