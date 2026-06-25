@@ -2256,3 +2256,96 @@ body.dark-mode .cal-cell--today { border-color: #3b82f6; }
 body.dark-mode .cal-badge { background: #60a5fa; }
 body.dark-mode .cal-dot--incoming { background: #60a5fa; }
 body.dark-mode .cal-dot--outgoing { background: #4ade80; }
+
+
+/* ===================================================================== */
+/*  UI refresh — depth, a11y focus, numeric alignment, mobile density.   */
+/*  Appended so all tweaks live in one reviewable block. CSS-only; the    */
+/*  stylesheet is a plain <link> (not bundled), so no rebuild is needed.  */
+/* ===================================================================== */
+
+/* Slightly richer elevation tokens for a more modern, layered look. */
+:root {
+    --shadow-sm: 0 1px 2px rgba(15, 27, 51, 0.06), 0 1px 3px rgba(15, 27, 51, 0.05);
+    --shadow-md: 0 6px 16px rgba(15, 27, 51, 0.10), 0 2px 6px rgba(15, 27, 51, 0.06);
+    --shadow-lg: 0 16px 40px rgba(15, 27, 51, 0.16);
+    --ring: 0 0 0 3px rgba(29, 78, 216, 0.35);
+}
+
+/* Keyboard focus ring — visible only for keyboard users (a11y), additive
+   to Bootstrap's input focus so it never fights native form styling. */
+.btn:focus-visible,
+.nav-link:focus-visible,
+.sidebar-nav .nav-link:focus-visible,
+.mobile-bottom-nav__item:focus-visible,
+.dropdown-item:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}
+
+/* Numbers in stat tiles align in columns and don't jitter as values change. */
+.dash-stat__value,
+.kpi-value,
+.stat-chip__value,
+.dash-stat__note {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
+
+/* Primary action buttons get subtle depth + a gentle lift on hover. */
+.btn-primary {
+    box-shadow: 0 1px 2px rgba(29, 78, 216, 0.20);
+    transition: background-color 0.15s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.btn-primary:hover {
+    box-shadow: 0 4px 12px rgba(29, 78, 216, 0.30);
+    transform: translateY(-1px);
+}
+.btn-primary:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(29, 78, 216, 0.25);
+}
+
+/* Interactive data cards lift slightly on hover for a tactile feel. */
+.data-card,
+.dash-chart-card {
+    transition: box-shadow 0.2s ease;
+}
+.data-card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+/* ---- Phones (≤575px): denser, 2-up KPI tiles instead of tall stacks. ---- */
+@media (max-width: 575.98px) {
+    .dash-hero {
+        --bs-gutter-x: 0.6rem;
+        --bs-gutter-y: 0.6rem;
+    }
+    .dash-hero > [class*="col-"] {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+    .dash-stat {
+        flex-direction: column;
+        gap: 8px;
+        padding: 14px 14px 16px;
+        height: 100%;
+    }
+    .dash-stat__icon {
+        width: 36px;
+        height: 36px;
+        font-size: 1.05rem;
+        border-radius: 10px;
+    }
+    .dash-stat__label {
+        font-size: 0.75rem;
+    }
+    .dash-stat__value {
+        font-size: 1.4rem;
+    }
+    .dash-stat__note {
+        font-size: 0.7rem;
+    }
+}
