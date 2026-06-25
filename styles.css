@@ -2349,3 +2349,90 @@ a:focus-visible {
         font-size: 0.7rem;
     }
 }
+
+
+/* ===================================================================== */
+/*  UI refresh II — bolder brand presence + denser data on desktop.       */
+/*  CSS-only, appended for review. Mobile density tweaks gated below.     */
+/* ===================================================================== */
+
+/* --- Bolder brand --- */
+
+/* Gold accent underline under section page titles. */
+.page-heading h1 {
+    position: relative;
+    padding-bottom: 9px;
+}
+.page-heading h1::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 36px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--brand-gold);
+}
+
+/* Card headers: navy title text + a gold left-accent bar (inset, no layout
+   shift) so every panel reads as part of the brand. */
+.card-header,
+.data-card > .card-header,
+.data-card > .table-responsive + .card-header {
+    color: var(--brand-navy);
+    box-shadow: inset 3px 0 0 var(--brand-gold);
+}
+
+/* Primary buttons get a subtle vertical gradient for more depth/pop. */
+.btn-primary {
+    background-image: linear-gradient(180deg, #2A5CEA 0%, var(--brand-primary) 100%);
+    border-color: var(--brand-primary);
+}
+.btn-primary:hover {
+    background-image: linear-gradient(180deg, var(--brand-primary) 0%, var(--brand-primary-hover) 100%);
+}
+
+/* Stronger active state in the sidebar (wider gold rail). */
+.sidebar-nav .nav-link.active {
+    box-shadow: inset 4px 0 0 var(--brand-gold);
+}
+
+/* --- Denser data (desktop) --- */
+
+/* Tighter table rows: more records on screen without feeling cramped. */
+.data-card .table td,
+.data-card .table th {
+    padding: 8px 14px;
+}
+.data-card .table thead th {
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+}
+
+/* Tighter panel headers. */
+.card-header,
+.data-card > .card-header {
+    padding: 11px 18px;
+}
+
+/* More compact member cards — smaller avatar + tighter body so more fit
+   above the fold; the gold avatar ring (brand cue) stays. */
+.member-card .card-body {
+    padding: 18px 16px;
+}
+.member-avatar {
+    width: 60px;
+    height: 60px;
+    font-size: 1.15rem;
+}
+
+/* Phones keep comfortable spacing — relax the desktop density there. */
+@media (max-width: 575.98px) {
+    .data-card .table td,
+    .data-card .table th {
+        padding: 10px 14px;
+    }
+    .member-card .card-body {
+        padding: 20px 18px;
+    }
+}
