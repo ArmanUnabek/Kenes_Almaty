@@ -1,0 +1,66 @@
+name: Build frontend bundles
+
+# Make CI the single source of truth for the committed dist/ bundles.
+#
+# The bundles are committed (so File-Manager deploys work without a server-side
+# build), but a minified build is not byte-stable across environments, so a
+# bundle built on a contributor's machine may differ from CI's. To avoid that
+# drift, when frontend sources change on main this job rebuilds dist/ in CI's
+# environment and commits the canonical result back. Within CI (fresh `npm ci`,
+# cleared Vite cache) the build is deterministic, so an unchanged source tree
+# produces no diff and no churn commit.
+#
+# Pushes made with GITHUB_TOKEN do not retrigger workflows, so this cannot loop;
+# the commit is also marked [skip ci] as belt-and-suspenders.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/js/**'
+      - 'api/app.js'
+      - 'admin/admin.js'
+      - 'admin/admin-i18n.js'
+      - 'js/login-i18n.js'
+      - 'csrf-handler.js'
+      - 'frontend/**'
+      - 'scripts/build-frontend.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: write
+
+# Avoid overlapping rebuilds racing to push to main.
+concurrency:
+  group: build-frontend-main
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Rebuild bundles
+        run: npm run build
+
+      - name: Commit rebuilt bundles if they changed
+        run: |
+          if git diff --quiet -- dist/; then
+            echo "dist/ already matches a fresh CI build — nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/
+          git commit -m "chore: rebuild frontend bundles [skip ci]"
+          git push

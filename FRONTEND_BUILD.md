@@ -31,12 +31,19 @@ The built bundles in `dist/` **are committed** so deploys work via File Manager
 (no server-side build needed); `deploy.sh` ships them through its `git ls-files`
 allowlist. `package-lock.json` is committed for reproducible installs.
 
-> **After any change to `api/js/*.js`, `admin/*.js`, `js/login-i18n.js` or an
-> entry file, run `npm run build` and commit `dist/`.** CI runs
-> `scripts/check-frontend-build.sh`, which rebuilds and verifies the bundles
-> compile to valid JS. It does not assert byte-for-byte equality (the minifier
-> is not byte-stable across environments) but logs a warning if `dist/` drifts,
-> so a forgotten rebuild is still visible in CI.
+### CI is the source of truth for `dist/`
+
+You can run `npm run build` and commit `dist/` yourself, but you don't have to:
+**on every push to `main` that touches frontend sources, the
+`Build frontend bundles` workflow (`.github/workflows/build-frontend.yml`)
+rebuilds `dist/` in CI's environment and commits the canonical bundles back.**
+Because CI always builds fresh (`npm ci`, cleared Vite cache) the result is
+deterministic there, so it never produces churn on an unchanged source tree.
+
+On pull requests, `scripts/check-frontend-build.sh` only verifies the bundles
+compile to valid JS (it does **not** require byte-for-byte equality, since a
+contributor's minified output may differ from CI's) — the canonical rebuild
+happens once the PR lands on `main`.
 
 ## Bumping the cache version
 
