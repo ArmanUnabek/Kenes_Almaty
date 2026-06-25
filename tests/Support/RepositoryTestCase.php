@@ -67,6 +67,10 @@ abstract class RepositoryTestCase extends TestCase
             commission_id INTEGER,
             email TEXT,
             phone TEXT,
+            birth_date TEXT,
+            facebook TEXT,
+            whatsapp TEXT,
+            instagram TEXT,
             status TEXT DEFAULT 'active',
             photo_path TEXT
         )");

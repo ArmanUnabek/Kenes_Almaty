@@ -116,8 +116,8 @@ class MemberRepository
     public function create(array $data): int
     {
         $stmt = $this->db->prepare("
-            INSERT INTO os_members (region_id, full_name, position, position_kz, organization, organization_kz, commission_id, email, phone, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO os_members (region_id, full_name, position, position_kz, organization, organization_kz, commission_id, email, phone, birth_date, facebook, whatsapp, instagram, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
 
         $stmt->execute([
@@ -130,6 +130,10 @@ class MemberRepository
             $data['commission_id'] ?? null,
             $data['email'] ?? null,
             $data['phone'] ?? null,
+            $data['birth_date'] ?? null,
+            $data['facebook'] ?? null,
+            $data['whatsapp'] ?? null,
+            $data['instagram'] ?? null,
             $data['status'] ?? 'active'
         ]);
 
@@ -139,9 +143,9 @@ class MemberRepository
     public function update(int $id, array $data, ?int $regionId = null): bool
     {
         $query = "
-            UPDATE os_members 
-            SET full_name = ?, position = ?, position_kz = ?, organization = ?, organization_kz = ?, commission_id = ?, 
-                email = ?, phone = ?, status = ?
+            UPDATE os_members
+            SET full_name = ?, position = ?, position_kz = ?, organization = ?, organization_kz = ?, commission_id = ?,
+                email = ?, phone = ?, birth_date = ?, facebook = ?, whatsapp = ?, instagram = ?, status = ?
             WHERE id = ?
         ";
         $params = [
@@ -153,6 +157,10 @@ class MemberRepository
             $data['commission_id'] ?? null,
             $data['email'] ?? null,
             $data['phone'] ?? null,
+            $data['birth_date'] ?? null,
+            $data['facebook'] ?? null,
+            $data['whatsapp'] ?? null,
+            $data['instagram'] ?? null,
             $data['status'] ?? 'active',
             $id,
         ];
