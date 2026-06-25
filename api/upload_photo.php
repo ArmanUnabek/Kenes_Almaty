@@ -52,7 +52,10 @@ class PhotoUploadController extends ApiController
             $this->validateFile($file);
 
             $extension = $this->getFileExtension($file['tmp_name']);
-            $filename = 'member_' . $member_id . '_' . time() . '.' . $extension;
+            // Unguessable filename: photos live under a publicly-servable directory,
+            // so a predictable "member_<id>_<time>" name would let anyone enumerate
+            // and fetch uploads directly. The DB stores the path; serving is by id.
+            $filename = bin2hex(random_bytes(16)) . '.' . $extension;
             $absPath = UPLOAD_DIR . $filename;              // абсолютный, для записи/удаления
             $dbPath  = 'uploads/photos/' . $filename;      // относительный, хранится в БД
 

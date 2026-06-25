@@ -2,6 +2,8 @@
  * UI shell: toast, loading, export/import, autocomplete.
  */
 (function (window) {
+  const t = (k, fb) => window.AppI18n?.t(k, fb) ?? fb;
+  const fmt = (k, vars) => window.AppI18n?.fmt(k, vars) ?? k;
   const formatDateISOtoRus = window.AppUtils?.formatDateISOtoRus
     || ((iso) => (iso ? new Date(iso).toLocaleDateString('ru-RU') : ''));
 
@@ -52,7 +54,7 @@
   async function exportData(format) {
     const allowed = window.canExport?.() || window.AppCore?.canExport?.();
     if (!allowed) {
-      showError('Экспорт данных доступен только администратору');
+      showError(t('export.admin_only', 'Экспорт данных доступен только администратору'));
       return;
     }
     try {
@@ -75,7 +77,7 @@
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
-      showSuccess('Экспорт выполнен. Операция записана в журнал аудита.');
+      showSuccess(t('export.done', 'Экспорт выполнен. Операция записана в журнал аудита.'));
     } catch (err) {
       console.error(err);
       showError(err.message || 'Не удалось экспортировать данные');
@@ -96,11 +98,11 @@
     const file = ev?.target?.files?.[0];
     if (!file) return;
     if (!window.canExport?.() && !window.AppCore?.canExport?.()) {
-      showError('Импорт данных доступен только администратору');
+      showError(t('import.admin_only', 'Импорт данных доступен только администратору'));
       if (ev?.target) ev.target.value = '';
       return;
     }
-    if (!window.confirm('Импорт добавит письма через API. Продолжить?')) {
+    if (!window.confirm(t('import.confirm', 'Импорт добавит письма через API. Продолжить?'))) {
       ev.target.value = '';
       return;
     }
@@ -173,11 +175,11 @@
       if (typeof window.refreshLetters === 'function') await window.refreshLetters();
       if (typeof window.renderAll === 'function') window.renderAll();
       hideLoading();
-      showSuccess(`Импорт завершён: ${ok} записей${fail ? `, ошибок: ${fail}` : ''}`);
+      showSuccess(fmt('import.done', { ok }) + (fail ? fmt('import.errors_suffix', { fail }) : ''));
     } catch (err) {
       console.error(err);
       hideLoading();
-      showError('Не удалось импортировать JSON');
+      showError(t('import.json_error', 'Не удалось импортировать JSON'));
     } finally {
       if (ev?.target) ev.target.value = '';
     }
@@ -242,7 +244,7 @@
     const file = ev?.target?.files?.[0];
     if (!file) return;
     if (!window.canExport?.() && !window.AppCore?.canExport?.()) {
-      showError('Импорт CSV доступен только администратору или модератору');
+      showError(t('import.csv_role_error', 'Импорт CSV доступен только администратору или модератору'));
       if (ev?.target) ev.target.value = '';
       return;
     }
@@ -305,7 +307,7 @@
   function exportXlsx() {
     const allowed = window.canExport?.() || window.AppCore?.canExport?.();
     if (!allowed) {
-      showError('Экспорт данных доступен только администратору');
+      showError(t('export.admin_only', 'Экспорт данных доступен только администратору'));
       return;
     }
     exportData('xlsx');
