@@ -30,7 +30,7 @@ scripts/check-asset-versions.sh
 #    paths (tests, CI, scripts, docs) are filtered out too. Protective files like
 #    uploads/.htaccess are tracked, so they DO ship.
 mapfile -t FILES < <(
-  git ls-files | grep -vE '^(tests/|\.github/|scripts/|.*\.md$|phpunit\.xml|docker-compose\.yml)' || true
+  git ls-files | grep -vE '^(tests/|\.github/|scripts/|frontend/|.*\.md$|phpunit\.xml|docker-compose\.yml|package\.json|package-lock\.json)' || true
 )
 
 if [[ -z "${DEPLOY_TARGET:-}" ]]; then
