@@ -24,7 +24,9 @@ const entries = [
 ];
 
 // Clean once up front; per-entry builds then append (emptyOutDir: false).
+// Also drop Vite's optimize cache so output doesn't depend on prior cache state.
 rmSync('dist', { recursive: true, force: true });
+rmSync('node_modules/.vite', { recursive: true, force: true });
 
 for (const e of entries) {
   await build({

@@ -32,8 +32,11 @@ The built bundles in `dist/` **are committed** so deploys work via File Manager
 allowlist. `package-lock.json` is committed for reproducible installs.
 
 > **After any change to `api/js/*.js`, `admin/*.js`, `js/login-i18n.js` or an
-> entry file, run `npm run build` and commit `dist/`.** CI enforces this:
-> `scripts/check-frontend-build.sh` rebuilds and fails if `dist/` is stale.
+> entry file, run `npm run build` and commit `dist/`.** CI runs
+> `scripts/check-frontend-build.sh`, which rebuilds and verifies the bundles
+> compile to valid JS. It does not assert byte-for-byte equality (the minifier
+> is not byte-stable across environments) but logs a warning if `dist/` drifts,
+> so a forgotten rebuild is still visible in CI.
 
 ## Bumping the cache version
 
