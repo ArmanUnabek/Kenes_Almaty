@@ -178,7 +178,8 @@ function handlePhotoUpload(\PDO $db, int $userId): void
     }
 
     $ext      = $allowed[$mimeType];
-    $filename = 'user_' . $userId . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+    // Fully-random, unguessable filename (no user id in the path).
+    $filename = bin2hex(random_bytes(16)) . '.' . $ext;
     $dest     = $dir . '/' . $filename;
     if (!move_uploaded_file($file['tmp_name'], $dest)) {
         http_response_code(500);
