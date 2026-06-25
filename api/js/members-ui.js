@@ -96,6 +96,10 @@
     document.getElementById('memberOrganizationKz').value = member.organization_kz || '';
     document.getElementById('memberPhone').value = member.phone || '';
     document.getElementById('memberEmail').value = member.email || '';
+    document.getElementById('memberBirthDate').value = (member.birth_date || '').slice(0, 10);
+    document.getElementById('memberFacebook').value = member.facebook || '';
+    document.getElementById('memberWhatsapp').value = member.whatsapp || '';
+    document.getElementById('memberInstagram').value = member.instagram || '';
     document.getElementById('memberStatus').value = member.status || 'active';
     document.getElementById('memberFormTitle').textContent = t('members.edit', 'Редактировать члена ОС');
     const collapse = document.getElementById('collapseMemberForm');
@@ -147,6 +151,32 @@
     return String(name || '?').slice(0, 2).toUpperCase();
   }
 
+  // Normalize a stored social value into a safe https href. Accepts a full
+  // http(s) URL or a bare handle; rejects anything else (e.g. javascript:) so
+  // the value can never inject a dangerous scheme into the card's <a href>.
+  function buildSocialUrl(type, raw) {
+    const v = String(raw || '').trim();
+    if (!v) return null;
+    if (type === 'whatsapp') {
+      const digits = v.replace(/[^\d]/g, '');
+      return digits.length >= 8 ? `https://wa.me/${digits}` : null;
+    }
+    if (/^https?:\/\//i.test(v)) return v;
+    const handle = v.replace(/^@/, '');
+    if (/^[A-Za-z0-9._-]+$/.test(handle)) {
+      return (type === 'facebook' ? 'https://facebook.com/' : 'https://instagram.com/') + handle;
+    }
+    return null;
+  }
+
+  function formatBirthDate(raw) {
+    const s = String(raw || '').slice(0, 10);
+    const dt = new Date(s + 'T00:00:00');
+    if (isNaN(dt.getTime())) return s;
+    return dt.toLocaleDateString(window.AppI18n?.getLang?.() === 'kz' ? 'kk-KZ' : 'ru-RU',
+      { day: '2-digit', month: 'long', year: 'numeric' });
+  }
+
   function populateMembersCommissionFilter() {
     const select = document.getElementById('filterMembersCommission');
     if (!select) return;
@@ -194,6 +224,21 @@
       const avatarContent = member.photo_url
         ? `<img src="${escapeHtml(member.photo_url)}" alt="" class="member-avatar-img" loading="lazy" referrerpolicy="same-origin">`
         : getInitials(member.full_name);
+      const birthday = member.birth_date
+        ? `<p class="small text-muted mb-0"><i class="bi bi-calendar-event me-1"></i>${escapeHtml(formatBirthDate(member.birth_date))}</p>`
+        : '';
+      const socialLinks = [
+        ['facebook', member.facebook, 'bi-facebook', '#1877F2', 'Facebook'],
+        ['whatsapp', member.whatsapp, 'bi-whatsapp', '#25D366', 'WhatsApp'],
+        ['instagram', member.instagram, 'bi-instagram', '#C13584', 'Instagram'],
+      ].map(([type, value, icon, iconColor, label]) => {
+        const url = buildSocialUrl(type, value);
+        if (!url) return '';
+        return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-light member-social" style="color:${iconColor}" title="${label}" aria-label="${label}"><i class="bi ${icon}"></i></a>`;
+      }).join('');
+      const socialRow = socialLinks
+        ? `<div class="member-socials d-flex justify-content-center gap-2 mt-2">${socialLinks}</div>`
+        : '';
       return `
         <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
           <div class="member-card card h-100">
@@ -204,6 +249,8 @@
               ${commissionBadge}
               ${memberLocalizedField(member, 'organization', 'organization_kz') ? `<p class="small text-muted mt-2 mb-0">${escapeHtml(memberLocalizedField(member, 'organization', 'organization_kz'))}</p>` : ''}
               ${member.phone ? `<p class="small text-muted mb-0">${escapeHtml(member.phone)}</p>` : ''}
+              ${birthday}
+              ${socialRow}
               <div class="mt-3 d-flex justify-content-center gap-2 flex-wrap">
                 <button type="button" class="btn btn-sm btn-outline-info" data-stats-member="${member.id}" data-member-name="${escapeHtml(member.full_name || '')}" data-member-commission="${escapeHtml(member.commission_name || '')}">
                   <i class="bi bi-bar-chart"></i> ${t('members.stats', 'Статистика')}
@@ -354,6 +401,10 @@
           organization_kz: document.getElementById('memberOrganizationKz').value.trim(),
           phone: document.getElementById('memberPhone').value.trim(),
           email: document.getElementById('memberEmail').value.trim(),
+          birth_date: document.getElementById('memberBirthDate').value || null,
+          facebook: document.getElementById('memberFacebook').value.trim(),
+          whatsapp: document.getElementById('memberWhatsapp').value.trim(),
+          instagram: document.getElementById('memberInstagram').value.trim(),
           status: document.getElementById('memberStatus').value,
         };
         if (editId) payload.id = Number(editId);

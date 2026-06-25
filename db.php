@@ -308,6 +308,60 @@ function ensureMemberI18nColumns(PDO $db): void
     }
 }
 
+/**
+ * Добавляет к os_members контактно-профильные колонки (дата рождения и соцсети),
+ * чтобы существующие БД мигрировались без пересоздания.
+ */
+function ensureMemberProfileColumns(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    // column name => SQL type for the ADD COLUMN (driver-specific date type).
+    $sqliteCols = [
+        'birth_date' => 'DATE',
+        'facebook'   => 'VARCHAR(255)',
+        'whatsapp'   => 'VARCHAR(50)',
+        'instagram'  => 'VARCHAR(255)',
+    ];
+
+    try {
+        if (DB_DRIVER === 'sqlite') {
+            $names = array_column($db->query('PRAGMA table_info(os_members)')->fetchAll(), 'name');
+            foreach ($sqliteCols as $col => $type) {
+                if (!in_array($col, $names, true)) {
+                    $db->exec("ALTER TABLE os_members ADD COLUMN {$col} {$type}");
+                }
+            }
+            return;
+        }
+
+        if (DB_DRIVER === 'mysql') {
+            $cols = [];
+            foreach ($db->query('SHOW COLUMNS FROM os_members') as $row) {
+                $cols[$row['Field']] = true;
+            }
+            if (!isset($cols['birth_date'])) {
+                $db->exec('ALTER TABLE os_members ADD COLUMN birth_date DATE NULL COMMENT "Дата рождения" AFTER phone');
+            }
+            if (!isset($cols['facebook'])) {
+                $db->exec('ALTER TABLE os_members ADD COLUMN facebook VARCHAR(255) NULL AFTER birth_date');
+            }
+            if (!isset($cols['whatsapp'])) {
+                $db->exec('ALTER TABLE os_members ADD COLUMN whatsapp VARCHAR(50) NULL AFTER facebook');
+            }
+            if (!isset($cols['instagram'])) {
+                $db->exec('ALTER TABLE os_members ADD COLUMN instagram VARCHAR(255) NULL AFTER whatsapp');
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('ensureMemberProfileColumns: ' . $e->getMessage());
+    }
+}
+
 function ensurePasswordResetTokens(\PDO $db): void
 {
     static $checked = false;
@@ -501,6 +555,7 @@ function getDBConnection(): PDO
         ensureAuditLogsSchema($db);
         ensureTranslationSchema($db);
         ensureMemberI18nColumns($db);
+        ensureMemberProfileColumns($db);
         ensurePasswordResetTokens($db);
         ensureTelegramTables($db);
         ensureTotpBackupColumn($db);

@@ -94,6 +94,20 @@ class MembersController extends ApiController
         if (!empty($data['phone'])) {
             $rules['phone'] = 'phone|max:50';
         }
+        if (!empty($data['birth_date'])) {
+            $rules['birth_date'] = 'date';
+        }
+        // Соцсети хранятся как введённый текст (URL или @handle) и нормализуются в
+        // безопасный https-href только на клиенте при отрисовке карточки.
+        if (!empty($data['facebook'])) {
+            $rules['facebook'] = 'string|max:255';
+        }
+        if (!empty($data['whatsapp'])) {
+            $rules['whatsapp'] = 'string|max:50';
+        }
+        if (!empty($data['instagram'])) {
+            $rules['instagram'] = 'string|max:255';
+        }
         return $rules;
     }
 

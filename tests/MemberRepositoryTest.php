@@ -23,6 +23,41 @@ class MemberRepositoryTest extends RepositoryTestCase
         $this->assertSame('Глава', $row['position']);
     }
 
+    public function testCreatePersistsProfileFields(): void
+    {
+        $repo = $this->repo();
+        $id = $repo->create([
+            'region_id' => 1,
+            'full_name' => 'Айгерим Нурланова',
+            'birth_date' => '1985-03-12',
+            'facebook' => 'https://facebook.com/aigerim',
+            'whatsapp' => '+7 701 000 00 00',
+            'instagram' => '@aigerim',
+        ]);
+
+        $row = $repo->getById($id);
+        $this->assertSame('1985-03-12', $row['birth_date']);
+        $this->assertSame('https://facebook.com/aigerim', $row['facebook']);
+        $this->assertSame('+7 701 000 00 00', $row['whatsapp']);
+        $this->assertSame('@aigerim', $row['instagram']);
+    }
+
+    public function testUpdateChangesProfileFields(): void
+    {
+        $repo = $this->repo();
+        $id = $repo->create(['region_id' => 1, 'full_name' => 'Данияр']);
+
+        $repo->update($id, [
+            'full_name' => 'Данияр Сапаров',
+            'birth_date' => '1990-07-01',
+            'instagram' => 'daniyar',
+        ]);
+
+        $row = $repo->getById($id);
+        $this->assertSame('1990-07-01', $row['birth_date']);
+        $this->assertSame('daniyar', $row['instagram']);
+    }
+
     public function testGetByIdRegionScoping(): void
     {
         $repo = $this->repo();

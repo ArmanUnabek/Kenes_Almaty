@@ -9,7 +9,7 @@
     <title>Журнал ОС — Статистика обращений</title>
     <link rel="manifest" href="/api/manifest.json" />
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <link href="/styles.css?v=29" rel="stylesheet" />
+    <link href="/styles.css?v=30" rel="stylesheet" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -890,6 +890,22 @@
                                 <input type="email" class="form-control" id="memberEmail" />
                             </div>
                             <div class="col-md-6">
+                                <label class="form-label" data-i18n="members.birth_date">Дата рождения</label>
+                                <input type="date" class="form-control" id="memberBirthDate" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label"><i class="bi bi-facebook text-primary"></i> Facebook</label>
+                                <input type="text" class="form-control" id="memberFacebook" placeholder="https://facebook.com/… или @username" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label"><i class="bi bi-whatsapp text-success"></i> WhatsApp</label>
+                                <input type="text" class="form-control" id="memberWhatsapp" placeholder="+7 701 000 00 00" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label"><i class="bi bi-instagram" style="color:#C13584"></i> Instagram</label>
+                                <input type="text" class="form-control" id="memberInstagram" placeholder="https://instagram.com/… или @username" />
+                            </div>
+                            <div class="col-md-6">
                                 <label class="form-label">Статус</label>
                                 <select class="form-select" id="memberStatus">
                                     <option value="active">Активен</option>
@@ -1441,12 +1457,12 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="config_public.php?v=29"></script>
+    <script src="config_public.php?v=30"></script>
     <!-- Bundled app scripts (csrf-handler + js/*.js + app.js), built by `npm run build`.
          Raw sources live in api/js/ and frontend/app.entry.js defines the order. -->
-    <script src="/dist/app.js?v=29"></script>
-    <script src="/js/site-config.js?v=29"></script>
-    <script src="/js/site-docs.js?v=29"></script>
+    <script src="/dist/app.js?v=30"></script>
+    <script src="/js/site-config.js?v=30"></script>
+    <script src="/js/site-docs.js?v=30"></script>
     <script>
         // Проверка сессии и показ пользователя
         document.addEventListener('DOMContentLoaded', async () => {
