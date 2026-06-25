@@ -327,3 +327,25 @@ body.admin-body {
     margin-left: 0;
   }
 }
+
+/* Larger tap targets for touch on the admin nav. */
+@media (max-width: 991px) {
+  .admin-nav-item {
+    min-height: 44px;
+  }
+}
+
+/* Phones: keep the topbar from crowding — drop the username text (the avatar
+   stays as the identity cue) and tighten the action row. */
+@media (max-width: 480px) {
+  .admin-user-chip {
+    padding: .3rem;
+    gap: 0;
+  }
+  .admin-user-chip #adminUserName {
+    display: none;
+  }
+  .admin-topbar-right {
+    gap: .4rem;
+  }
+}
