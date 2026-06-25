@@ -20,6 +20,12 @@
 ## Предусловия (один раз)
 
 - [ ] Боевая БД создана, импортирован `deploy_database.sql` (если уже работает — пропустить).
+- [ ] Применены индексы производительности (идемпотентно — можно запускать повторно):
+  - MySQL/MariaDB: `database_indexes.sql` и `database_indexes_performance.sql`
+  - PostgreSQL: `database_indexes_performance_pg.sql`
+  - Скрипты используют существование-проверки (процедура `add_index_if_missing` /
+    `CREATE INDEX IF NOT EXISTS`), поэтому повторный импорт не падает с «Duplicate key
+    name». Для MySQL нужна привилегия `CREATE ROUTINE` (есть на большинстве хостингов).
 - [ ] В корне сайта лежит `.env.local` с боевыми значениями:
   - `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASS`
   - `APP_URL=https://zhurnal.zhasylumit.kz`
