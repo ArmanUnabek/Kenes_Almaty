@@ -1747,11 +1747,24 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
     <script nonce="<?= $nonce ?>">
         // Проверка сессии и показ пользователя
         document.addEventListener('DOMContentLoaded', async () => {
+            let data;
             try {
                 const resp = await fetch('auth.php');
                 if (!resp.ok) throw new Error('unauth');
-                const data = await resp.json();
+                data = await resp.json();
                 if (!data.authenticated) throw new Error('unauth');
+            } catch (e) {
+                // Только настоящий сбой авторизации ведёт на страницу входа.
+                window.location.href = '../login.html';
+                return;
+            }
+
+            // Сессия подтверждена. Дальше — настройка UI и запуск приложения.
+            // Ошибки на этом этапе НЕ должны трактоваться как «сессия истекла»:
+            // иначе любая JS-ошибка (например, неподгруженный Bootstrap из-за
+            // отсутствующих /assets/vendor/*) выкидывала авторизованного
+            // пользователя на форму входа.
+            try {
                 const user = data.user;
                 window.syncUserSession?.(user);
                 window.allRegions = data.regions || [];
@@ -1808,9 +1821,10 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
                 if (typeof initializeApp === 'function') {
                     await initializeApp();
                 }
-            } catch(e) {
-                // Нет сессии — на страницу входа
-                window.location.href = '../login.html';
+            } catch (e) {
+                // Сессия валидна — это ошибка инициализации UI, а не авторизации.
+                // Логируем, но НЕ уводим на логин.
+                console.error('Ошибка инициализации приложения:', e);
             }
         });
 
