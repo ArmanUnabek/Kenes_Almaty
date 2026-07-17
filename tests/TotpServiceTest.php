@@ -71,8 +71,12 @@ class TotpServiceTest extends TestCase
     {
         $uri = 'otpauth://totp/Test%3Auser?secret=ABC';
         $url = TotpService::getQrUrl($uri);
-        $this->assertStringStartsWith('https://api.qrserver.com/', $url);
-        $this->assertStringContainsString(rawurlencode($uri), $url);
-        $this->assertStringNotContainsString('chart.googleapis.com', $url);
+        $this->assertStringStartsWith('data:image/svg+xml;base64,', $url);
+
+        $base64 = substr($url, strlen('data:image/svg+xml;base64,'));
+        $svg = base64_decode($base64);
+        $this->assertStringContainsString('<svg', $svg);
+        $this->assertStringNotContainsString('chart.googleapis.com', $svg);
+        $this->assertStringNotContainsString('api.qrserver.com', $svg);
     }
 }
