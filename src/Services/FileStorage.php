@@ -38,7 +38,7 @@ class FileStorage
         }
 
         return [
-            'path' => str_replace(APP_ROOT . '/', '', $path),
+            'path' => str_replace(str_replace('\\', '/', APP_ROOT) . '/', '', str_replace('\\', '/', $path)),
             'mime' => $mimeType,
             'file_name' => $originalName ?: $name,
             'size' => strlen($binary),

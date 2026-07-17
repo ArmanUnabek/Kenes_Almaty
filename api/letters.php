@@ -5,8 +5,10 @@ require_once __DIR__ . '/../auth_middleware.php';
 require_once __DIR__ . '/../src/ApiController.php';
 
 use App\ApiController;
+use App\Services\LetterClassifier;
 use App\Services\LetterPersistenceService;
 use App\Services\LetterService;
+use App\Services\ScanVersionService;
 
 class LettersController extends ApiController
 {
@@ -18,8 +20,12 @@ class LettersController extends ApiController
         try {
             $this->requireAuth();
             LetterPersistenceService::ensureIncomingCategorySupport($this->db);
+            LetterClassifier::ensureTable($this->db);
 
             $this->type = $this->getQueryParam('type', 'incoming');
+            if (!in_array($this->type, ['incoming', 'outgoing'], true)) {
+                $this->error('Invalid letter type', 400);
+            }
             $this->table = $this->type === 'incoming' ? 'incoming_letters' : 'outgoing_letters';
 
             $this->ensureSoftDeleteColumns();
@@ -38,6 +44,9 @@ class LettersController extends ApiController
                     } elseif ($action === 'bulk_restore') {
                         $this->requireDeleteAccess();
                         $this->handleBulkRestore();
+                    } elseif ($action === 'bulk') {
+                        $this->requireDeleteAccess();
+                        $this->handleBulk();
                     } else {
                         $this->handleCreate();
                     }
@@ -46,6 +55,11 @@ class LettersController extends ApiController
                     $this->requireWriteAccess();
                     $this->requireCsrf();
                     $this->handleUpdate();
+                    break;
+                case 'PATCH':
+                    $this->requireWriteAccess();
+                    $this->requireCsrf();
+                    $this->handlePatch();
                     break;
                 case 'DELETE':
                     $this->requireDeleteAccess();
@@ -84,7 +98,7 @@ class LettersController extends ApiController
         }
 
         $regionId = $this->resolveRegionIdForRead();
-        $hasPagination = isset($_GET['limit']);
+        $hasPagination = true;
         $limit = max(1, min(500, (int)$this->getQueryParam('limit', 50)));
         $page = max(1, (int)$this->getQueryParam('page', 1));
         $offset = ($page - 1) * $limit;
@@ -157,6 +171,7 @@ class LettersController extends ApiController
         $regionId = resolveRegionIdForWrite(
             isset($data['region_id']) ? (int)$data['region_id'] : null
         );
+        $data = $this->normalizeCrossRefs($data, $regionId);
         $createdBy = $this->currentUser['id'] ?? null;
         $members = LetterPersistenceService::normalizeMembersPayload($data['members'] ?? []);
         $recipients = LetterPersistenceService::normalizeRecipientsPayload($data['recipients'] ?? []);
@@ -174,6 +189,10 @@ class LettersController extends ApiController
                 LetterService::insertScans($this->db, $this->type, $letterId, $data['scans']);
             }
 
+            if (empty($data['category_id']) && $this->type === 'incoming') {
+                $this->autoClassify($letterId, $data, $regionId);
+            }
+
             $this->logAction($this->table, $letterId, 'CREATE', null, $data);
             $this->db->commit();
         } catch (\Throwable $e) {
@@ -183,12 +202,6 @@ class LettersController extends ApiController
             throw $e;
         }
 
-        pusherTrigger('council-documents', 'documents-updated', [
-            'action' => 'create',
-            'type' => $this->type,
-            'id' => $letterId,
-            'region_id' => $regionId,
-        ]);
         $this->json(['id' => $letterId, 'message' => 'Письмо успешно добавлено'], 201);
     }
 
@@ -211,6 +224,7 @@ class LettersController extends ApiController
         LetterService::assertRegionAccess($existingRow);
         $regionId = (int)$existingRow['region_id'];
         $previousIncomingRef = $existingRow['incoming_ref_id'] ?? null;
+        $data = $this->normalizeCrossRefs($data, $regionId);
 
         try {
             $this->db->beginTransaction();
@@ -225,6 +239,7 @@ class LettersController extends ApiController
             LetterPersistenceService::syncLetterMembers($this->db, $this->type, $id, $members);
             LetterPersistenceService::syncLetterRecipients($this->db, $this->type, $id, $recipients);
 
+            $currentUserId = (int)($this->currentUser['id'] ?? 0);
             if (!empty($data['delete_scan_ids']) && is_array($data['delete_scan_ids'])) {
                 $ids = array_values(array_filter(array_map('intval', $data['delete_scan_ids'])));
                 if ($ids) {
@@ -234,7 +249,17 @@ class LettersController extends ApiController
                 }
             }
             if (!empty($data['scans']) && is_array($data['scans'])) {
-                LetterService::insertScans($this->db, $this->type, $id, $data['scans']);
+                $hasCurrent = ScanVersionService::getCurrentVersion($this->db, $this->type, $id) !== null;
+                if ($hasCurrent) {
+                    foreach ($data['scans'] as $scan) {
+                        if (!is_array($scan)) {
+                            continue;
+                        }
+                        ScanVersionService::uploadNewVersion($this->db, $this->type, $id, $scan, $currentUserId);
+                    }
+                } else {
+                    LetterService::insertScans($this->db, $this->type, $id, $data['scans']);
+                }
             }
 
             $this->logAction($this->table, $id, 'UPDATE', null, $data);
@@ -246,13 +271,92 @@ class LettersController extends ApiController
             throw $e;
         }
 
-        pusherTrigger('council-documents', 'documents-updated', [
-            'action' => 'update',
-            'type' => $this->type,
-            'id' => $id,
-            'region_id' => $regionId,
-        ]);
         $this->json(['message' => 'Письмо успешно обновлено']);
+    }
+
+    private function handlePatch(): void
+    {
+        $data = $this->getJsonInput() ?? [];
+        $id = (int)($data['id'] ?? $this->getQueryParam('id') ?? 0);
+        if ($id <= 0) {
+            $this->error('ID не указан', 400);
+        }
+
+        $field = $data['field'] ?? '';
+        $value = $data['value'] ?? null;
+        if ($field === '') {
+            $this->error('Поле не указано', 400);
+        }
+
+        // Те же лимиты, что и в LetterService::validateIncoming/validateOutgoing —
+        // PATCH не должен позволять обходить валидацию PUT/POST.
+        $textLimits = ['responsible' => 255, 'organization' => 255, 'subject' => 500, 'note' => 2000];
+        if (isset($textLimits[$field])) {
+            if ($value !== null && !is_scalar($value)) {
+                $this->error("Поле '{$field}' должно быть строкой", 422);
+            }
+            $value = (string)$value;
+            if (strlen($value) > $textLimits[$field]) {
+                $this->error("Поле '{$field}' должно быть не более {$textLimits[$field]} символов", 422);
+            }
+        }
+
+        $stmt = $this->db->prepare("SELECT region_id FROM {$this->table} WHERE id = ?");
+        $stmt->execute([$id]);
+        $row = $stmt->fetch();
+        if (!$row) {
+            $this->error('Письмо не найдено', 404);
+        }
+        LetterService::assertRegionAccess($row);
+
+        try {
+            $this->db->beginTransaction();
+
+            if ($field === 'members' && is_array($value)) {
+                $members = LetterPersistenceService::normalizeMembersPayload($value);
+                LetterPersistenceService::syncLetterMembers($this->db, $this->type, $id, $members);
+            } elseif ($field === 'responsible' || $field === 'organization') {
+                // ЛЕГАСИ-АЛИАС: 'responsible' здесь пишет в колонку `organization`.
+                // В схеме (incoming_letters / outgoing_letters) НЕТ отдельной колонки
+                // responsible/assignee — «ответственные» письма моделируются связью
+                // многие-ко-многим через letter_members и правятся через field='members'
+                // (см. inline-edit.js openResponsibleDropdown -> patchField 'members').
+                // Ни один текущий клиент не шлёт PATCH field='responsible', поэтому эта
+                // ветка недостижима. Оставлена как исторический алиас. ВНИМАНИЕ: если
+                // какой-либо клиент начнёт слать field='responsible' со скалярным значением,
+                // это ЗАТРЁТ организацию письма. Для настоящего скалярного «ответственного»
+                // потребуется отдельная колонка + маппинг (миграция здесь намеренно не заводится).
+                $this->db->prepare("UPDATE {$this->table} SET organization = ? WHERE id = ?")
+                    ->execute([(string)$value, $id]);
+            } elseif ($field === 'subject') {
+                $this->db->prepare("UPDATE {$this->table} SET subject = ? WHERE id = ?")
+                    ->execute([(string)$value, $id]);
+            } elseif ($field === 'note') {
+                $this->db->prepare("UPDATE {$this->table} SET note = ? WHERE id = ?")
+                    ->execute([(string)$value, $id]);
+            } elseif ($field === 'category' && $this->type === 'incoming') {
+                $allowed = ['KK', 'N', 'JT', 'ZT'];
+                if (!in_array($value, $allowed, true)) {
+                    $this->error('Недопустимая категория', 422);
+                }
+                $this->db->prepare("UPDATE {$this->table} SET category = ? WHERE id = ?")
+                    ->execute([$value, $id]);
+            } elseif ($field === 'scans' && is_array($value)) {
+                LetterService::insertScans($this->db, $this->type, $id, $value);
+            } else {
+                $this->error("Поле '{$field}' не поддерживается для частичного обновления", 400);
+            }
+
+            $this->logAction($this->table, $id, 'PATCH', null, ['field' => $field, 'value' => $value]);
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $e;
+        }
+
+        $this->json(['message' => 'Поле обновлено', 'field' => $field]);
     }
 
     private function handleDelete(): void
@@ -272,15 +376,11 @@ class LettersController extends ApiController
 
         // Soft delete — move to archive
         $deletedBy = (int)($_SESSION['user_id'] ?? 0);
-        $this->db->prepare("UPDATE {$this->table} SET deleted_at = NOW(), deleted_by = ? WHERE id = ?")
-            ->execute([$deletedBy, $id]);
+        $now = date('Y-m-d H:i:s');
+        $this->db->prepare("UPDATE {$this->table} SET deleted_at = ?, deleted_by = ? WHERE id = ?")
+            ->execute([$now, $deletedBy, $id]);
         $this->logAction($this->table, $id, 'DELETE', ['id' => $id], null);
 
-        pusherTrigger('council-documents', 'documents-updated', [
-            'action' => 'delete',
-            'type' => $this->type,
-            'id' => $id,
-        ]);
         $this->json(['message' => 'Письмо перемещено в архив']);
     }
 
@@ -307,11 +407,6 @@ class LettersController extends ApiController
             ->execute([$id]);
         $this->logAction($this->table, $id, 'UPDATE', ['deleted_at' => $letterRow['deleted_at']], ['deleted_at' => null]);
 
-        pusherTrigger('council-documents', 'documents-updated', [
-            'action' => 'restore',
-            'type' => $this->type,
-            'id' => $id,
-        ]);
         $this->json(['message' => 'Письмо восстановлено из архива']);
     }
 
@@ -327,23 +422,87 @@ class LettersController extends ApiController
         $regionId    = $this->resolveRegionIdForRead();
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
 
+        $now = date('Y-m-d H:i:s');
         if ($regionId) {
-            $params = array_merge($ids, [$deletedBy, $deletedBy], $ids, [$regionId]);
             $stmt   = $this->db->prepare(
-                "UPDATE {$this->table} SET deleted_at = NOW(), deleted_by = ? WHERE id IN ({$placeholders}) AND region_id = ? AND deleted_at IS NULL"
+                "UPDATE {$this->table} SET deleted_at = ?, deleted_by = ? WHERE id IN ({$placeholders}) AND region_id = ? AND deleted_at IS NULL"
             );
-            $params = array_merge([$deletedBy], $ids, [$regionId]);
+            $params = array_merge([$now, $deletedBy], $ids, [$regionId]);
         } else {
-            $params = array_merge([$deletedBy], $ids);
+            $params = array_merge([$now, $deletedBy], $ids);
             $stmt   = $this->db->prepare(
-                "UPDATE {$this->table} SET deleted_at = NOW(), deleted_by = ? WHERE id IN ({$placeholders}) AND deleted_at IS NULL"
+                "UPDATE {$this->table} SET deleted_at = ?, deleted_by = ? WHERE id IN ({$placeholders}) AND deleted_at IS NULL"
             );
         }
         $stmt->execute($params);
         $affected = $stmt->rowCount();
 
-        pusherTrigger('council-documents', 'documents-updated', ['action' => 'bulk_delete', 'type' => $this->type]);
         $this->json(['archived' => $affected, 'message' => "Перемещено в архив: {$affected}"]);
+    }
+
+    /**
+     * POST ?action=bulk — массовая операция над письмами.
+     * JSON: {action: 'archive'|'delete', ids: [...]}.
+     * В проекте «архив» = soft-delete (deleted_at), поэтому обе операции
+     * помечают письма удалёнными; различие только в тексте ответа/аудите.
+     * Региональная проверка — одним WHERE region_id = ? AND id IN (...).
+     */
+    private function handleBulk(): void
+    {
+        $data   = $this->getJsonInput() ?? [];
+        $action = (string)($data['action'] ?? '');
+        if (!in_array($action, ['archive', 'delete'], true)) {
+            $this->error("action должен быть 'archive' или 'delete'", 400);
+        }
+        $ids = array_values(array_unique(array_filter(array_map('intval', (array)($data['ids'] ?? [])), static fn ($v) => $v > 0)));
+        if (empty($ids) || count($ids) > 200) {
+            $this->error('ids должен содержать от 1 до 200 элементов', 400);
+        }
+
+        $deletedBy    = (int)($_SESSION['user_id'] ?? 0);
+        $regionId     = $this->resolveRegionIdForRead();
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $regionSql    = $regionId ? ' AND region_id = ?' : '';
+        $regionParam  = $regionId ? [(int)$regionId] : [];
+        $now          = date('Y-m-d H:i:s');
+
+        try {
+            $this->db->beginTransaction();
+
+            // Какие письма реально затронем (для аудита) — с той же региональной проверкой
+            $stmtSel = $this->db->prepare(
+                "SELECT id FROM {$this->table} WHERE id IN ({$placeholders}){$regionSql} AND deleted_at IS NULL"
+            );
+            $stmtSel->execute(array_merge($ids, $regionParam));
+            $affectedIds = array_map('intval', $stmtSel->fetchAll(\PDO::FETCH_COLUMN));
+
+            if ($affectedIds) {
+                $ph2  = implode(',', array_fill(0, count($affectedIds), '?'));
+                $stmt = $this->db->prepare(
+                    "UPDATE {$this->table} SET deleted_at = ?, deleted_by = ? WHERE id IN ({$ph2}) AND deleted_at IS NULL"
+                );
+                $stmt->execute(array_merge([$now, $deletedBy], $affectedIds));
+
+                foreach ($affectedIds as $affectedId) {
+                    $this->logAction($this->table, $affectedId, 'DELETE', ['id' => $affectedId], ['bulk' => $action]);
+                }
+            }
+
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $e;
+        }
+
+        $updated = count($affectedIds);
+        $this->json([
+            'updated' => $updated,
+            'message' => $action === 'archive'
+                ? "Перемещено в архив: {$updated}"
+                : "Удалено: {$updated}",
+        ]);
     }
 
     private function handleBulkRestore(): void
@@ -371,8 +530,69 @@ class LettersController extends ApiController
         $stmt->execute($params);
         $affected = $stmt->rowCount();
 
-        pusherTrigger('council-documents', 'documents-updated', ['action' => 'bulk_restore', 'type' => $this->type]);
         $this->json(['restored' => $affected, 'message' => "Восстановлено: {$affected}"]);
+    }
+
+    /**
+     * Нормализует и проверяет ссылки на связанные письма:
+     * incoming_ref_id / responds_to_outgoing_id должны существовать и
+     * принадлежать тому же региону, что и само письмо. Иначе moderator мог бы,
+     * подставив чужой id, изменить linked_outgoing_id письма другого региона
+     * или прочитать его номер (kk_number/outgoing_number) через автогенерацию.
+     */
+    private function normalizeCrossRefs(array $data, int $regionId): array
+    {
+        if ($this->type === 'outgoing') {
+            $ref = !empty($data['incoming_ref_id']) ? (int)$data['incoming_ref_id'] : null;
+            if ($ref !== null) {
+                $this->assertLetterRefInRegion('incoming_letters', $ref, $regionId);
+            }
+            $data['incoming_ref_id'] = $ref;
+        } else {
+            $ref = !empty($data['responds_to_outgoing_id']) ? (int)$data['responds_to_outgoing_id'] : null;
+            if ($ref !== null) {
+                $this->assertLetterRefInRegion('outgoing_letters', $ref, $regionId);
+            }
+            $data['responds_to_outgoing_id'] = $ref;
+        }
+        return $data;
+    }
+
+    private function assertLetterRefInRegion(string $table, int $refId, int $regionId): void
+    {
+        $stmt = $this->db->prepare("SELECT region_id FROM {$table} WHERE id = ?");
+        $stmt->execute([$refId]);
+        $refRegion = $stmt->fetchColumn();
+        if ($refRegion === false || (int)$refRegion !== $regionId) {
+            $this->error('Связанное письмо не найдено в этом регионе', 422);
+        }
+    }
+
+    private function autoClassify(int $letterId, array $data, int $regionId): void
+    {
+        try {
+            $classifier = new LetterClassifier($this->db);
+
+            $result = $classifier->classifyLetter($data['subject'] ?? null, $data['note'] ?? null);
+            if ($result['category_id'] === null) {
+                return;
+            }
+
+            $commissionId = $classifier->suggestCommission($result['category_id']);
+            if ($commissionId) {
+                $driver = $this->db->getAttribute(\PDO::ATTR_DRIVER_NAME);
+                if ($driver === 'sqlite') {
+                    $insertSql = 'INSERT OR IGNORE INTO letter_commissions (letter_type, letter_id, commission_id) VALUES (?, ?, ?)';
+                } elseif ($driver === 'pgsql') {
+                    $insertSql = 'INSERT INTO letter_commissions (letter_type, letter_id, commission_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING';
+                } else {
+                    $insertSql = 'INSERT IGNORE INTO letter_commissions (letter_type, letter_id, commission_id) VALUES (?, ?, ?)';
+                }
+                $this->db->prepare($insertSql)->execute([$this->type, $letterId, $commissionId]);
+            }
+        } catch (\Throwable $e) {
+            error_log('autoClassify failed for letter ' . $letterId . ': ' . $e->getMessage());
+        }
     }
 
     private function ensureSoftDeleteColumns(): void
@@ -411,7 +631,7 @@ class LettersController extends ApiController
 
     private function insertIncoming(array $data, int $regionId, ?int $createdBy): int
     {
-        $seq = $data['seq'] ?? null;
+        $seq = !empty($data['seq']) ? (int)$data['seq'] : null;
         if (!$seq) {
             $seq = LetterService::computeNextSeq($this->db, $this->table, $regionId);
         }
@@ -444,7 +664,7 @@ class LettersController extends ApiController
 
     private function insertOutgoing(array $data, int $regionId, ?int $createdBy): int
     {
-        $seq = $data['seq'] ?? null;
+        $seq = !empty($data['seq']) ? (int)$data['seq'] : null;
         if (!$seq) {
             $seq = LetterService::computeNextSeq($this->db, $this->table, $regionId);
         }
@@ -522,7 +742,7 @@ class LettersController extends ApiController
             $data['note'] ?? null,
             $id,
         ]);
-        if ($previousIncomingRef && $previousIncomingRef !== ($data['incoming_ref_id'] ?? null)) {
+        if ($previousIncomingRef && (int)$previousIncomingRef !== (int)($data['incoming_ref_id'] ?? 0)) {
             $this->db->prepare('UPDATE incoming_letters SET linked_outgoing_id = NULL WHERE id = ? AND linked_outgoing_id = ?')
                 ->execute([$previousIncomingRef, $id]);
         }

@@ -1,7 +1,7 @@
 <?php
 /**
  * Скрипт проверки входящих писем без ответа.
- * Отправляет Pusher-события и email-уведомления назначенным членам.
+ * Отправляет email/Telegram/WhatsApp/SMS-уведомления назначенным членам.
  * Запуск из CLI или по HTTP с CRON_TOKEN:
  *   php /path/to/cron_deadlines.php
  *   GET /cron_deadlines.php?token=<CRON_TOKEN>
@@ -14,6 +14,8 @@ require_once __DIR__ . '/config.php';
 
 use App\Services\EmailService;
 use App\Services\TelegramService;
+use App\Services\WhatsAppService;
+use App\Services\SmsService;
 
 $isCli = php_sapi_name() === 'cli';
 
@@ -21,7 +23,12 @@ if (!$isCli) {
     header('Content-Type: application/json; charset=utf-8');
 
     $expectedToken = envValue('CRON_TOKEN');
-    $providedToken = $_GET['token'] ?? '';
+    $headerToken = '';
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+        $headerToken = $headers['X-Cron-Token'] ?? $headers['x-cron-token'] ?? '';
+    }
+    $providedToken = $headerToken ?: ($_GET['token'] ?? '');
     if (!is_string($expectedToken) || $expectedToken === '' || !is_string($providedToken)
         || !hash_equals($expectedToken, $providedToken)) {
         http_response_code(403);
@@ -83,21 +90,33 @@ function buildDeadlineEmailHtml(array $payload, string $statusLabel): string
 try {
     $db = getDBConnection();
 
-    $stmt = $db->query("
+    // Only check letters from the last 6 months to avoid re-scanning ancient unresolved letters every run.
+    $sixMonthsAgo = date('Y-m-d', strtotime('-6 months'));
+    $stmt = $db->prepare("
         SELECT il.id, il.seq, il.date, il.organization, il.kk_number, il.region_id
         FROM incoming_letters il
-        WHERE il.linked_outgoing_id IS NULL
+        WHERE il.deleted_at IS NULL
+          AND il.linked_outgoing_id IS NULL
+          AND il.date >= ?
         ORDER BY il.date ASC
+        LIMIT 500
     ");
+    $stmt->execute([$sixMonthsAgo]);
     $letters = $stmt->fetchAll();
 
     $now           = new DateTime('now');
     $notifications = [];
     $emailsQueued  = 0;
-    $smtpEnabled     = defined('SMTP_HOST') && SMTP_HOST !== '';
-    $telegramEnabled = TelegramService::isConfigured();
-    $telegramSent    = 0;
+    $smtpEnabled      = defined('SMTP_HOST') && SMTP_HOST !== '';
+    $telegramEnabled  = TelegramService::isConfigured();
+    $whatsappEnabled  = WhatsAppService::isConfigured();
+    $smsEnabled       = SmsService::isConfigured();
+    $telegramSent     = 0;
+    $whatsappSent     = 0;
+    $smsSent          = 0;
 
+    // --- First pass: determine which letters need alerts and build payloads ---
+    $alertLetters = []; // letter_id => payload
     foreach ($letters as $letter) {
         if (empty($letter['date'])) {
             continue;
@@ -128,98 +147,174 @@ try {
             'due_date'     => $due->format('Y-m-d'),
             'days_left'    => $daysLeft,
             'region_id'    => (int)$letter['region_id'],
+            'due_obj'      => $due,
         ];
+        $alertLetters[(int)$letter['id']] = $payload;
         $notifications[] = $payload;
+    }
 
-        // Email назначенным членам письма (один раз в день на каждое письмо+получатель)
+    if (!empty($alertLetters)) {
+        $alertIds    = array_keys($alertLetters);
+        $inList      = implode(',', array_fill(0, count($alertIds), '?'));
+
+        // --- Batch fetch: email recipients for all alert letters (1 query) ---
+        $membersByLetter = [];
         if ($smtpEnabled) {
             $stmtMembers = $db->prepare("
-                SELECT m.email, m.full_name
+                SELECT lm.letter_id, m.email, m.full_name
                 FROM letter_members lm
                 JOIN os_members m ON lm.member_id = m.id
                 WHERE lm.letter_type = 'incoming'
-                  AND lm.letter_id = ?
+                  AND lm.letter_id IN ($inList)
                   AND m.email IS NOT NULL
                   AND m.email != ''
                   AND m.status = 'active'
             ");
-            $stmtMembers->execute([(int)$letter['id']]);
-            $members = $stmtMembers->fetchAll();
+            $stmtMembers->execute($alertIds);
+            foreach ($stmtMembers->fetchAll() as $row) {
+                $membersByLetter[(int)$row['letter_id']][] = $row;
+            }
 
-            $statusLabel = $status === 'overdue' ? 'просрочено' : 'предупреждение';
-            $subject     = ($status === 'overdue' ? '[ПРОСРОЧЕНО] ' : '[Срок!] ')
-                . 'Входящее письмо Вх.' . (int)$letter['seq']
-                . ' — ' . ($letter['organization'] ?? '');
-            $bodyHtml    = buildDeadlineEmailHtml($payload, $statusLabel);
-
-            // Дедупликация: не ставить в очередь если уже есть за сегодня
-            $stmtDup = $db->prepare("
-                SELECT COUNT(*) FROM email_queue
-                WHERE recipient_email = ?
-                  AND subject = ?
-                  AND created_at >= ?
-                  AND status != 'failed'
-            ");
+            // Pre-fetch today's already-sent subjects per email to avoid per-member dedup queries.
             $todayStart = date('Y-m-d') . ' 00:00:00';
-
-            foreach ($members as $member) {
-                if (!filter_var($member['email'], FILTER_VALIDATE_EMAIL)) {
-                    continue;
-                }
-                $stmtDup->execute([$member['email'], $subject, $todayStart]);
-                if ((int)$stmtDup->fetchColumn() > 0) {
-                    continue; // уже уведомили сегодня
-                }
-                EmailService::enqueue($db, $member['email'], $subject, $bodyHtml, strip_tags($bodyHtml));
-                $emailsQueued++;
+            // Bounded by today's date already; LIMIT is a safety cap against runaway growth.
+            $stmtSent   = $db->prepare("
+                SELECT recipient_email, subject FROM email_queue
+                WHERE created_at >= ? AND status != 'failed'
+                LIMIT 5000
+            ");
+            $stmtSent->execute([$todayStart]);
+            $sentToday = [];
+            foreach ($stmtSent->fetchAll() as $row) {
+                $sentToday[$row['recipient_email'] . '|' . $row['subject']] = true;
             }
         }
 
-        // Telegram: уведомляем пользователей с telegram_chat_id, привязанных к письму через member_id
+        // --- Batch fetch: Telegram recipients for all alert letters (1 query) ---
+        $tgByLetter = [];
         if ($telegramEnabled) {
-            try {
-                $stmtTg = $db->prepare("
-                    SELECT DISTINCT u.telegram_chat_id
-                    FROM letter_members lm
-                    JOIN os_members m ON lm.member_id = m.id
-                    JOIN users u ON u.full_name = m.full_name
-                         AND (u.region_id = ? OR u.role = 'admin')
-                    WHERE lm.letter_type = 'incoming'
-                      AND lm.letter_id = ?
-                      AND u.telegram_chat_id IS NOT NULL
-                      AND u.telegram_chat_id != ''
-                ");
-                $stmtTg->execute([(int)$letter['region_id'], (int)$letter['id']]);
-                $tgRecipients = $stmtTg->fetchAll(\PDO::FETCH_COLUMN);
-                $statusEmoji  = $status === 'overdue' ? '🔴' : '🟡';
-                $tgText       = "{$statusEmoji} <b>Журнал ОС</b>: входящее письмо Вх.{$letter['seq']} ({$letter['organization']})\n"
-                              . "Срок ответа: {$due->format('d.m.Y')}\n"
-                              . ($status === 'overdue' ? 'Письмо ПРОСРОЧЕНО' : 'Срок истекает через ' . $daysLeft . ' дн.');
-                foreach ($tgRecipients as $chatId) {
-                    TelegramService::sendMessage((string)$chatId, $tgText);
-                    $telegramSent++;
-                }
-            } catch (\Throwable $tgEx) {
-                error_log('Telegram notification failed: ' . $tgEx->getMessage());
+            $stmtTg = $db->prepare("
+                SELECT DISTINCT lm.letter_id, u.telegram_chat_id
+                FROM letter_members lm
+                JOIN os_members m ON lm.member_id = m.id
+                JOIN users u ON u.member_id = m.id
+                WHERE lm.letter_type = 'incoming'
+                  AND lm.letter_id IN ($inList)
+                  AND u.telegram_chat_id IS NOT NULL
+                  AND u.telegram_chat_id != ''
+            ");
+            $stmtTg->execute($alertIds);
+            foreach ($stmtTg->fetchAll() as $row) {
+                $tgByLetter[(int)$row['letter_id']][] = $row['telegram_chat_id'];
             }
         }
-    }
 
-    foreach ($notifications as $p) {
-        pusherTrigger('council-deadlines', 'deadline-warning', $p);
+        // --- Batch fetch: WhatsApp/SMS recipients (phone numbers from os_members) ---
+        $phoneByLetter = [];
+        if ($whatsappEnabled || $smsEnabled) {
+            $stmtPhone = $db->prepare("
+                SELECT DISTINCT lm.letter_id, m.phone
+                FROM letter_members lm
+                JOIN os_members m ON lm.member_id = m.id
+                WHERE lm.letter_type = 'incoming'
+                  AND lm.letter_id IN ($inList)
+                  AND m.phone IS NOT NULL
+                  AND m.phone != ''
+                  AND m.status = 'active'
+            ");
+            $stmtPhone->execute($alertIds);
+            foreach ($stmtPhone->fetchAll() as $row) {
+                $phoneByLetter[(int)$row['letter_id']][] = $row['phone'];
+            }
+        }
+
+        // --- Second pass: send notifications using pre-fetched data (no per-letter queries) ---
+        foreach ($alertLetters as $letterId => $payload) {
+            $status   = $payload['status'];
+            $due      = $payload['due_obj'];
+            $daysLeft = $payload['days_left'];
+
+            if ($smtpEnabled) {
+                $members     = $membersByLetter[$letterId] ?? [];
+                $statusLabel = $status === 'overdue' ? 'просрочено' : 'предупреждение';
+                $subject     = ($status === 'overdue' ? '[ПРОСРОЧЕНО] ' : '[Срок!] ')
+                    . 'Входящее письмо Вх.' . $payload['seq']
+                    . ' — ' . ($payload['organization'] ?? '');
+                $bodyHtml = buildDeadlineEmailHtml($payload, $statusLabel);
+
+                foreach ($members as $member) {
+                    if (!filter_var($member['email'], FILTER_VALIDATE_EMAIL)) {
+                        continue;
+                    }
+                    if (isset($sentToday[$member['email'] . '|' . $subject])) {
+                        continue; // already notified today
+                    }
+                    EmailService::enqueue($db, $member['email'], $subject, $bodyHtml, strip_tags($bodyHtml));
+                    $sentToday[$member['email'] . '|' . $subject] = true;
+                    $emailsQueued++;
+                }
+            }
+
+            if ($telegramEnabled) {
+                try {
+                    $tgRecipients = $tgByLetter[$letterId] ?? [];
+                    $statusEmoji  = $status === 'overdue' ? '🔴' : '🟡';
+                    $tgText       = "{$statusEmoji} <b>Журнал ОС</b>: входящее письмо Вх.{$payload['seq']} ({$payload['organization']})\n"
+                                  . "Срок ответа: {$due->format('d.m.Y')}\n"
+                                  . ($status === 'overdue' ? 'Письмо ПРОСРОЧЕНО' : 'Срок истекает через ' . $daysLeft . ' дн.');
+                    foreach ($tgRecipients as $chatId) {
+                        TelegramService::sendMessage((string)$chatId, $tgText);
+                        $telegramSent++;
+                    }
+                } catch (\Throwable $tgEx) {
+                    error_log('Telegram notification failed: ' . $tgEx->getMessage());
+                }
+            }
+
+            if ($whatsappEnabled || $smsEnabled) {
+                $phones  = $phoneByLetter[$letterId] ?? [];
+                $smsText = ($status === 'overdue' ? '[ПРОСРОЧЕНО] ' : '[Срок!] ')
+                    . "Вх.{$payload['seq']} {$payload['organization']}. "
+                    . "Срок: {$due->format('d.m.Y')}. Журнал ОС.";
+                foreach ($phones as $phone) {
+                    if ($whatsappEnabled) {
+                        try {
+                            WhatsAppService::notifyDeadline($phone, 'Вх.' . $payload['seq'], $due->format('d.m.Y'));
+                            $whatsappSent++;
+                        } catch (\Throwable $waEx) {
+                            error_log('WhatsApp notification failed: ' . $waEx->getMessage());
+                        }
+                    } elseif ($smsEnabled) {
+                        try {
+                            $smsRes = SmsService::send($phone, $smsText);
+                            if (!empty($smsRes['success'])) {
+                                $smsSent++;
+                            } else {
+                                error_log('SMS notification not sent: ' . ($smsRes['error'] ?? 'unknown'));
+                            }
+                        } catch (\Throwable $smsEx) {
+                            error_log('SMS notification failed: ' . $smsEx->getMessage());
+                        }
+                    }
+                }
+            }
+        }
     }
 
     $response = [
         'total_checked'      => count($letters),
         'notifications_sent' => count($notifications),
         'emails_queued'      => $emailsQueued,
-        'telegram_sent'      => $telegramSent ?? 0,
+        'telegram_sent'      => $telegramSent,
+        'whatsapp_sent'      => $whatsappSent,
+        'sms_sent'           => $smsSent,
         'timestamp'          => $now->format(DATE_ATOM),
     ];
 
     if ($isCli) {
         echo '[' . date('Y-m-d H:i:s') . '] '
-            . "checked={$response['total_checked']} alerts={$response['notifications_sent']} emails_queued={$emailsQueued}"
+            . "checked={$response['total_checked']} alerts={$response['notifications_sent']} "
+            . "emails_queued={$emailsQueued} tg={$telegramSent} wa={$whatsappSent} sms={$smsSent}"
             . PHP_EOL;
     } else {
         echo json_encode($response, JSON_ENCODE_FLAGS);

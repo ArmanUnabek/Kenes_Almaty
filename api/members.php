@@ -120,6 +120,8 @@ class MembersController extends ApiController
         $this->requireRegionAccess($targetRegion);
         $data['region_id'] = $targetRegion;
 
+        $this->validateCommissionRegion($data, (int)$targetRegion);
+
         $memberId = $this->repo->create($data);
         $this->logAction('os_members', $memberId, 'CREATE', null, $data);
         $this->json(['id' => $memberId, 'message' => 'Член ОС успешно создан'], 201);
@@ -139,6 +141,9 @@ class MembersController extends ApiController
         }
 
         $this->validateInput($data, $this->buildMemberRules($data));
+
+        // Регион члена ОС при обновлении не меняется — проверяем комиссию против существующего региона
+        $this->validateCommissionRegion($data, (int)($existing['region_id'] ?? 0));
 
         $this->repo->update($id, $data, $regionId);
         $this->logAction('os_members', $id, 'UPDATE', $existing, $data);
@@ -160,6 +165,25 @@ class MembersController extends ApiController
         $this->repo->delete($id, $regionId);
         $this->logAction('os_members', $id, 'DELETE', $existing, null);
         $this->json(['message' => 'Член ОС успешно удалён']);
+    }
+
+    /**
+     * Комиссия (если указана) должна существовать и принадлежать региону члена ОС.
+     */
+    private function validateCommissionRegion(array $data, int $memberRegionId): void
+    {
+        if (empty($data['commission_id'])) {
+            return;
+        }
+        $stmt = $this->db->prepare('SELECT region_id FROM commissions WHERE id = ?');
+        $stmt->execute([(int)$data['commission_id']]);
+        $commissionRegion = $stmt->fetchColumn();
+        if ($commissionRegion === false) {
+            $this->error('Комиссия не найдена', 422);
+        }
+        if ((int)$commissionRegion !== $memberRegionId) {
+            $this->error('Комиссия принадлежит другому региону', 422);
+        }
     }
 }
 

@@ -78,12 +78,22 @@ class ProfileController extends ApiController
             $email = trim($data['email']);
             if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 $errors['email'] = 'Некорректный email';
+            } elseif ($email !== '') {
+                $stmt = $this->db->prepare('SELECT id FROM users WHERE email = ? AND id != ?');
+                $stmt->execute([$email, $userId]);
+                if ($stmt->fetch()) {
+                    $errors['email'] = 'Этот email уже используется';
+                } else {
+                    $fields[] = 'email = ?';
+                    $params[] = $email;
+                }
             } else {
                 $fields[] = 'email = ?';
-                $params[] = $email !== '' ? $email : null;
+                $params[] = null;
             }
         }
 
+        $newPasswordHash = null;
         if (!empty($data['password'])) {
             $pass = $data['password'];
             $current = $data['current_password'] ?? '';
@@ -93,11 +103,12 @@ class ProfileController extends ApiController
             $row = $stmt->fetch();
             if (!$row || !password_verify($current, $row['password_hash'])) {
                 $errors['current_password'] = 'Текущий пароль введён неверно';
-            } elseif (strlen($pass) < 8) {
-                $errors['password'] = 'Новый пароль должен содержать минимум 8 символов';
+            } elseif (($passError = validatePasswordStrength((string)$pass)) !== null) {
+                $errors['password'] = $passError;
             } else {
+                $newPasswordHash = password_hash($pass, PASSWORD_DEFAULT);
                 $fields[] = 'password_hash = ?';
-                $params[] = password_hash($pass, PASSWORD_DEFAULT);
+                $params[] = $newPasswordHash;
             }
         }
 
@@ -113,6 +124,13 @@ class ProfileController extends ApiController
         $params[] = $userId;
         $this->db->prepare('UPDATE users SET ' . implode(', ', $fields) . ' WHERE id = ?')
             ->execute($params);
+
+        // Обновляем отпечаток хэша пароля в текущей сессии, иначе checkAuth()
+        // разлогинит пользователя сразу после смены собственного пароля.
+        // Остальные сессии этого пользователя инвалидируются проверкой отпечатка.
+        if ($newPasswordHash !== null) {
+            $_SESSION['pwd_fingerprint'] = hash('sha256', $newPasswordHash);
+        }
 
         $this->json(['message' => 'Профиль обновлён']);
     }
@@ -145,17 +163,10 @@ class ProfileController extends ApiController
             $this->error('Не удалось создать директорию', 500);
         }
 
-        // Remove old photo (confined to the uploads directory)
+        // Fetch old photo path before overwriting
         $stmtOld = $this->db->prepare('SELECT photo FROM users WHERE id = ?');
         $stmtOld->execute([$userId]);
         $oldPhoto = $stmtOld->fetchColumn();
-        if ($oldPhoto) {
-            $oldFull = realpath(APP_ROOT . '/' . ltrim((string)$oldPhoto, '/'));
-            $rootDir = realpath($dir);
-            if ($oldFull && $rootDir && str_starts_with($oldFull, $rootDir . DIRECTORY_SEPARATOR)) {
-                @unlink($oldFull);
-            }
-        }
 
         $ext = $allowed[$mimeType];
         // Fully-random, unguessable filename (no user id in the path).
@@ -168,6 +179,15 @@ class ProfileController extends ApiController
         $relativePath = 'uploads/photos/' . $filename;
         $this->db->prepare('UPDATE users SET photo = ?, updated_at = NOW() WHERE id = ?')
             ->execute([$relativePath, $userId]);
+
+        // Delete old photo only after new file is saved and DB updated
+        if ($oldPhoto) {
+            $oldFull = realpath(APP_ROOT . '/' . ltrim((string)$oldPhoto, '/'));
+            $rootDir = realpath($dir);
+            if ($oldFull && $rootDir && str_starts_with($oldFull, $rootDir . DIRECTORY_SEPARATOR)) {
+                @unlink($oldFull);
+            }
+        }
 
         $this->json(['photo' => $relativePath, 'message' => 'Фото обновлено']);
     }

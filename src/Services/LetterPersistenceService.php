@@ -131,15 +131,29 @@ class LetterPersistenceService
         ');
         // Регион письма постоянен в пределах вызова — читаем один раз, а не на каждого участника.
         $letterRegion = self::getLetterRegionId($db, $type, $letterId);
-        $check = $db->prepare('SELECT region_id FROM os_members WHERE id = ?');
+
+        // Batch-fetch all member regions in one query instead of one SELECT per member.
+        $memberIds = array_values(array_filter(array_map(
+            fn($m) => (int)($m['member_id'] ?? 0),
+            $members
+        )));
+        $memberRegionMap = [];
+        if (!empty($memberIds)) {
+            $placeholders = implode(',', array_fill(0, count($memberIds), '?'));
+            $stmtRegions = $db->prepare("SELECT id, region_id FROM os_members WHERE id IN ($placeholders)");
+            $stmtRegions->execute($memberIds);
+            foreach ($stmtRegions->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+                $memberRegionMap[(int)$row['id']] = (int)$row['region_id'];
+            }
+        }
+
         $insertedIds = [];
         foreach ($members as $member) {
             $memberId = (int)($member['member_id'] ?? 0);
             if ($memberId <= 0) {
                 continue;
             }
-            $check->execute([$memberId]);
-            $memberRegion = (int)$check->fetchColumn();
+            $memberRegion = $memberRegionMap[$memberId] ?? 0;
             if ($letterRegion > 0 && $memberRegion > 0 && $memberRegion !== $letterRegion) {
                 continue;
             }
@@ -158,8 +172,7 @@ class LetterPersistenceService
             try {
                 // Fetch letter seq and organization for the notification message
                 $table = $type === 'incoming' ? 'incoming_letters' : 'outgoing_letters';
-                $orgCol = $type === 'incoming' ? 'organization' : 'recipient';
-                $stmtLetter = $db->prepare("SELECT seq, {$orgCol} AS org FROM {$table} WHERE id = ?");
+                $stmtLetter = $db->prepare("SELECT seq, organization AS org FROM {$table} WHERE id = ?");
                 $stmtLetter->execute([$letterId]);
                 $letter = $stmtLetter->fetch(\PDO::FETCH_ASSOC);
                 if ($letter) {
@@ -216,7 +229,8 @@ class LetterPersistenceService
         }
         $stmt = $db->prepare('INSERT INTO letter_recipients (letter_type, letter_id, recipient) VALUES (?, ?, ?)');
         foreach ($recipients as $name) {
-            $stmt->execute([$type, $letterId, $name]);
+            // Колонка recipient — VARCHAR(255): обрезаем, чтобы bulk-данные не падали на INSERT
+            $stmt->execute([$type, $letterId, mb_substr((string)$name, 0, 255)]);
         }
     }
 

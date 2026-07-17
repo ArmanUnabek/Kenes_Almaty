@@ -1,134 +1,157 @@
 <?php
+/**
+ * Health-check endpoint для внешнего аптайм-мониторинга.
+ *
+ * Работает БЕЗ авторизации (мониторинг дёргает извне), но не раскрывает
+ * ничего чувствительного: только статусы и обезличенные метрики — без путей,
+ * имён БД и стектрейсов.
+ *
+ * Формат ответа:
+ *   { "status": "ok"|"degraded"|"down", "checks": {...}, "timestamp": "..." }
+ *
+ * HTTP-коды: 200 при ok/degraded, 503 при down (БД недоступна).
+ *
+ * Опционально: если задан env HEALTH_TOKEN (или HEALTH_CHECK_TOKEN) и он НЕ
+ * совпадает с ?token= / заголовком X-Health-Token — отдаётся урезанная версия
+ * (только status + timestamp), чтобы детальные метрики видел лишь мониторинг.
+ *
+ * Всё обёрнуто в try/catch, чтобы сам health-эндпоинт никогда не падал 500.
+ */
 
-require_once __DIR__ . '/../config.php';
+$STUCK_HOURS = 6;          // очередь «застряла», если элемент висит дольше N часов
+$DISK_WARN_FREE_PCT = 10;  // предупреждение, если свободно меньше N% диска
 
-header('Content-Type: application/json; charset=utf-8');
+// Определяем «полный» доступ до подключения config, чтобы даже сбой конфига
+// не мешал отдать урезанный ответ.
+$expectedToken = (string)(getenv('HEALTH_TOKEN') ?: getenv('HEALTH_CHECK_TOKEN') ?: '');
+$providedToken = (string)($_GET['token'] ?? ($_SERVER['HTTP_X_HEALTH_TOKEN'] ?? ''));
+$fullDetail = ($expectedToken === '') || hash_equals($expectedToken, $providedToken);
 
-$expectedToken = getenv('HEALTH_CHECK_TOKEN') ?: '';
-// Token must be sent as X-Health-Token header — never in the URL (would appear in access logs)
-$providedToken = (string)($_SERVER['HTTP_X_HEALTH_TOKEN'] ?? '');
-
-if ($expectedToken !== '') {
-    if ($providedToken === '' || !hash_equals($expectedToken, $providedToken)) {
-        http_response_code(403);
-        echo json_encode(['error' => 'Forbidden'], JSON_ENCODE_FLAGS);
-        exit;
-    }
-} else {
-    require_once __DIR__ . '/../auth_middleware.php';
-    checkAuth();
-    requireRole(['admin']);
-}
-
-$checks = [
-    'database' => false,
-    'uploads_writable' => false,
-];
-
-$messages = [];
-$metrics  = [];
+$status  = 'down';
+$checks  = [];
+$metrics = [];
+$httpCode = 503;
 
 try {
-    $db = getDBConnection();
-    $db->query('SELECT 1');
-    $checks['database'] = true;
-} catch (\Throwable $e) {
-    $messages[] = 'database: unavailable';
-}
+    require_once __DIR__ . '/../config.php';
 
-$uploadDir = defined('UPLOAD_DIR') ? UPLOAD_DIR : (APP_ROOT . '/uploads/photos/');
-if (!is_dir($uploadDir)) {
-    @mkdir($uploadDir, 0775, true);
-}
-$checks['uploads_writable'] = is_dir($uploadDir) && is_writable($uploadDir);
-if (!$checks['uploads_writable']) {
-    $messages[] = 'uploads directory is not writable';
-}
-
-$rateLimitDir = __DIR__ . '/../.rate_limit';
-$checks['rate_limit_dir'] = is_dir($rateLimitDir) || @mkdir($rateLimitDir, 0755, true);
-
-// ── Extended metrics ──────────────────────────────────────────────────────────
-
-// PHP memory
-$metrics['php_memory_mb']       = round(memory_get_usage(true) / 1048576, 2);
-$metrics['php_memory_limit']    = ini_get('memory_limit');
-$metrics['php_version']         = PHP_VERSION;
-
-// Uploads directory size
-function dirSizeBytes(string $dir): int {
-    $size = 0;
-    if (!is_dir($dir)) return 0;
-    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $f) {
-        if ($f->isFile()) $size += $f->getSize();
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+        // Ответ мониторинга не должен кэшироваться промежуточными узлами.
+        header('Cache-Control: no-store, max-age=0');
     }
-    return $size;
-}
-$uploadsBytes = dirSizeBytes($uploadDir);
-$metrics['uploads_size_mb'] = round($uploadsBytes / 1048576, 2);
-$metrics['uploads_files']   = iterator_count(
-    new RecursiveIteratorIterator(new RecursiveDirectoryIterator($uploadDir, FilesystemIterator::SKIP_DOTS))
-);
 
-// SMTP check: connect and verify the 220 greeting banner
-$smtpHost = SMTP_HOST;
-$smtpPort = SMTP_PORT ?: 587;
-if ($smtpHost) {
-    $checks['smtp_reachable'] = false;
-    $sock = @fsockopen($smtpHost, $smtpPort, $errno, $errstr, 3);
-    if ($sock) {
-        stream_set_timeout($sock, 3);
-        $banner = fgets($sock, 512);
-        fwrite($sock, "QUIT\r\n");
-        fclose($sock);
-        // A valid SMTP server responds with "220 ..."
-        if ($banner !== false && str_starts_with(ltrim($banner), '220')) {
-            $checks['smtp_reachable'] = true;
-        } else {
-            $checks['smtp_reachable'] = false;
-            $messages[] = 'smtp: connected but no valid 220 greeting';
-        }
+    $degraded = false;
+
+    // ── (а) База данных ──────────────────────────────────────────────────────
+    $dbOk = false;
+    try {
+        $t0 = microtime(true);
+        $db = getDBConnection();
+        $db->query('SELECT 1');
+        $dbMs = round((microtime(true) - $t0) * 1000, 1);
+        $dbOk = true;
+        $checks['database'] = ['ok' => true, 'response_ms' => $dbMs];
+    } catch (\Throwable $e) {
+        // Не раскрываем текст исключения (может содержать DSN/имя БД).
+        $checks['database'] = ['ok' => false];
+    }
+
+    // БД недоступна → сервис down (503). Остальное всё равно посчитаем.
+    if (!$dbOk) {
+        $status = 'down';
+        $httpCode = 503;
     } else {
-        $messages[] = 'smtp: connection failed';
+        $status = 'ok';
+        $httpCode = 200;
     }
-} else {
-    $checks['smtp_configured'] = false;
-    $messages[] = 'smtp: not configured';
-}
 
-// Pusher check (config present?)
-$checks['pusher_configured'] = (bool)(PUSHER_APP_ID && PUSHER_KEY && PUSHER_SECRET);
-
-// Email queue stats
-if ($checks['database']) {
+    // ── (б) Диск ─────────────────────────────────────────────────────────────
     try {
-        $qStmt = $db->query("SELECT status, COUNT(*) AS cnt FROM email_queue GROUP BY status");
-        $queueStats = [];
-        foreach ($qStmt->fetchAll() as $row) {
-            $queueStats[$row['status']] = (int)$row['cnt'];
+        $root = defined('APP_ROOT') ? APP_ROOT : __DIR__;
+        $free  = @disk_free_space($root);
+        $total = @disk_total_space($root);
+        if ($free !== false && $total !== false && $total > 0) {
+            $freePct = round(($free / $total) * 100, 1);
+            $diskOk = $freePct >= $DISK_WARN_FREE_PCT;
+            $checks['disk'] = [
+                'ok'          => $diskOk,
+                'free_bytes'  => (int)$free,
+                'total_bytes' => (int)$total,
+                'free_pct'    => $freePct,
+            ];
+            if (!$diskOk) {
+                $degraded = true;
+            }
+        } else {
+            $checks['disk'] = ['ok' => null];
         }
-        $metrics['email_queue'] = $queueStats;
-        $metrics['email_queue_pending'] = ($queueStats['queued'] ?? 0) + ($queueStats['failed'] ?? 0);
     } catch (\Throwable $e) {
-        // email_queue table may not exist
+        $checks['disk'] = ['ok' => null];
     }
 
-    // DB table count as a size proxy
-    try {
-        $dbStmt = $db->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()");
-        $metrics['db_table_count'] = (int)$dbStmt->fetchColumn();
-    } catch (\Throwable $e) {
-        // SQLite or other DBs without information_schema
+    // ── (в) Очереди email_queue / sms_queue ──────────────────────────────────
+    if ($dbOk) {
+        foreach (['email_queue', 'sms_queue'] as $table) {
+            try {
+                // Таблица может отсутствовать — тогда просто пропускаем.
+                $stmt = $db->query(
+                    "SELECT
+                        SUM(status IN ('queued','failed')) AS pending,
+                        SUM(status IN ('queued','failed')
+                            AND created_at < (NOW() - INTERVAL {$STUCK_HOURS} HOUR)) AS stuck
+                     FROM {$table}"
+                );
+                $row = $stmt->fetch();
+                $pending = (int)($row['pending'] ?? 0);
+                $stuck   = (int)($row['stuck'] ?? 0);
+                $queueOk = $stuck === 0;
+                $checks[$table] = [
+                    'ok'      => $queueOk,
+                    'pending' => $pending,
+                    'stuck'   => $stuck,
+                ];
+                if (!$queueOk) {
+                    $degraded = true;
+                }
+            } catch (\Throwable $e) {
+                // Нет таблицы / нет доступа — не отражаем в checks.
+            }
+        }
+    }
+
+    // ── (г) Версия PHP ───────────────────────────────────────────────────────
+    $metrics['php_version'] = PHP_VERSION;
+
+    // Итоговый статус: down имеет приоритет, иначе degraded при любом warn.
+    if ($status !== 'down' && $degraded) {
+        $status = 'degraded';
+        $httpCode = 200;
+    }
+} catch (\Throwable $e) {
+    // Любой непредвиденный сбой самого health — считаем сервис down, но не 500.
+    $status = 'down';
+    $httpCode = 503;
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
     }
 }
 
-// Cron last run (check for timestamp file)
-$cronStamp = APP_ROOT . '/.cron_last_run';
-if (file_exists($cronStamp)) {
-    $metrics['cron_last_run'] = date('c', (int)file_get_contents($cronStamp));
-} else {
-    $metrics['cron_last_run'] = null;
+$flags = defined('JSON_ENCODE_FLAGS')
+    ? JSON_ENCODE_FLAGS
+    : (JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+http_response_code($httpCode);
+
+if (!$fullDetail) {
+    // Урезанная версия: наружу без валидного токена — только статус.
+    echo json_encode(['status' => $status, 'timestamp' => date('c')], $flags);
+    exit;
 }
 
-http_response_code(\App\Services\HealthReport::httpStatus($checks));
-echo json_encode(\App\Services\HealthReport::build($checks, $metrics, $messages), JSON_ENCODE_FLAGS);
+echo json_encode([
+    'status'    => $status,
+    'checks'    => $checks,
+    'metrics'   => $metrics,
+    'timestamp' => date('c'),
+], $flags);

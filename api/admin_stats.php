@@ -19,12 +19,12 @@ $stats = [
     'email_queue' => ['pending' => 0, 'sent' => 0, 'failed' => 0, 'total' => 0],
 ];
 
-$row = $db->query('SELECT COUNT(*) AS total, SUM(is_active = 1) AS active FROM regions')->fetch();
+$row = $db->query('SELECT COUNT(*) AS total, SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active FROM regions')->fetch();
 $stats['regions']['total'] = (int)($row['total'] ?? 0);
 $stats['regions']['active'] = (int)($row['active'] ?? 0);
 $stats['regions']['inactive'] = $stats['regions']['total'] - $stats['regions']['active'];
 
-$row = $db->query('SELECT COUNT(*) AS total, SUM(is_active = 1) AS active FROM users')->fetch();
+$row = $db->query('SELECT COUNT(*) AS total, SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active FROM users')->fetch();
 $stats['users']['total'] = (int)($row['total'] ?? 0);
 $stats['users']['active'] = (int)($row['active'] ?? 0);
 $stats['users']['inactive'] = $stats['users']['total'] - $stats['users']['active'];
@@ -39,7 +39,10 @@ $stats['letters']['incoming'] = (int)$db->query('SELECT COUNT(*) FROM incoming_l
 $stats['letters']['outgoing'] = (int)$db->query('SELECT COUNT(*) FROM outgoing_letters')->fetchColumn();
 
 $stats['audit']['total'] = (int)$db->query('SELECT COUNT(*) FROM audit_logs')->fetchColumn();
-$stats['audit']['last_24h'] = (int)$db->query('SELECT COUNT(*) FROM audit_logs WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)')->fetchColumn();
+$since24h = date('Y-m-d H:i:s', time() - 86400);
+$stmt24h = $db->prepare('SELECT COUNT(*) FROM audit_logs WHERE created_at >= ?');
+$stmt24h->execute([$since24h]);
+$stats['audit']['last_24h'] = (int)$stmt24h->fetchColumn();
 $stats['audit']['security_events'] = (int)$db->query("SELECT COUNT(*) FROM audit_logs WHERE operation IN ('EXPORT', 'DOWNLOAD')")->fetchColumn();
 
 try {

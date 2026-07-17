@@ -4,7 +4,6 @@ function getSessionUser() {
   return window.getSessionUser?.() || window.sessionUser || null;
 }
 
-let pusherClient = null;
 let realtimeRefreshTimer = null;
 
 async function scheduleRealtimeRefresh() {
@@ -52,6 +51,7 @@ async function initializeApp() {
 
     if (typeof window.initCalendar === 'function') window.initCalendar();
     if (typeof window.refreshCalendar === 'function') window.refreshCalendar();
+    if (typeof window.refreshAppeals === 'function') window.refreshAppeals();
 
     setTimeout(() => {
       if (typeof window.checkDeadlineNotifications === 'function') {
@@ -98,7 +98,8 @@ function pageMeta() {
     'tab-members': { title: t('page.members', 'Члены Общественного Совета'), subtitle: '' },
     'tab-commissions': { title: t('page.commissions', 'Комиссии'), subtitle: t('page.commissions_sub', 'Структура Общественного Совета') },
     'tab-kpi': { title: t('page.kpi', 'KPI'), subtitle: t('page.kpi_sub', 'Показатели работы членов и комиссий') },
-    'tab-events': { title: t('page.events', 'Мероприятия'), subtitle: t('page.events_sub', 'Учёт участия членов ОС') },
+    'tab-events':  { title: t('page.events', 'Мероприятия'), subtitle: t('page.events_sub', 'Учёт участия членов ОС') },
+    'tab-appeals': { title: 'Обращения граждан', subtitle: 'Входящие обращения и заявления' },
   };
 }
 
@@ -181,6 +182,7 @@ function renderAll() {
   if (typeof renderKPIs === 'function') renderKPIs();
   if (typeof renderCharts === 'function') renderCharts();
   if (typeof renderEvents === 'function') renderEvents();
+  if (typeof renderAppeals === 'function') renderAppeals();
 }
 
 function parseRealtimePayload(payload) {
@@ -192,57 +194,25 @@ function parseRealtimePayload(payload) {
 }
 
 function showDeadlineNotification(data) {
-  const seqLabel = data.seq ? `Вх.${data.seq}` : `ID ${data.id}`;
+  const t = window.AppI18n?.t || ((_, fb) => fb);
+  const seqLabel = data.seq ? `${t('notify.dead.incoming_prefix', 'Вх.')}${data.seq}` : `ID ${data.id}`;
   const dueText = data.due_date ? new Date(data.due_date).toLocaleDateString('ru-RU') : null;
   let message = `${seqLabel}: `;
+  const fmt = window.AppI18n?.fmt
+    ? window.AppI18n.fmt.bind(window.AppI18n)
+    : ((key, vars) => t(key, '').replace('{days}', String(vars.days)));
   if (data.status === 'overdue') {
-    message += `срок просрочен на ${Math.abs(Number(data.days_left || 0))} дн.`;
+    message += fmt('notify.rt.overdue_days', { days: Math.abs(Number(data.days_left || 0)) });
   } else {
-    message += `до дедлайна ${Math.max(0, Number(data.days_left || 0))} дн.`;
+    message += fmt('notify.rt.until_deadline', { days: Math.max(0, Number(data.days_left || 0)) });
   }
-  if (dueText) message += ` (срок: ${dueText})`;
+  if (dueText) message += ` (${t('notify.rt.due', 'срок')}: ${dueText})`;
   if (data.organization) message += ` • ${data.organization}`;
   window.showWarning ? window.showWarning(message) : alert(message);
 }
 
 function initRealtime() {
-  try {
-    if (!window.Pusher || !window.PUSHER_KEY) return;
-    pusherClient = new Pusher(window.PUSHER_KEY, {
-      cluster: window.PUSHER_CLUSTER || 'eu',
-      forceTLS: true,
-    });
-    pusherClient.subscribe(window.PUSHER_CHANNEL_DOCUMENTS || 'council-documents')
-      .bind('documents-updated', async (payload) => {
-        scheduleRealtimeRefresh();
-        const data = parseRealtimePayload(payload);
-        if (data?.action) {
-          const typeText = data.type === 'incoming' ? 'Входящее письмо' : 'Исходящее письмо';
-          const actionText = data.action === 'create' ? 'добавлено' : data.action === 'update' ? 'обновлено' : 'удалено';
-          const msg = `${typeText} ${actionText} другим пользователем`;
-          window.showInfo?.(msg);
-          window.showBrowserNotification?.('Журнал ОС', msg);
-          if (typeof window.refreshCalendar === 'function') window.refreshCalendar();
-        }
-      });
-    pusherClient.subscribe(window.PUSHER_CHANNEL_EVENTS || 'council-events')
-      .bind('events-updated', async (payload) => {
-        await refreshEvents();
-        renderEvents();
-        const data = parseRealtimePayload(payload);
-        if (data?.action) {
-          const actionText = data.action === 'create' ? 'создано' : data.action === 'update' ? 'обновлено' : 'удалено';
-          window.showInfo?.(`Мероприятие ${actionText} другим пользователем`);
-        }
-      });
-    pusherClient.subscribe(window.PUSHER_CHANNEL_DEADLINES || 'council-deadlines')
-      .bind('deadline-warning', (payload) => {
-        const data = parseRealtimePayload(payload);
-        if (data) showDeadlineNotification(data);
-      });
-  } catch (e) {
-    console.warn('Realtime disabled:', e);
-  }
+  // Pusher removed — realtime notifications disabled
 }
 
 if (typeof initLettersUI === 'function') initLettersUI();

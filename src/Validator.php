@@ -1,12 +1,10 @@
 <?php
 /**
  * Validator класс для валидации входных данных.
- * Поддерживает различные правила валидации и безопасность от XSS.
+ * Поддерживает различные правила валидации.
  */
 
 namespace App;
-
-class ValidationException extends \Exception {}
 
 class Validator
 {
@@ -100,8 +98,8 @@ class Validator
                 break;
 
             case 'integer':
-                if ($value !== null && !is_numeric($value) && !is_int($value)) {
-                    $this->addError($field, $ruleName, "Поле '{$field}' должно быть числом");
+                if ($value !== null && !is_int($value) && filter_var($value, FILTER_VALIDATE_INT) === false) {
+                    $this->addError($field, $ruleName, "Поле '{$field}' должно быть целым числом");
                 }
                 break;
 
@@ -234,30 +232,5 @@ class Validator
     public function hasErrors(): bool
     {
         return !empty($this->errors);
-    }
-
-    /**
-     * Очистить данные от XSS (экранировать HTML)
-     * Возвращает очищенный массив или строку
-     */
-    public static function sanitize($data): mixed
-    {
-        if (is_array($data)) {
-            return array_map([self::class, 'sanitize'], $data);
-        }
-
-        if (is_string($data)) {
-            return htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
-        }
-
-        return $data;
-    }
-
-    /**
-     * Экранировать данные для вывода в HTML
-     */
-    public static function escape(string $data): string
-    {
-        return htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
     }
 }

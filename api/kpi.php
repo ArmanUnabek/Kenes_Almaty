@@ -1,6 +1,6 @@
 <?php
-require_once '../config.php';
-require_once '../auth_middleware.php';
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../auth_middleware.php';
 
 use App\Services\FileCache;
 
@@ -211,19 +211,40 @@ try {
     $stmtOthers->execute($othersParams);
     $others = $stmtOthers->fetchAll();
 
-    // KPI: участие членов ОС в мероприятиях (по ФИО)
+    // KPI: участие членов ОС в мероприятиях
+    // JOIN по member_id если колонка существует, иначе fallback по full_name
     $params3 = [];
     $regionFilterEvents = '';
     if ($regionId) {
-        $regionFilterEvents = ' WHERE e.region_id = ? ';
+        $regionFilterEvents = ' AND (e.region_id = ? OR e.id IS NULL) ';
         $params3[] = $regionId;
+    }
+    $eaDriver = $db->getAttribute(\PDO::ATTR_DRIVER_NAME);
+    $hasEaMemberId = false;
+    try {
+        if ($eaDriver === 'sqlite') {
+            $r = $db->query("PRAGMA table_info(event_attendees)");
+            foreach ($r->fetchAll() as $col) { if ($col['name'] === 'member_id') { $hasEaMemberId = true; break; } }
+        } elseif ($eaDriver === 'pgsql') {
+            $r = $db->query("SELECT 1 FROM information_schema.columns WHERE table_name='event_attendees' AND column_name='member_id'");
+            $hasEaMemberId = (bool)$r->fetchColumn();
+        } else {
+            $r = $db->query("SHOW COLUMNS FROM event_attendees LIKE 'member_id'");
+            $hasEaMemberId = (bool)$r->fetch();
+        }
+    } catch (\Throwable $ignored) {}
+
+    if ($hasEaMemberId) {
+        $joinCond = 'ea.member_id = m.id';
+    } else {
+        $joinCond = 'ea.full_name = m.full_name';
     }
     $sqlEventsByMember = "
         SELECT m.id, m.full_name, COALESCE(SUM(CASE WHEN ea.attended = 1 THEN 1 ELSE 0 END),0) AS events_attended
         FROM os_members m
-        LEFT JOIN event_attendees ea ON ea.full_name = m.full_name
+        LEFT JOIN event_attendees ea ON {$joinCond}
         LEFT JOIN events e ON e.id = ea.event_id
-        " . ($regionFilterEvents ? $regionFilterEvents : "") . "
+        WHERE 1=1 {$regionFilterEvents}
         GROUP BY m.id
         ORDER BY events_attended DESC, m.full_name ASC
     ";

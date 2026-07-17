@@ -28,10 +28,32 @@ class ExportController extends ApiController
                 SecurityAuditService::EXPORT_RATE_WINDOW
             );
 
+            // Регион: админ (endpoint только для admin) может явно указать region_id,
+            // 0/пусто = активный регион из сессии (null = все регионы).
             $regionId = $this->getCurrentRegionId();
+            $requestedRegion = (int)($this->getQueryParam('region_id') ?? 0);
+            if ($requestedRegion > 0) {
+                $regionId = $requestedRegion;
+            } elseif ($this->getQueryParam('region_id') === 'all') {
+                $regionId = null;
+            }
+
             $archived = $this->getQueryParam('archived') === '1';
 
-            [$incoming, $outgoing] = $this->fetchLetters($regionId, $archived);
+            // Диапазон дат (YYYY-MM-DD), невалидные значения игнорируются
+            $dateFrom = $this->validDate($this->getQueryParam('date_from'));
+            $dateTo   = $this->validDate($this->getQueryParam('date_to'));
+            if ($dateFrom !== null && $dateTo !== null && $dateFrom > $dateTo) {
+                [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+            }
+
+            // Направление: in | out | all
+            $direction = strtolower((string)$this->getQueryParam('direction', 'all'));
+            if (!in_array($direction, ['in', 'out', 'all'], true)) {
+                $direction = 'all';
+            }
+
+            [$incoming, $outgoing] = $this->fetchLetters($regionId, $archived, $dateFrom, $dateTo, $direction);
 
             SecurityAuditService::logExport($this->db, $userId, $regionId, $format, count($incoming), count($outgoing));
 
@@ -50,42 +72,74 @@ class ExportController extends ApiController
     }
 
     /**
+     * Валидация даты YYYY-MM-DD (иначе null — фильтр игнорируется).
+     */
+    private function validDate($raw): ?string
+    {
+        $raw = (string)($raw ?? '');
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $raw, $m)) {
+            return null;
+        }
+        return checkdate((int)$m[2], (int)$m[3], (int)$m[1]) ? $raw : null;
+    }
+
+    /**
      * @return array{0: array, 1: array} [incoming, outgoing]
      */
-    private function fetchLetters(?int $regionId, bool $archived): array
+    private function fetchLetters(?int $regionId, bool $archived, ?string $dateFrom = null, ?string $dateTo = null, string $direction = 'all'): array
     {
         $conditions = [];
+        $params = [];
         $conditions[] = $archived
             ? "(deleted_at IS NOT NULL AND deleted_at != '0000-00-00 00:00:00')"
             : "(deleted_at IS NULL OR deleted_at = '0000-00-00 00:00:00')";
         if ($regionId) {
             $conditions[] = 'region_id = ?';
+            $params[] = $regionId;
+        }
+        if ($dateFrom !== null) {
+            $conditions[] = 'date >= ?';
+            $params[] = $dateFrom;
+        }
+        if ($dateTo !== null) {
+            $conditions[] = 'date <= ?';
+            $params[] = $dateTo;
         }
         $where = ' WHERE ' . implode(' AND ', $conditions);
-        $params = $regionId ? [$regionId] : [];
 
+        // Fallback-условия без deleted_at (колонка может отсутствовать)
+        $fbConditions = array_slice($conditions, 1);
+        $fallbackWhere = $fbConditions ? ' WHERE ' . implode(' AND ', $fbConditions) : '';
+
+        $incoming = [];
+        $outgoing = [];
         try {
-            $stmt = $this->db->prepare('SELECT * FROM incoming_letters' . $where . ' ORDER BY date DESC, seq DESC');
-            $stmt->execute($params);
-            $incoming = $stmt->fetchAll();
-
-            $stmt = $this->db->prepare('SELECT * FROM outgoing_letters' . $where . ' ORDER BY date DESC, seq DESC');
-            $stmt->execute($params);
-            $outgoing = $stmt->fetchAll();
+            if ($direction !== 'out') {
+                $stmt = $this->db->prepare('SELECT * FROM incoming_letters' . $where . ' ORDER BY date DESC, seq DESC');
+                $stmt->execute($params);
+                $incoming = $stmt->fetchAll();
+            }
+            if ($direction !== 'in') {
+                $stmt = $this->db->prepare('SELECT * FROM outgoing_letters' . $where . ' ORDER BY date DESC, seq DESC');
+                $stmt->execute($params);
+                $outgoing = $stmt->fetchAll();
+            }
         } catch (\Throwable $e) {
             // deleted_at column not yet created
             if ($archived) {
                 // Archive can't be distinguished without the column — return nothing
                 return [[], []];
             }
-            $fallbackWhere = $regionId ? ' WHERE region_id = ?' : '';
-            $stmt = $this->db->prepare('SELECT * FROM incoming_letters' . $fallbackWhere . ' ORDER BY date DESC, seq DESC');
-            $stmt->execute($params);
-            $incoming = $stmt->fetchAll();
-
-            $stmt = $this->db->prepare('SELECT * FROM outgoing_letters' . $fallbackWhere . ' ORDER BY date DESC, seq DESC');
-            $stmt->execute($params);
-            $outgoing = $stmt->fetchAll();
+            if ($direction !== 'out') {
+                $stmt = $this->db->prepare('SELECT * FROM incoming_letters' . $fallbackWhere . ' ORDER BY date DESC, seq DESC');
+                $stmt->execute($params);
+                $incoming = $stmt->fetchAll();
+            }
+            if ($direction !== 'in') {
+                $stmt = $this->db->prepare('SELECT * FROM outgoing_letters' . $fallbackWhere . ' ORDER BY date DESC, seq DESC');
+                $stmt->execute($params);
+                $outgoing = $stmt->fetchAll();
+            }
         }
 
         return [$incoming, $outgoing];
@@ -119,11 +173,11 @@ class ExportController extends ApiController
                 'Входящее',
                 'Вх.' . ($row['seq'] ?? ''),
                 $row['date'] ?? '',
-                $row['organization'] ?? '',
+                SpreadsheetExporter::sanitizeCell($row['organization'] ?? ''),
                 $row['category'] ?? 'KK',
                 $row['kk_number'] ?? '',
-                $row['subject'] ?? '',
-                $row['note'] ?? '',
+                SpreadsheetExporter::sanitizeCell($row['subject'] ?? ''),
+                SpreadsheetExporter::sanitizeCell($row['note'] ?? ''),
             ], ';');
         }
 
@@ -135,9 +189,9 @@ class ExportController extends ApiController
                 'Исх.' . ($row['seq'] ?? ''),
                 $row['date'] ?? '',
                 $row['outgoing_number'] ?? '',
-                $row['organization'] ?? '',
-                $row['subject'] ?? '',
-                $row['note'] ?? '',
+                SpreadsheetExporter::sanitizeCell($row['organization'] ?? ''),
+                SpreadsheetExporter::sanitizeCell($row['subject'] ?? ''),
+                SpreadsheetExporter::sanitizeCell($row['note'] ?? ''),
             ], ';');
         }
         fclose($out);

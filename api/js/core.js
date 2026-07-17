@@ -79,7 +79,8 @@
     if (!resp.ok) throw new Error(data.error || data.message || 'Не удалось загрузить фото');
     const photoUrl = data.data?.photo_url || data.photo_url;
     if (photoUrl) {
-      const member = membersCatalog.find((m) => String(m.id) === String(memberId));
+      const catalog = window.membersCatalog ?? membersCatalog;
+      const member = catalog.find((m) => String(m.id) === String(memberId));
       if (member) {
         member.photo_url = photoUrl;
       }

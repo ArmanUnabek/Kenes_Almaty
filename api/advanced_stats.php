@@ -1,6 +1,6 @@
 <?php
-require_once '../config.php';
-require_once '../auth_middleware.php';
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../auth_middleware.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -19,7 +19,11 @@ try {
     $stats = [];
 
     $withRegion = static function (string $alias) use ($regionId): string {
-        return $regionId ? " AND {$alias}.region_id = ? " : '';
+        $filter = " AND ({$alias}.deleted_at IS NULL OR {$alias}.deleted_at = '0000-00-00 00:00:00')";
+        if ($regionId) {
+            $filter .= " AND {$alias}.region_id = ?";
+        }
+        return $filter;
     };
     $regionParams = $regionId ? [$regionId] : [];
 
@@ -55,6 +59,40 @@ try {
     $params = array_merge([date('Y-m-d', strtotime('-21 days'))], $regionParams);
     $stmt->execute($params);
     $stats['overdue_letters'] = (int)$stmt->fetchColumn();
+
+    // Воронка сроков: «в срок» / «приближается дедлайн (≤3 дня)» / «просрочено» / «отвечено»
+    // deadline_date = 15 рабочих дней от даты письма (триггер в БД); фолбэк ≈ 21 календарный день
+    if (DB_DRIVER === 'sqlite') {
+        $deadlineExpr = "COALESCE(il.deadline_date, date(il.date, '+21 days'))";
+    } elseif (DB_DRIVER === 'pgsql') {
+        $deadlineExpr = "COALESCE(il.deadline_date, il.date + 21)";
+    } else {
+        $deadlineExpr = "COALESCE(il.deadline_date, DATE_ADD(il.date, INTERVAL 21 DAY))";
+    }
+    $sql = "
+        SELECT
+            COUNT(CASE WHEN r.incoming_ref_id IS NOT NULL THEN 1 END) as answered,
+            COUNT(CASE WHEN r.incoming_ref_id IS NULL AND $deadlineExpr < ? THEN 1 END) as overdue,
+            COUNT(CASE WHEN r.incoming_ref_id IS NULL AND $deadlineExpr >= ? AND $deadlineExpr <= ? THEN 1 END) as due_soon,
+            COUNT(CASE WHEN r.incoming_ref_id IS NULL AND $deadlineExpr > ? THEN 1 END) as on_track
+        FROM incoming_letters il
+        LEFT JOIN (
+            SELECT DISTINCT incoming_ref_id FROM outgoing_letters WHERE incoming_ref_id IS NOT NULL
+        ) r ON r.incoming_ref_id = il.id
+        WHERE 1=1
+          {$withRegion('il')}
+    ";
+    $today = date('Y-m-d');
+    $soon = date('Y-m-d', strtotime('+3 days'));
+    $stmt = $db->prepare($sql);
+    $stmt->execute(array_merge([$today, $today, $soon, $soon], $regionParams));
+    $funnel = $stmt->fetch();
+    $stats['deadline_funnel'] = [
+        'on_track' => (int)($funnel['on_track'] ?? 0),
+        'due_soon' => (int)($funnel['due_soon'] ?? 0),
+        'overdue'  => (int)($funnel['overdue'] ?? 0),
+        'answered' => (int)($funnel['answered'] ?? 0),
+    ];
 
     // Письма по месяцам (последние 6 месяцев)
     $monthFmt = (DB_DRIVER === 'pgsql') ? "TO_CHAR(date, 'YYYY-MM')" : "SUBSTR(date, 1, 7)";
@@ -170,6 +208,7 @@ try {
         GROUP BY m.id
         HAVING COUNT(lm.id) = 0
         ORDER BY m.full_name
+        LIMIT 100
     ";
     $stmt = $db->prepare($sql);
     $stmt->execute($regionParams);

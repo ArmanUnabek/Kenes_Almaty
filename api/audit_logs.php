@@ -1,6 +1,6 @@
 <?php
-require_once '../config.php';
-require_once '../auth_middleware.php';
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../auth_middleware.php';
 
 checkAuth();
 requireRole(['admin']);
@@ -15,6 +15,10 @@ $search       = trim((string)($_GET['search'] ?? ''));
 $format       = strtolower((string)($_GET['format'] ?? 'json'));
 $tableFilter  = trim((string)($_GET['table_name'] ?? ''));
 $recordFilter = isset($_GET['record_id']) ? (int)$_GET['record_id'] : 0;
+$dateFrom     = trim((string)($_GET['date_from'] ?? ''));
+$dateTo       = trim((string)($_GET['date_to'] ?? ''));
+$userFilter   = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
+$actionFilter = trim((string)($_GET['action'] ?? ''));
 
 $conditions = [];
 $params = [];
@@ -33,6 +37,22 @@ if ($tableFilter !== '') {
 if ($recordFilter > 0) {
     $conditions[] = 'al.record_id = ?';
     $params[] = $recordFilter;
+}
+if ($dateFrom !== '') {
+    $conditions[] = 'al.created_at >= ?';
+    $params[] = $dateFrom . ' 00:00:00';
+}
+if ($dateTo !== '') {
+    $conditions[] = 'al.created_at <= ?';
+    $params[] = $dateTo . ' 23:59:59';
+}
+if ($userFilter > 0) {
+    $conditions[] = 'al.user_id = ?';
+    $params[] = $userFilter;
+}
+if ($actionFilter !== '') {
+    $conditions[] = 'al.operation = ?';
+    $params[] = strtoupper($actionFilter);
 }
 if ($search !== '') {
     $conditions[] = '(al.table_name LIKE ? OR al.operation LIKE ? OR u.full_name LIKE ? OR u.username LIKE ? OR CAST(al.record_id AS CHAR) LIKE ?)';

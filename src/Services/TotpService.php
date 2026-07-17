@@ -66,13 +66,12 @@ class TotpService
     }
 
     /**
-     * URL внешнего сервиса для QR-кода (не отправляет секрет на сервер — только данные URI).
-     * Google Image Charts (chart.googleapis.com) отключён Google, поэтому используем
-     * api.qrserver.com (goqr.me), отдающий PNG напрямую — подходит для <img src>.
+     * data-URI с QR-кодом (SVG), сгенерированным локально — секрет не покидает сервер.
+     * Подходит для <img src>.
      */
     public static function getQrUrl(string $uri): string
     {
-        return 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' . rawurlencode($uri);
+        return QrService::toBase64Src($uri, 200);
     }
 
     // ── Backup codes ──────────────────────────────────────────────────────────

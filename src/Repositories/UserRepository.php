@@ -122,6 +122,14 @@ class UserRepository
             $fields[] = 'password_hash = ?';
             $params[] = password_hash($data['password'], PASSWORD_DEFAULT);
         }
+        if (array_key_exists('password_history', $data)) {
+            $fields[] = 'password_history = ?';
+            $params[] = $data['password_history'];
+        }
+        if (array_key_exists('member_id', $data)) {
+            $fields[] = 'member_id = ?';
+            $params[] = ($data['member_id'] !== null && $data['member_id'] !== '') ? (int)$data['member_id'] : null;
+        }
         if (array_key_exists('telegram_chat_id', $data)) {
             $this->ensureTelegramChatIdColumn();
             $fields[] = 'telegram_chat_id = ?';

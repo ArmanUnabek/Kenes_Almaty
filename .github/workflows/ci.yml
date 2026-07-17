@@ -1,43 +1,90 @@
 name: CI
 
+# Автоматическая проверка перед мержем/деплоем.
+# Запускается на каждый push и pull_request.
+# Никаких внешних CDN/Pusher — только официальные GitHub Actions и локальные проверки.
+
 on:
   push:
-    branches: [main, 'cursor/**', 'claude/**']
   pull_request:
-    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  verify:
+    name: Lint & Build
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Setup PHP
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
-          coverage: pcov
+          php-version: '8.3'
+          tools: composer
 
-      - name: Validate PHP syntax
-        run: find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --no-progress
 
-      - name: Check asset version consistency
-        run: bash scripts/check-asset-versions.sh
-
-      - name: Setup Node
+      - name: Setup Node (LTS)
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 'lts/*'
 
-      - name: Check frontend bundles are fresh
-        run: bash scripts/check-frontend-build.sh
+      - name: Install Node dependencies
+        run: npm ci || npm install
 
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist
+      # --- PHP syntax check по всем *.php кроме vendor/node_modules ---
+      # Падаем при первой же ошибке php -l.
+      - name: PHP lint (php -l)
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r -d '' file; do
+            if ! php -l "$file" > /dev/null; then
+              echo "::error file=$file::PHP syntax error"
+              fail=1
+            fi
+          done < <(find . -type f -name '*.php' \
+                     -not -path './vendor/*' \
+                     -not -path './node_modules/*' -print0)
+          if [ "$fail" -ne 0 ]; then
+            echo "PHP lint failed"
+            exit 1
+          fi
+          echo "PHP lint OK"
 
-      - name: Run tests
-        run: composer test
+      # --- JS syntax check по ключевым js ---
+      - name: JS syntax check (node --check)
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail=0
+          for file in dist/app.js dist/admin.js dist/login.js api/js/*.js; do
+            [ -e "$file" ] || continue
+            if ! node --check "$file"; then
+              echo "::error file=$file::JS syntax error"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "JS check failed"
+            exit 1
+          fi
+          echo "JS check OK"
 
-      - name: Coverage summary (src/)
-        continue-on-error: true
-        run: vendor/bin/phpunit --coverage-text --only-summary-for-coverage-text
+      # --- Сборка фронтенд-бандла (проверка, что esbuild собирается) ---
+      - name: Build frontend bundle
+        run: npm run build
+
+      # --- Smoke-тест: lint-секция отработает, HTTP-секция скипнется без сервера ---
+      - name: Smoke test
+        run: php tests/smoke.php

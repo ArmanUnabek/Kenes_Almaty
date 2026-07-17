@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Auth\AccessDenied;
+
 /**
  * Политика получателей email-уведомлений.
  * Admin — любой адрес; moderator — только свой регион или разрешённые домены.
@@ -89,8 +91,6 @@ class NotificationRecipientPolicy
 
     private static function deny(string $message, int $status = 403): void
     {
-        http_response_code($status);
-        echo json_encode(['error' => $message], JSON_ENCODE_FLAGS);
-        exit;
+        throw new AccessDenied($status, $message);
     }
 }

@@ -1,0 +1,1978 @@
+<?php
+$nonce = base64_encode(random_bytes(16));
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
+?>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0F1B33" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Журнал ОС — Статистика обращений</title>
+    <link rel="manifest" href="/api/manifest.json" />
+    <link href="/assets/vendor/bootstrap.min.css?v=1" rel="stylesheet" />
+    <link href="/styles.css?v=34" rel="stylesheet" />
+    <link href="/assets/vendor/inter.css?v=1" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons.css?v=1">
+</head>
+<body class="app-body">
+    <!-- Skip navigation for keyboard users -->
+    <a href="#mainContent" class="skip-link" tabindex="0" data-i18n="skip.content">Перейти к содержимому</a>
+
+    <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Меню" aria-expanded="false" aria-controls="sidebar">
+        <i class="bi bi-list"></i>
+    </button>
+    <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
+
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <div class="sidebar-mark">
+                <i class="bi bi-journal-text"></i>
+            </div>
+            <div class="sidebar-titles">
+                <h1>Журнал ОС</h1>
+                <p>Общественный Совет</p>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav" id="sidebarNav" role="tablist" aria-label="Основная навигация">
+            <button class="nav-link active" id="tab-dashboard" data-bs-toggle="tab" data-bs-target="#pane-dashboard" type="button" role="tab">
+                <i class="bi bi-bar-chart"></i> <span class="sidebar-label" data-i18n="nav.dashboard">Статистика</span>
+            </button>
+            <button class="nav-link" id="tab-incoming" data-bs-toggle="tab" data-bs-target="#pane-incoming" type="button" role="tab">
+                <i class="bi bi-inbox"></i> <span class="sidebar-label" data-i18n="nav.incoming">Входящий журнал</span>
+            </button>
+            <button class="nav-link" id="tab-outgoing" data-bs-toggle="tab" data-bs-target="#pane-outgoing" type="button" role="tab">
+                <i class="bi bi-send"></i> <span class="sidebar-label" data-i18n="nav.outgoing">Исходящий журнал</span>
+            </button>
+            <button class="nav-link" id="tab-members" data-bs-toggle="tab" data-bs-target="#pane-members" type="button" role="tab">
+                <i class="bi bi-people"></i> <span class="sidebar-label" data-i18n="nav.members">Члены ОС</span>
+            </button>
+            <button class="nav-link" id="tab-commissions" data-bs-toggle="tab" data-bs-target="#pane-commissions" type="button" role="tab">
+                <i class="bi bi-building"></i> <span class="sidebar-label" data-i18n="nav.commissions">Комиссии</span>
+            </button>
+            <button class="nav-link" id="tab-kpi" data-bs-toggle="tab" data-bs-target="#pane-kpi" type="button" role="tab">
+                <i class="bi bi-graph-up"></i> <span class="sidebar-label" data-i18n="nav.kpi">KPI</span>
+            </button>
+            <button class="nav-link" id="tab-events" data-bs-toggle="tab" data-bs-target="#pane-events" type="button" role="tab">
+                <i class="bi bi-calendar-event"></i> <span class="sidebar-label" data-i18n="nav.events">Мероприятия</span>
+            </button>
+            <button class="nav-link" id="tab-calendar" data-bs-toggle="tab" data-bs-target="#pane-calendar" type="button" role="tab">
+                <i class="bi bi-calendar3"></i> <span class="sidebar-label" data-i18n="nav.calendar">Календарь</span>
+            </button>
+            <button class="nav-link" id="tab-my-letters" data-bs-toggle="tab" data-bs-target="#pane-my-letters" type="button" role="tab">
+                <i class="bi bi-person-lines-fill"></i> <span class="sidebar-label" data-i18n="nav.my_letters">Мои письма</span>
+            </button>
+            <button class="nav-link" id="tab-appeals" data-bs-toggle="tab" data-bs-target="#pane-appeals" type="button" role="tab">
+                <i class="bi bi-envelope-paper"></i> <span class="sidebar-label" data-i18n="nav.appeals">Обращения</span>
+                <span class="notify-badge" id="appealsNewBadge" style="display:none"></span>
+            </button>
+            <button class="nav-link" id="tab-archive" data-bs-toggle="tab" data-bs-target="#pane-archive" type="button" role="tab">
+                <i class="bi bi-archive"></i> <span class="sidebar-label" data-i18n="nav.archive">Архив</span>
+            </button>
+            <button class="nav-link" id="tab-updates" data-bs-toggle="tab" data-bs-target="#pane-updates" type="button" role="tab">
+                <i class="bi bi-stars"></i> <span class="sidebar-label" data-i18n="nav.whats_new">Что нового</span>
+                <span class="badge bg-danger ms-auto" id="updatesBadge" style="font-size:0.65rem">NEW</span>
+            </button>
+            <a class="nav-link d-none" id="navAdminPanel" href="/admin/">
+                <i class="bi bi-shield-lock"></i> <span class="sidebar-label" data-i18n="nav.admin">Админ-панель</span>
+            </a>
+            <button class="nav-link border-0 bg-transparent text-start w-100" id="langToggleBtn" type="button" title="Тіл / Язык">
+                <i class="bi bi-translate"></i> <span class="sidebar-label">Қазақша</span>
+            </button>
+        </nav>
+
+        <div class="sidebar-user">
+            <div class="sidebar-avatar" id="sidebarAvatar">?</div>
+            <div class="sidebar-user-info">
+                <div class="sidebar-user-name" id="userName">Гость</div>
+                <div class="sidebar-user-role" id="userRegion">—</div>
+            </div>
+            <button class="sidebar-logout" id="profileBtn" type="button" title="Профиль" aria-label="Профиль">
+                <i class="bi bi-person-circle"></i>
+            </button>
+            <button class="sidebar-logout" id="tgLinkBtn" type="button" title="Привязать Telegram" data-i18n-title="tg.link_title" style="display:none" aria-label="Привязать Telegram">
+                <i class="bi bi-telegram" style="color:#29b6f6"></i>
+            </button>
+            <button class="sidebar-logout" id="logoutBtn" type="button" data-i18n-title="common.logout" title="Выйти" aria-label="Выйти">
+                <i class="bi bi-box-arrow-right"></i>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Telegram Link Modal -->
+    <div class="modal fade" id="tgLinkModal" tabindex="-1" aria-labelledby="tgLinkModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="tgLinkModalLabel">
+                        <i class="bi bi-telegram me-2" style="color:#29b6f6" aria-hidden="true"></i><span data-i18n="tg.link_title">Привязать Telegram</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="tgLinkLoading" class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        <span class="ms-2 text-muted" data-i18n="tg.generating">Генерация кода…</span>
+                    </div>
+                    <div id="tgLinkCodeArea" style="display:none">
+                        <p class="text-muted mb-2" data-i18n="tg.send_command">Отправьте боту следующую команду:</p>
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <code id="tgLinkCodeCmd" class="fs-5 px-3 py-2 rounded flex-grow-1 text-center"
+                                  style="background:var(--bg-muted);letter-spacing:.2em"></code>
+                            <button class="btn btn-outline-secondary btn-sm" id="tgCopyCodeBtn" type="button" title="Скопировать" data-i18n-title="tg.copy" aria-label="Скопировать">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                        <p class="text-muted small mb-2"><span data-i18n="tg.code_valid_1">Код действителен</span> <b data-i18n="tg.code_10min">10 минут</b><span data-i18n="tg.code_valid_2">. Откройте бота и отправьте команду выше.</span></p>
+                        <a id="tgOpenBotLink" href="#" target="_blank" rel="noopener" class="btn btn-primary btn-sm">
+                            <i class="bi bi-telegram me-1"></i><span data-i18n="tg.open_bot">Открыть бота в Telegram</span>
+                        </a>
+                    </div>
+                    <div id="tgLinkError" class="alert alert-danger d-none mt-2"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.close">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div class="modal fade" id="profileModal" tabindex="-1" aria-labelledby="profileModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="profileModalLabel"><i class="bi bi-person-circle me-2" aria-hidden="true"></i><span data-i18n="profile.title">Мой профиль</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="profileAlert" class="alert d-none mb-3"></div>
+                    <form id="profileForm" novalidate>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" data-i18n="profile.login">Логин</label>
+                            <input type="text" class="form-control" id="profileUsername" readonly style="background:var(--bg-muted)">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" data-i18n="profile.display_name">Отображаемое имя</label>
+                            <input type="text" class="form-control" id="profileFullName" minlength="2" maxlength="255">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" data-i18n="profile.email">Email</label>
+                            <input type="email" class="form-control" id="profileEmail" autocomplete="email">
+                        </div>
+                        <hr>
+                        <p class="text-muted small mb-2" data-i18n="profile.change_pass_hint">Смена пароля (оставьте пустым, если не хотите менять)</p>
+                        <div class="mb-3">
+                            <label class="form-label" data-i18n="profile.current_pass">Текущий пароль</label>
+                            <input type="password" class="form-control" id="profileCurrentPass" autocomplete="current-password">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label"><span data-i18n="profile.new_pass">Новый пароль</span> <small class="text-muted" data-i18n="profile.min8">(мин. 8 символов)</small></label>
+                            <input type="password" class="form-control" id="profileNewPass" minlength="8" autocomplete="new-password">
+                        </div>
+                    </form>
+                    <hr>
+                    <div id="sessionsBlock">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="fw-semibold mb-0"><i class="bi bi-shield-lock me-1"></i><span data-i18n="profile.sessions">Активные сессии</span></h6>
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="sessionsTerminateAllBtn" data-i18n="profile.terminate_all">Завершить все другие сессии</button>
+                        </div>
+                        <div id="sessionsAlert" class="alert d-none py-2 small mb-2"></div>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" data-i18n="profile.th_device">Устройство / браузер</th>
+                                        <th scope="col">IP</th>
+                                        <th scope="col" data-i18n="profile.th_last_active">Последняя активность</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sessionsTableBody">
+                                    <tr><td colspan="4" class="text-muted small" data-i18n="common.loading">Загрузка…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div id="adminErrorsBlock" class="d-none">
+                        <hr>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="fw-semibold mb-0"><i class="bi bi-exclamation-triangle me-1"></i><span data-i18n="errors.title">Последние ошибки</span></h6>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="adminErrorsRefreshBtn" data-i18n="errors.refresh">Обновить</button>
+                        </div>
+                        <div class="table-responsive" style="max-height:260px;overflow-y:auto">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" data-i18n="errors.th_time">Время</th>
+                                        <th scope="col" data-i18n="errors.th_level">Уровень</th>
+                                        <th scope="col" data-i18n="errors.th_message">Сообщение</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminErrorsTableBody">
+                                    <tr><td colspan="3" class="text-muted small" data-i18n="common.loading">Загрузка…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.cancel">Отмена</button>
+                    <button type="button" class="btn btn-primary" id="profileSaveBtn" data-i18n="common.save">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-shell">
+        <header class="app-topbar">
+            <div class="page-heading">
+                <h1 id="pageTitle">Статистика обращений</h1>
+                <p id="pageSubtitle">Ключевые показатели и динамика обращений</p>
+            </div>
+            <div class="page-context-actions" id="pageContextActions"></div>
+            <div class="topbar-actions">
+                <button class="btn btn-outline-secondary btn-sm" id="darkModeToggle" title="Тёмная тема" aria-label="Переключить тему">
+                    <i class="bi bi-moon-fill" id="darkModeIcon"></i>
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" id="globalSearchBtn" title="Поиск (Ctrl+K)">
+                    <i class="bi bi-search"></i> <span class="btn-label" data-i18n="topbar.search">Поиск</span>
+                </button>
+                <select class="form-select form-select-sm d-none" id="adminRegionSelect" style="width:auto;max-width:200px;" title="Регион"></select>
+                <span class="notify-btn-wrap">
+                    <button class="btn btn-outline-secondary btn-sm" id="notifyBtn" title="Уведомления" aria-label="Уведомления">
+                        <i class="bi bi-bell"></i> <span class="btn-label d-none d-sm-inline" data-i18n="topbar.notify">Уведомления</span>
+                    </button>
+                    <span class="notify-badge d-none" id="notifyBadge" aria-live="polite">0</span>
+                </span>
+                <div class="topbar-secondary export-admin-only d-none d-lg-flex align-items-center gap-2">
+                    <button class="btn btn-outline-primary btn-sm" id="exportCenterBtn" title="Экспорт-центр">
+                        <i class="bi bi-box-arrow-up"></i> <span class="btn-label" data-i18n="exportcenter.open">Экспорт-центр</span>
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" id="exportCsvBtn">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> <span class="btn-label" data-i18n="topbar.export_csv">CSV</span>
+                    </button>
+                    <button class="btn btn-outline-success btn-sm" id="exportXlsxBtn" title="Экспорт в Excel">
+                        <i class="bi bi-file-earmark-excel"></i> <span class="btn-label">Excel</span>
+                    </button>
+                    <a class="btn btn-outline-secondary btn-sm" id="exportPdfBtn" href="/api/export_pdf.php?type=summary" target="_blank" rel="noopener">
+                        <i class="bi bi-file-earmark-pdf"></i> <span class="btn-label" data-i18n="topbar.export_pdf">PDF</span>
+                    </a>
+                    <button class="btn btn-primary btn-sm" id="exportJsonBtn">
+                        <i class="bi bi-download"></i> <span class="btn-label" data-i18n="topbar.export_json">JSON</span>
+                    </button>
+                    <label class="btn btn-outline-secondary btn-sm mb-0" title="Импорт JSON">
+                        <i class="bi bi-upload"></i> <span class="btn-label" data-i18n="topbar.import">Импорт</span>
+                        <input type="file" id="importJsonInput" hidden accept="application/json" />
+                    </label>
+                    <label class="btn btn-outline-secondary btn-sm mb-0" title="Импорт CSV (входящие/исходящие)">
+                        <i class="bi bi-filetype-csv"></i> <span class="btn-label">CSV</span>
+                        <input type="file" id="importCsvInput" hidden accept=".csv,text/csv,text/plain" />
+                    </label>
+                </div>
+                <div class="dropdown d-lg-none">
+                    <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown" aria-label="Ещё действия">
+                        <i class="bi bi-three-dots-vertical"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" id="topbarMoreMenu">
+                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportCenterBtn"><i class="bi bi-box-arrow-up me-2"></i><span data-i18n="exportcenter.open_item">Экспорт-центр…</span></button></li>
+                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportCsvBtn"><i class="bi bi-file-earmark-spreadsheet me-2"></i><span data-i18n="topbar.export_csv">CSV</span></button></li>
+                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportXlsxBtn"><i class="bi bi-file-earmark-excel me-2"></i>Excel</button></li>
+                        <li class="export-admin-only"><a class="dropdown-item" href="/api/export_pdf.php?type=summary" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-2"></i><span data-i18n="topbar.export_pdf">PDF</span></a></li>
+                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportJsonBtn"><i class="bi bi-download me-2"></i><span data-i18n="topbar.export_json">JSON</span></button></li>
+                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="importJson"><i class="bi bi-upload me-2"></i>Импорт JSON</button></li>
+                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="importCsv"><i class="bi bi-filetype-csv me-2"></i>Импорт CSV</button></li>
+                    </ul>
+                </div>
+            </div>
+        </header>
+
+        <main class="content" id="mainContent" role="main">
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="pane-dashboard" role="tabpanel">
+                <div id="dashboardAlerts" class="alert-summary-bar d-none"></div>
+
+                <div class="row g-3 dash-hero">
+                    <div class="col-12 col-sm-6 col-xl-3">
+                        <div class="dash-stat dash-stat--incoming">
+                            <div class="dash-stat__icon"><i class="bi bi-inbox"></i></div>
+                            <div class="dash-stat__body">
+                                <div class="dash-stat__label" data-i18n="dash.incoming">Входящих</div>
+                                <div class="dash-stat__value" id="kpiIncoming">0</div>
+                                <div class="dash-stat__note" id="kpiIncomingNote" data-i18n="dash.all_time">за всё время</div>
+                                <div class="dash-stat__trend d-none" id="kpiIncomingTrend"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-xl-3">
+                        <div class="dash-stat dash-stat--outgoing">
+                            <div class="dash-stat__icon"><i class="bi bi-send"></i></div>
+                            <div class="dash-stat__body">
+                                <div class="dash-stat__label" data-i18n="dash.outgoing">Исходящих</div>
+                                <div class="dash-stat__value" id="kpiOutgoing">0</div>
+                                <div class="dash-stat__note" id="kpiOutgoingNote" data-i18n="dash.os_replies">ответы ОС</div>
+                                <div class="dash-stat__trend d-none" id="kpiOutgoingTrend"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-xl-3">
+                        <div class="dash-stat dash-stat--closed">
+                            <div class="dash-stat__icon"><i class="bi bi-check-circle"></i></div>
+                            <div class="dash-stat__body">
+                                <div class="dash-stat__label" data-i18n="dash.closed">Закрыто ответом</div>
+                                <div class="dash-stat__value" id="kpiClosed">0</div>
+                                <div class="dash-stat__progress" aria-hidden="true"><span id="kpiClosedProgress"></span></div>
+                                <div class="dash-stat__note" id="kpiClosedNote">—</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-xl-3">
+                        <div class="dash-stat dash-stat--time">
+                            <div class="dash-stat__icon"><i class="bi bi-clock-history"></i></div>
+                            <div class="dash-stat__body">
+                                <div class="dash-stat__label" data-i18n="dash.avg_days">Средний срок ответа</div>
+                                <div class="dash-stat__value" id="kpiAvgDays">—</div>
+                                <div class="dash-stat__note" id="kpiAvgDaysNote" data-i18n="dash.working_days">рабочих дней</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-12 col-lg-8">
+                        <div class="card dash-chart-card h-100">
+                        <div class="card-header d-flex align-items-center justify-content-between">
+                                <span data-i18n="dash.dynamics">Динамика обращений</span>
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <label for="dashboardPeriodSelect" class="form-label mb-0 small text-secondary" data-i18n="dash.period">Период</label>
+                                        <select id="dashboardPeriodSelect" class="form-select form-select-sm" style="width:auto;">
+                                            <option value="month" selected>Месяц</option>
+                                            <option value="quarter">Квартал</option>
+                                            <option value="year">Год</option>
+                                        </select>
+                                    </div>
+                                    <span class="dash-chart-legend">
+                                        <span class="dash-chart-legend__item dash-chart-legend__item--in"><i></i> Входящие</span>
+                                        <span class="dash-chart-legend__item dash-chart-legend__item--out"><i></i> Исходящие</span>
+                                    </span>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary chart-export-btn" data-chart="chartLettersTrend" aria-label="Скачать график PNG"><i class="bi bi-download"></i></button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="chartLettersTrend" height="220"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-4">
+                        <div class="card dash-insights h-100">
+                            <div class="card-header">Оперативная сводка</div>
+                            <div class="card-body p-0">
+                                <ul class="dash-insight-list list-unstyled mb-0">
+                                    <li class="dash-insight dash-insight--warn dash-insight--clickable" id="dashInsightPending" role="button" tabindex="0">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                        <div>
+                                            <div class="dash-insight__label">Без ответа</div>
+                                            <div class="dash-insight__value" id="kpiPending">0</div>
+                                        </div>
+                                    </li>
+                                    <li class="dash-insight dash-insight--danger dash-insight--clickable" id="dashInsightOverdue" role="button" tabindex="0">
+                                        <i class="bi bi-alarm"></i>
+                                        <div>
+                                            <div class="dash-insight__label">Просрочено</div>
+                                            <div class="dash-insight__value" id="kpiOverdue">0</div>
+                                        </div>
+                                    </li>
+                                    <li class="dash-insight">
+                                        <i class="bi bi-calendar3"></i>
+                                        <div>
+                                            <div class="dash-insight__label" id="kpiIncomingPeriodLabel">За период</div>
+                                            <div class="dash-insight__value" id="kpiIncomingMay">0</div>
+                                        </div>
+                                    </li>
+                                    <li class="dash-insight">
+                                        <i class="bi bi-paperclip"></i>
+                                        <div>
+                                            <div class="dash-insight__label">Со сканами</div>
+                                            <div class="dash-insight__value" id="kpiWithScans">0</div>
+                                        </div>
+                                    </li>
+                                    <li class="dash-insight">
+                                        <i class="bi bi-people"></i>
+                                        <div>
+                                            <div class="dash-insight__label">Членов ОС</div>
+                                            <div class="dash-insight__value" id="kpiMembersCount">0</div>
+                                            <div class="dash-insight__note small text-muted d-none" id="kpiMembersPhotoNote"></div>
+                                        </div>
+                                    </li>
+                                    <li class="dash-insight">
+                                        <i class="bi bi-building"></i>
+                                        <div>
+                                            <div class="dash-insight__label">Комиссий</div>
+                                            <div class="dash-insight__value" id="kpiCommissionsCount">0</div>
+                                        </div>
+                                    </li>
+                                    <li class="dash-insight d-none" id="dashInsightOnTime">
+                                        <i class="bi bi-patch-check"></i>
+                                        <div>
+                                            <div class="dash-insight__label">В срок (≤21 дня)</div>
+                                            <div class="dash-insight__value" id="kpiOnTime">—</div>
+                                            <div class="dash-insight__note small text-muted">из ответивших</div>
+                                        </div>
+                                    </li>
+                                    <li class="dash-insight d-none" id="dashInsightInactive">
+                                        <i class="bi bi-person-dash"></i>
+                                        <div>
+                                            <div class="dash-insight__label">Без писем</div>
+                                            <div class="dash-insight__value" id="kpiInactiveMembers">—</div>
+                                            <div class="dash-insight__note small text-muted">членов ОС</div>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-12 col-lg-7">
+                        <div class="card h-100" id="commissionsCard">
+                            <div class="card-header">Активность комиссий</div>
+                            <div class="card-body">
+                                <div id="commissionsKPI"></div>
+                                <div class="mt-3 d-none" id="commissionHeatmapWrap">
+                                    <div class="small text-secondary fw-semibold mb-2" id="commissionHeatmapTitle" data-i18n="dash.heatmap.title">Теплокарта нагрузки</div>
+                                    <div class="commission-heatmap" id="commissionHeatmap"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-5">
+                        <div class="card h-100">
+                            <div class="card-header d-flex align-items-center justify-content-between">
+                                <span>Топ организаций (входящие)</span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary chart-export-btn" data-chart="chartTopOrgs" aria-label="Скачать график PNG"><i class="bi bi-download"></i></button>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="chartTopOrgs" height="260"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-12 col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-header d-flex align-items-center justify-content-between">
+                                <span data-i18n="dash.funnel.title">Воронка сроков</span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary chart-export-btn" data-chart="chartDeadlineFunnel" aria-label="Скачать график PNG"><i class="bi bi-download"></i></button>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="chartDeadlineFunnel" height="200"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Вкладка Мероприятия -->
+            <div class="tab-pane fade" id="pane-events" role="tabpanel">
+                <div class="card form-card mb-3 write-admin-only">
+                    <div class="card-header form-card-header" data-bs-toggle="collapse" data-bs-target="#collapseEventForm" aria-expanded="false">
+                        <span><i class="bi bi-calendar-plus"></i> Добавить / Изменить мероприятие</span>
+                        <i class="bi bi-chevron-down form-card-chevron"></i>
+                    </div>
+                    <div class="collapse" id="collapseEventForm">
+                        <div class="card-body">
+                            <form id="formEvent" class="row g-3">
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Название</label>
+                                    <input type="text" class="form-control" id="evTitle" required />
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label">Дата</label>
+                                    <input type="date" class="form-control" id="evDate" required />
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label">Локация</label>
+                                    <input type="text" class="form-control" id="evLocation" />
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Ссылка 2GIS</label>
+                                    <input type="url" class="form-control" id="evLocationUrl" placeholder="https://2gis.kz/..." />
+                                    <div class="form-text">Вставьте ссылку с карты 2GIS на место проведения</div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Описание мероприятия</label>
+                                    <textarea class="form-control" id="evDescription" rows="2" placeholder="Программа, цели, дополнительная информация..."></textarea>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Участники (члены ОС)</label>
+                                    <div class="d-flex gap-2 mb-2">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="attSelectAll">Выбрать всех</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="attClear">Очистить</button>
+                                    </div>
+                                    <div id="attChecklist" class="row g-2"></div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Примечание</label>
+                                    <textarea class="form-control" id="evNotes" rows="2"></textarea>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">KPI (произвольные метрики)</label>
+                                    <div class="row g-2" id="kpiList"></div>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="addKpiBtn">Добавить KPI</button>
+                                </div>
+                                <div class="col-12 d-flex gap-2">
+                                    <button class="btn btn-primary" type="submit">Сохранить</button>
+                                    <button class="btn btn-outline-secondary" type="reset">Очистить</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card data-card">
+                    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <span><i class="bi bi-calendar-event me-2"></i>Список мероприятий</span>
+                        <input type="text" class="form-control form-control-sm" id="searchEvents" placeholder="Поиск..." style="max-width:240px;" />
+                    </div>
+                    <div class="table-responsive table-scroll-hint">
+                        <table class="table table-hover align-middle mb-0 table-mobile-cards" id="tableEvents">
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col">Дата</th>
+                                    <th scope="col">Название</th>
+                                    <th scope="col">Локация</th>
+                                    <th scope="col" class="text-end">Присутствовало/Всего</th>
+                                    <th scope="col" class="text-end">% явки</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модалка: список присутствующих -->
+            <div class="modal fade" id="eventAttendeesModal" tabindex="-1" aria-labelledby="eventAttendeesModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="eventAttendeesModalLabel">Присутствующие</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                        </div>
+                        <div class="modal-body" id="eventAttendeesBody">
+                            Загрузка...
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Модалка: адресаты письма -->
+            <div class="modal fade" id="letterRecipientsModal" tabindex="-1" aria-labelledby="letterRecipientsModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-md modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="letterRecipientsModalLabel">Адресаты письма</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                        </div>
+                        <div class="modal-body" id="letterRecipientsBody">
+                            Загрузка...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модалка: детали письма с вкладками (комментарии, история) -->
+            <div class="modal fade" id="letterDetailTabsModal" tabindex="-1" aria-labelledby="letterDetailTabsTitle" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="letterDetailTabsTitle">Письмо</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                        </div>
+                        <div class="modal-body p-0">
+                            <ul class="nav nav-tabs px-3 pt-2" id="letterDetailTabList" role="tablist">
+                                <li class="nav-item"><button class="nav-link active" id="ldtab-info" data-bs-toggle="tab" data-bs-target="#ldpane-info" type="button">Сведения</button></li>
+                                <li class="nav-item"><button class="nav-link" id="ldtab-comments" data-bs-toggle="tab" data-bs-target="#ldpane-comments" type="button">Комментарии <span class="badge bg-secondary ms-1" id="ldCommentsBadge">0</span></button></li>
+                                <li class="nav-item"><button class="nav-link" id="ldtab-history" data-bs-toggle="tab" data-bs-target="#ldpane-history" type="button">История</button></li>
+                            </ul>
+                            <div class="tab-content px-3 py-2">
+                                <div class="tab-pane fade show active" id="ldpane-info">
+                                    <div id="ldInfoBody" class="py-2"></div>
+                                </div>
+                                <div class="tab-pane fade" id="ldpane-comments">
+                                    <div id="ldCommentsList" class="py-2" style="max-height:320px;overflow-y:auto"></div>
+                                    <div class="border-top pt-2 mt-2 write-admin-only">
+                                        <textarea id="ldCommentInput" class="form-control form-control-sm mb-2" rows="2" placeholder="Добавить комментарий..."></textarea>
+                                        <button class="btn btn-sm btn-primary" id="ldCommentSubmit"><i class="bi bi-send"></i> Отправить</button>
+                                    </div>
+                                </div>
+                                <div class="tab-pane fade" id="ldpane-history">
+                                    <div id="ldHistoryBody" class="py-2" style="max-height:380px;overflow-y:auto"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модалка: выбор шаблона -->
+            <div class="modal fade" id="templatePickerModal" tabindex="-1" aria-labelledby="templatePickerModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-md modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="templatePickerModalLabel">Выбрать шаблон</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="templatePickerList" class="list-group">
+                                <div class="text-muted text-center py-3">Загрузка шаблонов...</div>
+                            </div>
+                            <div id="templatePickerPreview" class="d-none border rounded p-2 mt-3">
+                                <div class="fw-semibold small mb-1" id="templatePreviewTitle">Предпросмотр</div>
+                                <div id="templatePreviewBody" class="small"></div>
+                                <button type="button" class="btn btn-sm btn-primary mt-2" id="btnApplyTemplate">Применить шаблон</button>
+                            </div>
+                            <div class="alert alert-light border small mt-3 mb-0" id="templateVarsHint">
+                                <div class="fw-semibold mb-1" id="templateVarsHintTitle">Переменные в тексте шаблона</div>
+                                <div id="templateVarsHintBody">Поддерживаются плейсхолдеры: <code>{номер}</code>, <code>{организация}</code>, <code>{дата}</code>, <code>{тема}</code> (или <code>{number}</code>, <code>{organization}</code>, <code>{date}</code>, <code>{subject}</code>). При применении они заменяются значениями из текущей формы письма; незаполненные — маркером <code>___</code>.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="pane-incoming" role="tabpanel">
+                <div class="card form-card mb-3 write-admin-only">
+                    <div class="card-header form-card-header" data-bs-toggle="collapse" data-bs-target="#collapseIncomingForm" aria-expanded="true">
+                        <span><i class="bi bi-plus-circle"></i> Добавить входящее письмо</span>
+                        <i class="bi bi-chevron-down form-card-chevron"></i>
+                    </div>
+                    <div class="collapse show" id="collapseIncomingForm">
+                    <div class="card-body">
+                        <form id="formIncoming" class="row g-3">
+                            <div class="col-12 col-md-3">
+                                <label class="form-label">Категория</label>
+                                <select class="form-select" id="incType" required>
+                                    <option value="KK" selected>Гос. органы (ҚК)</option>
+                                    <option value="N">Рекомендации (.Н)</option>
+                                    <option value="JT">Жители (ЖТ)</option>
+                                    <option value="ZT">Организации (ЗТ)</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <label class="form-label">Дата получения</label>
+                                <input type="date" class="form-control" id="incDate" required />
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Организация</label>
+                                <input type="text" class="form-control" id="incOrg" placeholder="Акимат г. Алматы" required />
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <label class="form-label">Номер письма</label>
+                                <input type="text" class="form-control" id="incNumber" placeholder="1345-ҚК / 27.Н / ЖТ-55" required />
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label d-flex align-items-center gap-2">
+                                    <input class="form-check-input" type="checkbox" id="incLinkToggle">
+                                    Ответ на исходящее письмо
+                                </label>
+                                <select class="form-select mt-2 d-none" id="incRespondsOutgoing">
+                                    <option value="">Выберите исходящее письмо</option>
+                                </select>
+                                <small class="text-muted">Включите галочку, чтобы выбрать исходящее, и номер сформируется как «новый рег.№ / исходящий №».</small>
+                            </div>
+                            <div class="col-12 col-md-2">
+                                <label class="form-label">Рег. № во входящем</label>
+                                <input type="number" class="form-control" id="incSeq" placeholder="Авто" min="1" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Тема/Краткое содержание</label>
+                                <input type="text" class="form-control" id="incSubject" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Примечание</label>
+                                <textarea class="form-control" id="incNote" rows="2"></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Адресаты</label>
+                                <div class="input-group mb-2" style="max-width: 520px;">
+                                    <input type="text" class="form-control" id="incRecipientInput" placeholder="Добавьте организацию или адрес" />
+                                    <button class="btn btn-outline-secondary" type="button" id="incRecipientAdd">Добавить</button>
+                                </div>
+                                <div id="incRecipientsList" class="recipient-chips d-flex flex-wrap gap-2"></div>
+                                <small class="text-muted">Первый адрес будет сохранён как основная организация.</small>
+                            </div>
+            <div class="col-12">
+                <label class="form-label">Ответственные члены ОС</label>
+                <select class="form-select" id="incMembers" multiple size="6"></select>
+                <small class="text-muted">Можно выбрать нескольких ответственных, чтобы их отобразить в карточке письма.</small>
+            </div>
+                            <div class="col-12">
+                                <label class="form-label">Сканы и вложения (несколько файлов)</label>
+                                <input type="file" class="form-control" id="incScans" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.mp4,.avi,.mov,.txt,.zip,.rar" multiple />
+                                <small class="text-muted">Поддерживаются изображения, PDF, документы, видео и другие файлы.</small>
+                                <div id="incScansPreview" class="mt-2 d-flex flex-wrap gap-2"></div>
+                            </div>
+                            <div class="col-12 d-flex gap-2 flex-wrap">
+                                <button class="btn btn-primary" type="submit">Добавить</button>
+                                <button class="btn btn-outline-secondary" type="reset">Очистить</button>
+                                <button class="btn btn-outline-secondary" type="button" id="btnOpenTemplatePickerIncoming">
+                                    <i class="bi bi-file-earmark-text"></i> Шаблон
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" id="btnSaveTemplateIncoming" title="Сохранить как шаблон" aria-label="Сохранить как шаблон">
+                                    <i class="bi bi-bookmark-plus"></i>
+                                </button>
+                                <button class="btn btn-outline-primary ms-auto" type="button" id="btnOpenOutgoingFromIncoming">
+                                    Создать ответ ОС
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    </div>
+                </div>
+
+                <div class="toolbar-panel mb-3">
+                <button type="button" class="btn btn-sm btn-outline-secondary filter-toggle-btn d-md-none w-100 mb-2" data-filter-toggle="incomingFilters" aria-expanded="false">
+                    <i class="bi bi-funnel me-1"></i>
+                    <span class="filter-toggle-label">Показать фильтры</span>
+                    <span class="filter-toggle-label-close d-none">Скрыть фильтры</span>
+                </button>
+                <div class="toolbar-filters" id="incomingFilters">
+                    <div class="search-field">
+                        <i class="bi bi-search"></i>
+                        <input type="text" class="form-control form-control-sm" id="searchIncoming" placeholder="Поиск по номеру, организации, теме…" />
+                    </div>
+                    <select class="form-select form-select-sm" id="filterYearIncoming"></select>
+                    <select class="form-select form-select-sm" id="filterMonthIncoming">
+                        <option value="all">Все месяцы</option>
+                    </select>
+                    <select class="form-select form-select-sm" id="filterStatusIncoming">
+                        <option value="all">Все статусы</option>
+                        <option value="pending">Без ответа</option>
+                        <option value="overdue">Просрочено</option>
+                    </select>
+                    <select class="form-select form-select-sm" id="filterScansIncoming">
+                        <option value="all">Все письма</option>
+                        <option value="with-scans">Только со сканами</option>
+                        <option value="without-scans">Без сканов</option>
+                    </select>
+                    <select class="form-select form-select-sm" id="filterRecipientIncoming">
+                        <option value="all">Все адресаты</option>
+                    </select>
+                </div>
+                </div>
+
+                <!-- Панель пакетных действий — входящие -->
+                <div class="batch-action-bar d-none" id="batchBarIncoming">
+                    <span class="batch-count" id="batchCountIncoming">0 выбрано</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="batchExportIncoming">
+                        <i class="bi bi-download me-1"></i>Экспорт выбранных
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger write-admin-only" id="batchArchiveIncoming" title="Переместить выбранные в архив">
+                        <i class="bi bi-archive me-1"></i>В архив
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger d-none" id="batchDeleteIncoming" title="Удалить выбранные">
+                        <i class="bi bi-trash me-1" aria-hidden="true"></i><span data-i18n="letters.batch_delete">Удалить</span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="batchClearIncoming">
+                        Снять выделение
+                    </button>
+                </div>
+
+                <div class="card data-card">
+                    <div class="card-header">Входящий журнал</div>
+                    <div class="table-responsive table-scroll-hint">
+                        <table class="table table-hover align-middle mb-0 table-mobile-cards" id="tableIncoming">
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col" class="batch-checkbox-col"><input type="checkbox" class="form-check-input" id="selectAllIncoming" title="Выбрать все" aria-label="Выбрать все"></th>
+                                    <th scope="col">Рег. №</th>
+                                    <th scope="col">Дата</th>
+                                    <th scope="col">Организация</th>
+                                    <th scope="col">Категория</th>
+                                    <th scope="col">Номер (ҚК)</th>
+                                    <th scope="col">Тема</th>
+                                    <th scope="col">Адресаты</th>
+                                    <th scope="col">Срок</th>
+                                    <th scope="col">Ответственные</th>
+                                    <th scope="col">Сканы</th>
+                                    <th scope="col">Ответ</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="table-footer" id="incomingTableFooter"></div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="pane-outgoing" role="tabpanel">
+                <div class="card form-card mb-3 write-admin-only">
+                    <div class="card-header form-card-header" data-bs-toggle="collapse" data-bs-target="#collapseOutgoingForm" aria-expanded="false">
+                        <span><i class="bi bi-send-plus"></i> Добавить исходящее письмо (Ответ ОС)</span>
+                        <i class="bi bi-chevron-down form-card-chevron"></i>
+                    </div>
+                    <div class="collapse" id="collapseOutgoingForm">
+                    <div class="card-body">
+                        <form id="formOutgoing" class="row g-3">
+                            <div class="col-12 col-md-3">
+                                <label class="form-label">Дата отправки</label>
+                                <input type="date" class="form-control" id="outDate" required />
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Связать с входящим</label>
+                                <select class="form-select" id="outLinkedIncoming"></select>
+                                <small class="text-muted">Можно оставить пустым для самостоятельного письма.</small>
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <label class="form-label">Категория адресата</label>
+                                <select class="form-select" id="outType">
+                                    <option value="gov">Гос. органы (ҚК)</option>
+                                    <option value="jt">Жители (ЖТ)</option>
+                                    <option value="zt">Организации (ЗТ)</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-2">
+                                <label class="form-label">Исходящий №</label>
+                                <input type="text" class="form-control" id="outNumber" placeholder="Авто или введите вручную" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Тема/Краткое содержание</label>
+                                <input type="text" class="form-control" id="outSubject" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Получатели (адресаты)</label>
+                                <div class="input-group mb-2">
+                                    <input type="text" class="form-control" id="outRecipientInput" placeholder="Добавьте адресата" />
+                                    <button class="btn btn-outline-secondary" type="button" id="outRecipientAdd">Добавить</button>
+                                </div>
+                                <div id="outRecipientsList" class="recipient-chips"></div>
+                                <small class="text-muted">Первый адресат заполнит поле «Организация».</small>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Примечание</label>
+                                <textarea class="form-control" id="outNote" rows="2"></textarea>
+                            </div>
+            <div class="col-12">
+                <label class="form-label">Ответственные члены ОС</label>
+                <select class="form-select" id="outMembers" multiple size="6"></select>
+                <small class="text-muted">Выберите ответственных за подготовку и отправку этого письма.</small>
+            </div>
+                            <div class="col-12">
+                                <label class="form-label">Сканы и вложения (несколько файлов)</label>
+                                <input type="file" class="form-control" id="outScans" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.mp4,.avi,.mov,.txt,.zip,.rar" multiple />
+                                <small class="text-muted">Поддерживаются изображения, PDF, документы, видео и другие файлы.</small>
+                                <div id="outScansPreview" class="mt-2 d-flex flex-wrap gap-2"></div>
+                            </div>
+                            <div class="col-12 d-flex gap-2 flex-wrap">
+                                <button class="btn btn-primary" type="submit">Добавить</button>
+                                <button class="btn btn-outline-secondary" type="reset">Очистить</button>
+                                <button class="btn btn-outline-secondary" type="button" id="btnOpenTemplatePickerOutgoing">
+                                    <i class="bi bi-file-earmark-text"></i> Шаблон
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" id="btnSaveTemplateOutgoing" title="Сохранить как шаблон" aria-label="Сохранить как шаблон">
+                                    <i class="bi bi-bookmark-plus"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    </div>
+                </div>
+
+                <div class="toolbar-panel mb-3">
+                <button type="button" class="btn btn-sm btn-outline-secondary filter-toggle-btn d-md-none w-100 mb-2" data-filter-toggle="outgoingFilters" aria-expanded="false">
+                    <i class="bi bi-funnel me-1"></i>
+                    <span class="filter-toggle-label">Показать фильтры</span>
+                    <span class="filter-toggle-label-close d-none">Скрыть фильтры</span>
+                </button>
+                <div class="toolbar-filters" id="outgoingFilters">
+                    <div class="search-field">
+                        <i class="bi bi-search"></i>
+                        <input type="text" class="form-control form-control-sm" id="searchOutgoing" placeholder="Поиск по номеру, теме, организации…" />
+                    </div>
+                    <select class="form-select form-select-sm" id="filterYearOutgoing"></select>
+                    <select class="form-select form-select-sm" id="filterMonthOutgoing">
+                        <option value="all">Все месяцы</option>
+                    </select>
+                    <select class="form-select form-select-sm" id="filterScansOutgoing">
+                        <option value="all">Все письма</option>
+                        <option value="with-scans">Только со сканами</option>
+                        <option value="without-scans">Без сканов</option>
+                    </select>
+                    <select class="form-select form-select-sm" id="filterRecipientOutgoing">
+                        <option value="all">Все адресаты</option>
+                    </select>
+                </div>
+                </div>
+
+                <!-- Панель пакетных действий — исходящие -->
+                <div class="batch-action-bar d-none" id="batchBarOutgoing">
+                    <span class="batch-count" id="batchCountOutgoing">0 выбрано</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="batchExportOutgoing">
+                        <i class="bi bi-download me-1"></i>Экспорт выбранных
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger write-admin-only" id="batchArchiveOutgoing" title="Переместить выбранные в архив">
+                        <i class="bi bi-archive me-1"></i>В архив
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger d-none" id="batchDeleteOutgoing" title="Удалить выбранные">
+                        <i class="bi bi-trash me-1" aria-hidden="true"></i><span data-i18n="letters.batch_delete">Удалить</span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="batchClearOutgoing">
+                        Снять выделение
+                    </button>
+                </div>
+
+                <div class="card data-card">
+                    <div class="card-header">Исходящий журнал</div>
+                    <div class="table-responsive table-scroll-hint">
+                        <table class="table table-hover align-middle mb-0 table-mobile-cards" id="tableOutgoing">
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col" class="batch-checkbox-col"><input type="checkbox" class="form-check-input" id="selectAllOutgoing" title="Выбрать все" aria-label="Выбрать все"></th>
+                                    <th scope="col">Порядк. №</th>
+                                    <th scope="col">Дата</th>
+                                    <th scope="col">Исходящий №</th>
+                                    <th scope="col">Организация</th>
+                                    <th scope="col">Категория</th>
+                                    <th scope="col">Связанное входящее</th>
+                                    <th scope="col">Тема</th>
+                                    <th scope="col">Адресаты</th>
+                                    <th scope="col">Ответственные</th>
+                                    <th scope="col">Сканы</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="table-footer" id="outgoingTableFooter"></div>
+                </div>
+            </div>
+
+            <!-- Вкладка Члены ОС -->
+            <div class="tab-pane fade" id="pane-members" role="tabpanel">
+                <div class="card form-card mb-3 d-none" id="memberFormCard">
+                    <div class="card-header form-card-header" data-bs-toggle="collapse" data-bs-target="#collapseMemberForm" aria-expanded="false">
+                        <span><i class="bi bi-person-plus"></i> <span id="memberFormTitle">Добавить члена ОС</span></span>
+                        <i class="bi bi-chevron-down form-card-chevron"></i>
+                    </div>
+                    <div class="collapse" id="collapseMemberForm">
+                    <div class="card-body">
+                        <form id="formMember" class="row g-3">
+                            <input type="hidden" id="memberEditId" />
+                            <div class="col-md-6">
+                                <label class="form-label">ФИО</label>
+                                <input type="text" class="form-control" id="memberFullName" required />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Комиссия</label>
+                                <select class="form-select" id="memberCommissionId">
+                                    <option value="">— не назначена —</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Должность</label>
+                                <input type="text" class="form-control" id="memberPosition" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Организация</label>
+                                <input type="text" class="form-control" id="memberOrganization" />
+                            </div>
+                            <!-- KazLLM: показывается при KAZLLM_ENABLED=true (см. docs/KAZLLM.md) -->
+                            <div id="kazllmMemberFields" class="col-12 d-none">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Должность (KZ)</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="memberPositionKz" placeholder="Қазақша" />
+                                            <button type="button" class="btn btn-outline-secondary" id="btnTranslatePosition" title="Аудару (KazLLM)">KK</button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Организация (KZ)</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="memberOrganizationKz" placeholder="Қазақша" />
+                                            <button type="button" class="btn btn-outline-secondary" id="btnTranslateOrganization" title="Аудару (KazLLM)">KK</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Телефон</label>
+                                <input type="tel" inputmode="tel" class="form-control" id="memberPhone" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Email</label>
+                                <input type="email" class="form-control" id="memberEmail" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" data-i18n="members.birth_date">Дата рождения</label>
+                                <input type="date" class="form-control" id="memberBirthDate" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label"><i class="bi bi-facebook text-primary"></i> Facebook</label>
+                                <input type="text" class="form-control" id="memberFacebook" placeholder="https://facebook.com/… или @username" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label"><i class="bi bi-whatsapp text-success"></i> WhatsApp</label>
+                                <input type="tel" inputmode="tel" class="form-control" id="memberWhatsapp" placeholder="+7 701 000 00 00" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label"><i class="bi bi-instagram" style="color:#C13584"></i> Instagram</label>
+                                <input type="text" class="form-control" id="memberInstagram" placeholder="https://instagram.com/… или @username" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Статус</label>
+                                <select class="form-select" id="memberStatus">
+                                    <option value="active">Активен</option>
+                                    <option value="inactive">Неактивен</option>
+                                </select>
+                            </div>
+                            <div class="col-12 d-flex gap-2">
+                                <button class="btn btn-primary" type="submit">Сохранить</button>
+                                <button class="btn btn-outline-secondary" type="button" id="memberFormReset">Очистить</button>
+                            </div>
+                        </form>
+                    </div>
+                    </div>
+                </div>
+                <div class="toolbar-panel mb-3">
+                    <label class="toolbar-label" for="filterMembersCommission">Комиссия</label>
+                    <select class="form-select form-select-sm" id="filterMembersCommission">
+                        <option value="">Все комиссии</option>
+                    </select>
+                </div>
+                <div class="row g-3" id="membersGrid">
+                            <!-- Члены ОС будут загружены динамически -->
+                </div>
+            </div>
+
+            <!-- Вкладка Комиссии -->
+            <div class="tab-pane fade" id="pane-commissions" role="tabpanel">
+                <div class="card form-card mb-3 d-none" id="commissionFormCard">
+                    <div class="card-header form-card-header" data-bs-toggle="collapse" data-bs-target="#collapseCommissionForm" aria-expanded="false">
+                        <span><i class="bi bi-building-add"></i> <span id="commissionFormTitle">Добавить комиссию</span></span>
+                        <i class="bi bi-chevron-down form-card-chevron"></i>
+                    </div>
+                    <div class="collapse" id="collapseCommissionForm">
+                    <div class="card-body">
+                        <form id="formCommission" class="row g-3">
+                            <input type="hidden" id="commissionEditId" />
+                            <div class="col-md-8">
+                                <label class="form-label">Название</label>
+                                <input type="text" class="form-control" id="commissionName" required />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Порядок</label>
+                                <input type="number" class="form-control" id="commissionSortOrder" value="0" min="0" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Цвет</label>
+                                <input type="color" class="form-control form-control-color w-100" id="commissionColor" value="#0d6efd" />
+                            </div>
+                            <div class="col-12 d-flex gap-2">
+                                <button class="btn btn-primary" type="submit">Сохранить</button>
+                                <button class="btn btn-outline-secondary" type="button" id="commissionFormReset">Очистить</button>
+                            </div>
+                        </form>
+                    </div>
+                    </div>
+                </div>
+                <div class="row g-3" id="commissionsGrid">
+                                    <!-- Комиссии будут загружены динамически -->
+                </div>
+            </div>
+
+            <!-- Вкладка KPI -->
+            <div class="tab-pane fade" id="pane-kpi" role="tabpanel">
+                <div class="row g-3">
+                    <div class="col-12 col-lg-6">
+                        <div class="card data-card h-100">
+                            <div class="card-header d-flex align-items-center justify-content-between">
+                                <span><i class="bi bi-people me-2"></i>KPI по членам ОС</span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle mb-0" id="tableKpiMembers">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">ФИО</th>
+                                            <th scope="col">Комиссия</th>
+                                            <th scope="col" class="text-end">Исход.</th>
+                                            <th scope="col" class="text-end">Вход.</th>
+                                            <th scope="col" class="text-end">Ведущий</th>
+                                            <th scope="col" class="text-end">Мероп.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-6">
+                        <div class="card data-card h-100">
+                            <div class="card-header">
+                                <span><i class="bi bi-building me-2"></i>KPI по комиссиям</span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle mb-0" id="tableKpiCommissions">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Комиссия</th>
+                                            <th scope="col" class="text-end">Исход.</th>
+                                            <th scope="col" class="text-end">Вход.</th>
+                                            <th scope="col" class="text-end">Мероп.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row g-3 mt-2">
+                    <div class="col-12">
+                        <div class="card data-card">
+                            <div class="card-header">
+                                <span><i class="bi bi-person-badge me-2"></i>Состав и ответственные</span>
+                            </div>
+                            <div class="card-body" id="summaryResponsible">
+                                <div class="text-muted small py-2"><i class="bi bi-arrow-clockwise me-1"></i>Загрузка...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row g-3 mt-2">
+                    <div class="col-12">
+                        <div class="card data-card">
+                            <div class="card-header">
+                                <span><i class="bi bi-trophy me-2"></i>Топ адресатов писем</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-4">
+                                    <div class="col-12 col-lg-6">
+                                        <p class="pane-kpi-heading"><i class="bi bi-inbox me-1"></i>Входящие</p>
+                                        <ul class="list-unstyled kpi-recipients-list" id="listKpiRecipientsIncoming"></ul>
+                                    </div>
+                                    <div class="col-12 col-lg-6">
+                                        <p class="pane-kpi-heading"><i class="bi bi-send me-1"></i>Исходящие</p>
+                                        <ul class="list-unstyled kpi-recipients-list" id="listKpiRecipientsOutgoing"></ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модалка привязки готового исходящего -->
+            <div class="modal fade" id="linkOutgoingModal" tabindex="-1" aria-labelledby="linkOutgoingModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="linkOutgoingModalLabel">Привязать исходящее письмо</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <input type="text" class="form-control" id="linkOutgoingSearch" placeholder="Поиск по номеру, теме или организации">
+                            </div>
+                            <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th scope="col">Исходящий №</th>
+                                            <th scope="col">Дата</th>
+                                            <th scope="col">Организация</th>
+                                            <th scope="col">Тема</th>
+                                            <th scope="col" class="text-end">Действие</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="linkOutgoingList">
+                                        <tr><td colspan="5" class="text-center text-muted">Нет доступных исходящих</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary d-none" id="linkOutgoingConfirm">Выбрать</button>
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Закрыть</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        </main>
+
+        <footer class="app-footer">
+            <div class="app-footer-links">
+                <a href="/help/">Справка</a>
+                <a href="/help/faq.html">FAQ</a>
+                <a href="/legal/privacy.html">Политика ПДн</a>
+                <a href="/legal/terms.html">Соглашение</a>
+                <a data-site-href="email" href="mailto:support@example.kz">Поддержка</a>
+            </div>
+            <div>© <span data-site="year">2026</span> <span data-site="operatorName">ТОО «Журнал ОС»</span> · БСН <span data-site="bin">—</span></div>
+        </footer>
+    </div>
+
+    <!-- Toast контейнер для уведомлений -->
+    <div class="toast-container">
+        <!-- Toasts будут добавляться динамически -->
+    </div>
+
+    <!-- Модальное окно подтверждения удаления -->
+    <!-- Экспорт-центр: единая точка выгрузок (письма / статистика / календарь / обращения) -->
+    <div class="modal fade" id="exportCenterModal" tabindex="-1" aria-labelledby="exportCenterModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title" id="exportCenterModalLabel"><i class="bi bi-box-arrow-up me-2"></i><span data-i18n="exportcenter.title">Экспорт-центр</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="ecDataType" data-i18n="exportcenter.what">Что выгрузить</label>
+                        <select class="form-select" id="ecDataType">
+                            <option value="letters" data-i18n="exportcenter.type_letters">Письма</option>
+                            <option value="stats" data-i18n="exportcenter.type_stats">Статистика</option>
+                            <option value="calendar" data-i18n="exportcenter.type_calendar">Календарь мероприятий</option>
+                            <option value="appeals" data-i18n="exportcenter.type_appeals">Обращения граждан</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="ecDirectionWrap">
+                        <label class="form-label" for="ecDirection" data-i18n="exportcenter.direction">Направление</label>
+                        <select class="form-select" id="ecDirection">
+                            <option value="all" data-i18n="exportcenter.dir_all">Входящие и исходящие</option>
+                            <option value="in" data-i18n="exportcenter.dir_in">Только входящие</option>
+                            <option value="out" data-i18n="exportcenter.dir_out">Только исходящие</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <span class="form-label d-block" data-i18n="exportcenter.format">Формат</span>
+                        <div class="btn-group flex-wrap" role="group" aria-label="Формат выгрузки" id="ecFormatGroup">
+                            <input type="radio" class="btn-check" name="ecFormat" id="ecFmtCsv" value="csv" checked>
+                            <label class="btn btn-outline-secondary btn-sm" for="ecFmtCsv">CSV</label>
+                            <input type="radio" class="btn-check" name="ecFormat" id="ecFmtXlsx" value="xlsx">
+                            <label class="btn btn-outline-secondary btn-sm" for="ecFmtXlsx">XLSX</label>
+                            <input type="radio" class="btn-check" name="ecFormat" id="ecFmtPdf" value="pdf">
+                            <label class="btn btn-outline-secondary btn-sm" for="ecFmtPdf">PDF</label>
+                            <input type="radio" class="btn-check" name="ecFormat" id="ecFmtJson" value="json">
+                            <label class="btn btn-outline-secondary btn-sm" for="ecFmtJson">JSON</label>
+                            <input type="radio" class="btn-check" name="ecFormat" id="ecFmtIcs" value="ics">
+                            <label class="btn btn-outline-secondary btn-sm" for="ecFmtIcs">ICS</label>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label" for="ecDateFrom" data-i18n="exportcenter.date_from">Дата от</label>
+                            <input type="date" class="form-control" id="ecDateFrom">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" for="ecDateTo" data-i18n="exportcenter.date_to">Дата до</label>
+                            <input type="date" class="form-control" id="ecDateTo">
+                        </div>
+                    </div>
+                    <div class="mb-3 d-none" id="ecRegionWrap">
+                        <label class="form-label" for="ecRegionSelect" data-i18n="exportcenter.region">Регион</label>
+                        <select class="form-select" id="ecRegionSelect"></select>
+                    </div>
+                    <div class="alert alert-danger d-none py-2" id="ecError" role="alert"></div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-i18n="exportcenter.cancel">Отмена</button>
+                    <button type="button" class="btn btn-primary" id="ecDownloadBtn">
+                        <i class="bi bi-download me-1"></i><span data-i18n="exportcenter.download">Скачать</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title" id="confirmDeleteModalLabel">Подтверждение удаления</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmDeleteMessage">Вы уверены, что хотите удалить этот элемент?</p>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Удалить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно статистики члена ОС -->
+    <div class="modal fade" id="memberStatsModal" tabindex="-1" aria-labelledby="memberStatsName" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="member-avatar member-avatar-sm" id="memberStatsAvatar"></div>
+                        <div>
+                            <h5 class="modal-title mb-0" id="memberStatsName">—</h5>
+                            <small class="text-muted" id="memberStatsCommission"></small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="memberStatsContent">
+                        <div class="text-center py-4">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Индикатор загрузки -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="loading-spinner">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Загрузка...</span>
+            </div>
+            <p>Загрузка данных...</p>
+        </div>
+    </div>
+
+    <!-- Модальное окно для просмотра сканов -->
+    <div class="modal fade" id="scanViewerModal" tabindex="-1" aria-labelledby="scanViewerModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="scanViewerModalLabel">Просмотр сканов письма</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="scanViewerCarousel" class="carousel slide" data-bs-ride="carousel">
+                        <div class="carousel-inner" id="scanViewerCarouselInner"></div>
+                        <button class="carousel-control-prev" type="button" data-bs-target="#scanViewerCarousel" data-bs-slide="prev">
+                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Предыдущий</span>
+                        </button>
+                        <button class="carousel-control-next" type="button" data-bs-target="#scanViewerCarousel" data-bs-slide="next">
+                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Следующий</span>
+                        </button>
+                    </div>
+                    <div class="mt-3 text-center">
+                        <button class="btn btn-sm btn-outline-primary" id="downloadAllScansBtn">Скачать все сканы</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+            <!-- Вкладка «Календарь» -->
+            <div class="tab-pane fade" id="pane-calendar" role="tabpanel">
+                <div id="calendarPane"></div>
+            </div>
+
+            <!-- Вкладка «Мои письма» -->
+            <div class="tab-pane fade" id="pane-my-letters" role="tabpanel">
+                <div class="data-card mb-3">
+                    <div class="data-card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-person-lines-fill"></i>
+                        <h5 class="mb-0">Мои письма</h5>
+                        <span class="badge bg-secondary ms-auto" id="myLettersBadge">0</span>
+                    </div>
+                    <div class="data-card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-sm align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th scope="col">Тип</th>
+                                        <th scope="col">№</th>
+                                        <th scope="col">Дата</th>
+                                        <th scope="col">Организация</th>
+                                        <th scope="col">Тема</th>
+                                        <th scope="col">Статус</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="myLettersBody">
+                                    <tr><td colspan="6" class="text-center text-muted py-3">Загрузка...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Вкладка «Обращения граждан» -->
+            <div class="tab-pane fade" id="pane-appeals" role="tabpanel">
+                <div class="card data-card mb-3">
+                    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <span><i class="bi bi-envelope-paper me-2"></i>Обращения граждан</span>
+                        <a href="/appeal.php" target="_blank" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Публичная форма
+                        </a>
+                    </div>
+                    <div class="card-body border-bottom py-2">
+                        <div class="appeals-filter-bar d-flex flex-wrap gap-2 align-items-center">
+                            <input type="text" class="form-control form-control-sm appeals-filter-search" id="appealSearch" placeholder="Поиск..." />
+                            <select class="form-select form-select-sm appeals-filter-select" id="appealFilterStatus">
+                                <option value="">Все статусы</option>
+                                <option value="new">Новые</option>
+                                <option value="in_review">На рассмотрении</option>
+                                <option value="responded">Отвечено</option>
+                                <option value="closed">Закрыто</option>
+                            </select>
+                            <select class="form-select form-select-sm appeals-filter-select" id="appealFilterCategory">
+                                <option value="">Все категории</option>
+                                <option value="complaint">Жалоба</option>
+                                <option value="suggestion">Предложение</option>
+                                <option value="question">Вопрос</option>
+                                <option value="request">Заявление</option>
+                                <option value="other">Иное</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="table-responsive table-scroll-hint">
+                        <table class="table table-hover align-middle mb-0 table-mobile-cards" id="tableAppeals">
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col">Номер</th>
+                                    <th scope="col">ФИО</th>
+                                    <th scope="col">Тема</th>
+                                    <th scope="col">Категория</th>
+                                    <th scope="col">Статус</th>
+                                    <th scope="col">Регион</th>
+                                    <th scope="col">Дата</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="card-footer text-muted small" id="appealsPaginationInfo"></div>
+                </div>
+            </div>
+
+            <!-- Модалка: детали обращения -->
+            <div class="modal fade" id="appealDetailModal" tabindex="-1" aria-labelledby="appealDetailModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="appealDetailModalLabel"><i class="bi bi-envelope-paper me-2"></i>Обращение</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                        </div>
+                        <div class="modal-body" id="appealDetailBody">Загрузка...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Вкладка «Архив» -->
+            <div class="tab-pane fade" id="pane-archive" role="tabpanel">
+                <div class="data-card mb-3">
+                    <div class="data-card-header d-flex align-items-center gap-2 flex-wrap">
+                        <i class="bi bi-archive"></i>
+                        <h5 class="mb-0" data-i18n="archive.title">Архив писем</h5>
+                        <span class="text-muted small ms-2" data-i18n="archive.subtitle">Удалённые письма. Только администратор может восстановить.</span>
+                        <div class="dropdown ms-auto" id="archiveExportDropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-download"></i> <span data-i18n="common.export">Экспорт</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="export.php?format=xlsx&archived=1"><i class="bi bi-file-earmark-excel me-2"></i>Excel (.xlsx)</a></li>
+                                <li><a class="dropdown-item" href="export.php?format=csv&archived=1"><i class="bi bi-filetype-csv me-2"></i>CSV</a></li>
+                                <li><a class="dropdown-item" href="export.php?format=json&archived=1"><i class="bi bi-filetype-json me-2"></i>JSON</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="data-card-body p-0">
+                        <div class="btn-group m-2">
+                            <button class="btn btn-sm btn-outline-primary active" id="archiveTypeIncoming" data-archive-type="incoming" data-i18n="chart.incoming">Входящие</button>
+                            <button class="btn btn-sm btn-outline-success" id="archiveTypeOutgoing" data-archive-type="outgoing" data-i18n="chart.outgoing">Исходящие</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover table-sm align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th scope="col">№</th>
+                                        <th scope="col" data-i18n="letters.th_date">Дата</th>
+                                        <th scope="col" data-i18n="letters.th_org">Организация</th>
+                                        <th scope="col" data-i18n="letters.th_subject">Тема</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="archiveBody">
+                                    <tr><td colspan="5" class="text-center text-muted py-3" data-i18n="common.loading">Загрузка...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Вкладка «Что нового» -->
+            <div class="tab-pane fade" id="pane-updates" role="tabpanel">
+                <div class="updates-page">
+                    <div class="updates-header">
+                        <div class="updates-icon"><i class="bi bi-stars"></i></div>
+                        <div>
+                            <h2 class="updates-title" data-i18n="updates.title">Что нового в системе</h2>
+                            <p class="updates-subtitle" data-i18n="updates.subtitle">Последние улучшения Журнала Общественного Совета</p>
+                        </div>
+                    </div>
+
+                    <!-- Версия июнь 2026 -->
+                    <div class="update-release">
+                        <div class="update-release-header">
+                            <span class="update-release-tag" data-i18n="updates.rel_jun">Июнь 2026</span>
+                            <span class="update-release-label" data-i18n="updates.rel_major">Крупное обновление</span>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-success-soft"><i class="bi bi-phone"></i></div>
+                            <div class="update-category-body">
+                                <h5 data-i18n="updates.c1_h">Приложение теперь работает как мобильное</h5>
+                                <p data-i18n="updates.c1_p">Журнал можно установить на экран телефона или планшета — как обычное приложение. При потере интернета вместо белого экрана появляется страница «Нет соединения».</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-warning-soft"><i class="bi bi-printer"></i></div>
+                            <div class="update-category-body">
+                                <h5 data-i18n="updates.c2_h">Кнопка «Распечатать» на каждом письме</h5>
+                                <p><span data-i18n="updates.c2_p1">В таблице входящих и исходящих появилась кнопка</span> <i class="bi bi-printer"></i><span data-i18n="updates.c2_p2">. Нажмите — откроется готовая форма письма для печати: с реквизитами, темой, ответственными и сроком.</span></p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-primary-soft"><i class="bi bi-check2-square"></i></div>
+                            <div class="update-category-body">
+                                <h5 data-i18n="updates.c3_h">Групповые действия с письмами</h5>
+                                <p data-i18n="updates.c3_p">Теперь можно выбрать несколько писем сразу — появятся чекбоксы в каждой строке. Отметив нужные, вы можете скачать их одним файлом.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-dark-soft"><i class="bi bi-moon-stars"></i></div>
+                            <div class="update-category-body">
+                                <h5 data-i18n="updates.c4_h">Тёмная тема</h5>
+                                <p><span data-i18n="updates.c4_p1">В правом верхнем углу появился переключатель</span> <i class="bi bi-moon-fill"></i><span data-i18n="updates.c4_p2">. Нажмите — интерфейс переключится в тёмный режим. Выбор сохраняется при следующем входе.</span></p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-success-soft"><i class="bi bi-file-earmark-excel"></i></div>
+                            <div class="update-category-body">
+                                <h5 data-i18n="updates.c5_h">Экспорт в Excel</h5>
+                                <p><span data-i18n="updates.c5_p1">Рядом с кнопками «CSV» и «PDF» появилась кнопка</span> <strong>Excel</strong><span data-i18n="updates.c5_p2">. Скачивает все письма в таблицу Excel (.xlsx) — удобно для отчётов и распечатки.</span></p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-danger-soft"><i class="bi bi-shield-lock"></i></div>
+                            <div class="update-category-body">
+                                <h5 data-i18n="updates.c6_h">Двухфакторная защита входа (2FA)</h5>
+                                <p data-i18n="updates.c6_p">Администраторы могут подключить защиту через приложение Google Authenticator. При входе кроме пароля нужно ввести одноразовый 6-значный код — так аккаунт защищён, даже если пароль попал к посторонним. Настройка — в Админ-панели → Система.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-info-soft"><i class="bi bi-activity"></i></div>
+                            <div class="update-category-body">
+                                <h5 data-i18n="updates.c7_h">Улучшенный мониторинг системы</h5>
+                                <p data-i18n="updates.c7_p">В Админ-панели раздел «Состояние системы» теперь показывает: сколько памяти использует сервер, статус почтовой очереди, размер загруженных файлов и когда последний раз выполнялась автоматическая рассылка напоминаний.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Более ранние версии -->
+                    <div class="update-release update-release--older">
+                        <div class="update-release-header">
+                            <span class="update-release-tag" data-i18n="updates.rel_older">Ранее</span>
+                            <span class="update-release-label" data-i18n="updates.rel_prev">Предыдущие обновления</span>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-primary-soft"><i class="bi bi-envelope-check"></i></div>
+                            <div class="update-category-body">
+                                <h5 data-i18n="updates.c8_h">Email-уведомления о просроченных письмах</h5>
+                                <p data-i18n="updates.c8_p">Система автоматически отправляет напоминание ответственным членам ОС, если срок ответа на письмо истекает или уже прошёл.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-warning-soft"><i class="bi bi-upload"></i></div>
+                            <div class="update-category-body">
+                                <h5 data-i18n="updates.c9_h">Импорт писем из CSV</h5>
+                                <p data-i18n="updates.c9_p">Теперь можно загрузить сразу много писем из таблицы CSV. Кнопка «Импорт CSV» находится в верхнем меню.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-success-soft"><i class="bi bi-person-badge"></i></div>
+                            <div class="update-category-body">
+                                <h5 data-i18n="updates.c10_h">Фото и статистика членов ОС</h5>
+                                <p data-i18n="updates.c10_p">У каждого члена Общественного совета можно загрузить фотографию. Страница члена показывает, сколько писем за ним закреплено, сколько просрочено и по каким комиссиям.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-info-soft"><i class="bi bi-translate"></i></div>
+                            <div class="update-category-body">
+                                <h5 data-i18n="updates.c11_h">Казахский язык интерфейса</h5>
+                                <p data-i18n="updates.c11_p">Переключатель языка в боковом меню — интерфейс полностью переведён на казахский язык.</p>
+                            </div>
+                        </div>
+
+                        <div class="update-category">
+                            <div class="update-category-icon bg-primary-soft"><i class="bi bi-graph-up-arrow"></i></div>
+                            <div class="update-category-body">
+                                <h5 data-i18n="updates.c12_h">Графики и KPI на дашборде</h5>
+                                <p data-i18n="updates.c12_p">Главная страница показывает активность по месяцам, статистику по категориям и рейтинг вовлечённости членов ОС.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="updates-footer" data-i18n="updates.footer">Все вопросы и пожелания по работе системы — обращайтесь к администратору.</p>
+                </div>
+            </div>
+    </div>
+
+    <!-- Глобальный поиск -->
+    <div class="modal fade" id="globalSearchModal" tabindex="-1" aria-labelledby="globalSearchModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="globalSearchModalLabel">Поиск по журналу</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div class="p-3 border-bottom">
+                        <input type="search" class="form-control" id="globalSearchInput" placeholder="Письма, организации, члены ОС..." autocomplete="off" />
+                        <div class="d-flex align-items-center gap-2 mt-2">
+                            <div class="btn-group btn-group-sm" id="searchScopeGroup" role="group">
+                                <input type="radio" class="btn-check" name="searchScope" id="scopeAll" value="all" checked autocomplete="off">
+                                <label class="btn btn-outline-secondary" for="scopeAll" data-i18n="search.scope_all">Все</label>
+                                <input type="radio" class="btn-check" name="searchScope" id="scopeLetters" value="letters" autocomplete="off">
+                                <label class="btn btn-outline-secondary" for="scopeLetters" data-i18n="search.scope_letters">Письма</label>
+                                <input type="radio" class="btn-check" name="searchScope" id="scopeMembers" value="members" autocomplete="off">
+                                <label class="btn btn-outline-secondary" for="scopeMembers" data-i18n="search.scope_members">Члены ОС</label>
+                                <input type="radio" class="btn-check" name="searchScope" id="scopeArchived" value="archived" autocomplete="off">
+                                <label class="btn btn-outline-secondary" for="scopeArchived"><i class="bi bi-archive"></i> <span data-i18n="search.scope_archived">Архив</span></label>
+                            </div>
+                            <span class="text-muted small ms-auto">Ctrl+K</span>
+                        </div>
+                    </div>
+                    <div id="globalSearchResults" class="global-search-results"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно Уведомления/Данные -->
+    <div class="modal fade" id="notifyModal" tabindex="-1" aria-labelledby="notifyModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="notifyModalLabel" data-i18n="notify.title">Уведомления</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body">
+                    <ul class="nav nav-tabs mb-3" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="notify-tab-feed" data-bs-toggle="tab" data-bs-target="#notifyFeedPane" type="button" role="tab" data-i18n="feed.tab">Лента</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="notify-tab-deadlines" data-bs-toggle="tab" data-bs-target="#notifyDeadlinesPane" type="button" role="tab" data-i18n="notify.tab.deadlines">Сроки</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="notify-tab-email" data-bs-toggle="tab" data-bs-target="#notifyEmailPane" type="button" role="tab" data-i18n="notify.tab.email">Email</button>
+                        </li>
+                    </ul>
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="notifyFeedPane" role="tabpanel"></div>
+                        <div class="tab-pane fade" id="notifyDeadlinesPane" role="tabpanel"></div>
+                        <div class="tab-pane fade" id="notifyEmailPane" role="tabpanel"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="mobile-bottom-nav d-lg-none" id="mobileBottomNav" aria-label="Основная навигация">
+        <button type="button" class="mobile-bottom-nav__item active" data-tab="tab-dashboard" aria-label="Статистика">
+            <i class="bi bi-bar-chart"></i><span>Статистика</span>
+        </button>
+        <button type="button" class="mobile-bottom-nav__item" data-tab="tab-incoming" aria-label="Входящие">
+            <i class="bi bi-inbox"></i><span>Входящие</span>
+        </button>
+        <button type="button" class="mobile-bottom-nav__item" data-tab="tab-outgoing" aria-label="Исходящие">
+            <i class="bi bi-send"></i><span>Исходящие</span>
+        </button>
+        <button type="button" class="mobile-bottom-nav__item" data-tab="tab-members" aria-label="Члены">
+            <i class="bi bi-people"></i><span>Члены</span>
+        </button>
+        <button type="button" class="mobile-bottom-nav__item" data-tab="menu" aria-label="Меню">
+            <i class="bi bi-grid"></i><span>Ещё</span>
+        </button>
+    </nav>
+
+    <script src="/assets/vendor/bootstrap.bundle.min.js?v=1"></script>
+    <script src="/assets/vendor/chart.umd.min.js?v=1"></script>
+    <script src="config_public.php?v=30"></script>
+    <!-- Bundled app scripts (csrf-handler + js/*.js + app.js), built by `npm run build`.
+         Raw sources live in api/js/ and frontend/app.entry.js defines the order. -->
+    <script src="/dist/app.js?v=37"></script>
+    <!-- Календарь v2: подключён отдельно ПОСЛЕ бандла и переопределяет
+         window.initCalendar/refreshCalendar из dist/app.js (старый календарь
+         в минифицированном бандле становится мёртвым кодом). При пересборке
+         бандла исключите calendar.js из frontend/app.entry.js. -->
+    <script src="/api/js/calendar.js?v=2"></script>
+    <script src="/api/js/appeals-ui.js?v=2"></script>
+    <script src="/api/js/sessions-ui.js?v=1"></script>
+    <script src="/api/js/admin-errors-ui.js?v=1"></script>
+    <script src="/api/js/pwa-install.js?v=1"></script>
+    <script src="/api/js/notify-feed.js?v=1"></script>
+    <script src="/api/js/export-center.js?v=1"></script>
+    <script src="/js/site-config.js?v=30"></script>
+    <script src="/js/site-docs.js?v=30"></script>
+    <script nonce="<?= $nonce ?>">
+        // Проверка сессии и показ пользователя
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const resp = await fetch('auth.php');
+                if (!resp.ok) throw new Error('unauth');
+                const data = await resp.json();
+                if (!data.authenticated) throw new Error('unauth');
+                const user = data.user;
+                window.syncUserSession?.(user);
+                window.allRegions = data.regions || [];
+                window.__sessionUser = user;
+                if (window.AppI18n?.updateUserLabels) {
+                    AppI18n.updateUserLabels(user);
+                } else {
+                    const displayName = user.full_name || user.username || 'Пользователь';
+                    document.getElementById('userName').textContent = displayName;
+                    document.getElementById('userRegion').textContent = user.region?.name_ru
+                        ? ('Регион: ' + user.region.name_ru)
+                        : (user.is_admin ? 'Супер-админ' : 'Пользователь');
+                }
+
+                if (user.is_admin) {
+                    const navAdmin = document.getElementById('navAdminPanel');
+                    if (navAdmin) navAdmin.classList.remove('d-none');
+                    const regionSelect = document.getElementById('adminRegionSelect');
+                    if (regionSelect && window.allRegions.length) {
+                        regionSelect.classList.remove('d-none');
+                        if (!window.AppI18n?.updateUserLabels) {
+                            regionSelect.innerHTML = window.allRegions
+                                .filter((r) => r.is_active == 1 || r.is_active === true)
+                                .map((r) => `<option value="${r.id}"${Number(user.active_region_id) === Number(r.id) ? ' selected' : ''}>${r.name_ru}</option>`)
+                                .join('');
+                        }
+                        regionSelect.addEventListener('change', async () => {
+                            try {
+                                await fetch('auth.php?action=switch_region', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                    body: new URLSearchParams({ action: 'switch_region', region_id: regionSelect.value }),
+                                });
+                                window.location.reload();
+                            } catch (err) {
+                                console.error(err);
+                            }
+                        });
+                    }
+                }
+
+                if (typeof applyPermissionsUI === 'function') {
+                    applyPermissionsUI(user);
+                }
+                if (window.AppI18n?.apply) window.AppI18n.apply();
+                const avatar = document.getElementById('sidebarAvatar');
+                if (avatar) {
+                    const displayName = user.full_name || user.username || '';
+                    const parts = displayName.trim().split(/\s+/);
+                    avatar.textContent = parts.length >= 2
+                        ? (parts[0][0] + parts[1][0]).toUpperCase()
+                        : displayName.slice(0, 2).toUpperCase();
+                }
+                if (typeof initializeApp === 'function') {
+                    await initializeApp();
+                }
+            } catch(e) {
+                // Нет сессии — на страницу входа
+                window.location.href = '../login.html';
+            }
+        });
+
+        // Выход
+        document.addEventListener('click', async (e) => {
+            const logoutTarget = e.target.closest('#logoutBtn');
+            if (logoutTarget) {
+                e.preventDefault();
+                window.resetCsrfToken?.();
+                try {
+                    await fetch('auth.php', { method: 'POST', body: new URLSearchParams({ action: 'logout' }) });
+                } catch {}
+                localStorage.removeItem('user');
+                localStorage.removeItem('login_username');
+                window.location.href = '../login.html';
+            }
+        });
+
+        // Telegram link button
+        (() => {
+            const tgBtn  = document.getElementById('tgLinkBtn');
+            const modal  = new bootstrap.Modal(document.getElementById('tgLinkModal'));
+            const codeEl = document.getElementById('tgLinkCodeCmd');
+            const area   = document.getElementById('tgLinkCodeArea');
+            const loading = document.getElementById('tgLinkLoading');
+            const errEl  = document.getElementById('tgLinkError');
+            const botLink = document.getElementById('tgOpenBotLink');
+            const copyBtn = document.getElementById('tgCopyCodeBtn');
+
+            // Show the Telegram button only when the bot is configured
+            if (window.TELEGRAM_BOT_USERNAME) {
+                tgBtn.style.display = '';
+                if (botLink) {
+                    botLink.href = 'https://t.me/' + encodeURIComponent(window.TELEGRAM_BOT_USERNAME);
+                }
+            }
+
+            tgBtn?.addEventListener('click', async () => {
+                // Reset modal state
+                area.style.display = 'none';
+                loading.style.display = '';
+                errEl.classList.add('d-none');
+                modal.show();
+
+                try {
+                    const csrf = document.querySelector('meta[name="csrf-token"]')?.content
+                        || window._csrfToken || '';
+                    const res = await fetch('auth.php?action=tg_link_code', {
+                        method: 'POST',
+                        headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: new URLSearchParams({ action: 'tg_link_code' })
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.code) throw new Error(data.error || 'Ошибка сервера');
+
+                    codeEl.textContent = '/link ' + data.code;
+                    if (data.bot && botLink) {
+                        botLink.href = 'https://t.me/' + encodeURIComponent(data.bot);
+                    }
+                    loading.style.display = 'none';
+                    area.style.display = '';
+                } catch (err) {
+                    loading.style.display = 'none';
+                    errEl.textContent = err.message || 'Ошибка генерации кода';
+                    errEl.classList.remove('d-none');
+                }
+            });
+
+            copyBtn?.addEventListener('click', () => {
+                const cmd = codeEl?.textContent || '';
+                navigator.clipboard?.writeText(cmd).then(() => {
+                    copyBtn.innerHTML = '<i class="bi bi-clipboard-check"></i>';
+                    setTimeout(() => { copyBtn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 1500);
+                });
+            });
+        })();
+
+        // ─── Profile Modal ────────────────────────────────────────────────────
+        (() => {
+            const profileBtn  = document.getElementById('profileBtn');
+            const profileModal = new bootstrap.Modal(document.getElementById('profileModal'));
+            const profileAlert = document.getElementById('profileAlert');
+            const saveBtn     = document.getElementById('profileSaveBtn');
+
+            function showProfileAlert(msg, type = 'danger') {
+                profileAlert.className = `alert alert-${type}`;
+                profileAlert.textContent = msg;
+                profileAlert.classList.remove('d-none');
+            }
+
+            async function loadProfile() {
+                try {
+                    const res  = await fetch('profile.php');
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    document.getElementById('profileUsername').value  = data.username || '';
+                    document.getElementById('profileFullName').value  = data.full_name || '';
+                    document.getElementById('profileEmail').value     = data.email || '';
+                } catch (_) {}
+            }
+
+            profileBtn?.addEventListener('click', () => {
+                profileAlert.classList.add('d-none');
+                document.getElementById('profileCurrentPass').value = '';
+                document.getElementById('profileNewPass').value = '';
+                loadProfile();
+                profileModal.show();
+            });
+
+            saveBtn?.addEventListener('click', async () => {
+                profileAlert.classList.add('d-none');
+                const fullName    = document.getElementById('profileFullName').value.trim();
+                const email       = document.getElementById('profileEmail').value.trim();
+                const currentPass = document.getElementById('profileCurrentPass').value;
+                const newPass     = document.getElementById('profileNewPass').value;
+
+                const payload = { full_name: fullName, email };
+                if (newPass) {
+                    payload.current_password = currentPass;
+                    payload.password = newPass;
+                }
+
+                try {
+                    saveBtn.disabled = true;
+                    const res = await fetch('profile.php', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        showProfileAlert(data.message || 'Профиль обновлён', 'success');
+                        // Update sidebar display name
+                        if (fullName) {
+                            const el = document.getElementById('userName');
+                            if (el) el.textContent = fullName;
+                        }
+                    } else {
+                        let msg = data.error || 'Ошибка сохранения';
+                        if (data.errors) {
+                            msg = Object.values(data.errors).join('; ');
+                        }
+                        showProfileAlert(msg);
+                    }
+                } catch (_) {
+                    showProfileAlert('Ошибка сети');
+                } finally {
+                    saveBtn.disabled = false;
+                }
+            });
+        })();
+
+        // PWA Service Worker.
+        // Scope намеренно ограничен /api/ (по расположению sw.js) и НЕ расширяется:
+        // страницы login/admin/help остаются online-only и не обслуживаются SW офлайн.
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/api/sw.js', { updateViaCache: 'none' }).catch(() => {});
+            });
+        }
+    </script>
+</body>
+</html>
+
+

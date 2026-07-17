@@ -1,5 +1,5 @@
 (function () {
-  const API = '/api';
+  const API = window.AppCore?.API_BASE || '/api';
   let debounceTimer = null;
   let searchModal = null;
 

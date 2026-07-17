@@ -2,7 +2,7 @@
  * Панель уведомлений: сроки + email-очередь.
  */
 (function (window) {
-  const API = '/api';
+  const API = window.AppCore?.API_BASE || '/api';
   let emailPaneBound = false;
 
   function t(key, fallback) {
@@ -156,7 +156,7 @@
         window.showSuccess?.(data.message || t('notify.queued', 'Поставлено в очередь'));
         await renderEmailTab(emailPane);
       } catch (err) {
-        window.showError?.(err.message) || alert(err.message);
+        window.showError?.(err.message);
       }
     });
     emailPaneBound = true;
@@ -211,7 +211,7 @@
   function showBrowserNotification(title, body, icon) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     try {
-      new Notification(title, { body: body || '', icon: icon || '/api/icon-192.png' });
+      new Notification(title, { body: body || '', icon: icon || '/api/icons/icon-192.png' });
     } catch (e) {
       console.warn('Notification failed', e);
     }
@@ -229,13 +229,17 @@
     );
     if (overdue.length > 0) {
       showBrowserNotification(
-        'Журнал ОС — Просроченные письма',
-        `${overdue.length} письм(а) просрочены`
+        t('notify.browser.overdue_title', 'Журнал ОС — Просроченные письма'),
+        window.AppI18n?.fmt
+          ? window.AppI18n.fmt('notify.browser.overdue_body', { n: overdue.length })
+          : `${overdue.length} письм(а) просрочены`
       );
     } else if (soon.length > 0) {
       showBrowserNotification(
-        'Журнал ОС — Срок истекает',
-        `${soon.length} письм(а) требуют ответа в ближайшее время`
+        t('notify.browser.due_soon_title', 'Журнал ОС — Срок истекает'),
+        window.AppI18n?.fmt
+          ? window.AppI18n.fmt('notify.browser.due_soon_body', { n: soon.length })
+          : `${soon.length} письм(а) требуют ответа в ближайшее время`
       );
     }
   }

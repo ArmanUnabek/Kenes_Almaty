@@ -27,7 +27,7 @@ if (!$member || empty($member['photo_path'])) {
 }
 
 $regionId = (int)($member['region_id'] ?? 0);
-if ($regionId <= 0 || !canAccessRegion($regionId)) {
+if ($regionId > 0 && !canAccessRegion($regionId)) {
     http_response_code(404);
     exit;
 }
@@ -40,9 +40,10 @@ if (!$uploadsRoot || !$fullPath || !str_starts_with($fullPath, $uploadsRoot . DI
 }
 
 $mimeMap = [
-    'jpg' => 'image/jpeg',
+    'jpg'  => 'image/jpeg',
     'jpeg' => 'image/jpeg',
-    'png' => 'image/png',
+    'png'  => 'image/png',
+    'webp' => 'image/webp',
 ];
 $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
 $contentType = $mimeMap[$ext] ?? 'application/octet-stream';

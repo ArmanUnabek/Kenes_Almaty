@@ -6,13 +6,40 @@ use PDO;
 
 class EmailService
 {
-    public static function enqueue(PDO $db, string $to, string $subject, string $bodyHtml, ?string $bodyText = null): void
-    {
+    public static function enqueue(
+        PDO $db,
+        string $to,
+        string $subject,
+        string $bodyHtml,
+        ?string $bodyText = null,
+        ?string $inReplyTo = null,
+        ?string $threadId = null
+    ): string {
+        if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            error_log('EmailService::enqueue skipped invalid address: ' . $to);
+            return '';
+        }
+        $messageId = self::generateMessageId();
         $stmt = $db->prepare("
-            INSERT INTO email_queue (recipient_email, subject, body_html, body_text, status)
-            VALUES (?, ?, ?, ?, 'queued')
+            INSERT INTO email_queue (recipient_email, subject, body_html, body_text, status, message_id, in_reply_to, thread_id)
+            VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)
         ");
-        $stmt->execute([$to, $subject, $bodyHtml, $bodyText]);
+        $stmt->execute([$to, $subject, $bodyHtml, $bodyText, $messageId, $inReplyTo, $threadId ?: $messageId]);
+        return $messageId;
+    }
+
+    /**
+     * Generate a RFC 2822 compliant Message-ID.
+     * Format: <uuid@domain>
+     */
+    public static function generateMessageId(): string
+    {
+        $domain = defined('SMTP_FROM') ? substr(strrchr(SMTP_FROM, '@'), 1) : 'localhost';
+        $b = random_bytes(16);
+        $b[6] = chr((ord($b[6]) & 0x0f) | 0x40);
+        $b[8] = chr((ord($b[8]) & 0x3f) | 0x80);
+        $uuid = vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($b), 4));
+        return '<' . $uuid . '@' . $domain . '>';
     }
 
     /**
@@ -24,7 +51,9 @@ class EmailService
         string $to,
         string $subject,
         string $bodyHtml,
-        ?string $bodyText = null
+        ?string $bodyText = null,
+        ?string $messageId = null,
+        ?string $inReplyTo = null
     ): bool {
         $host     = defined('SMTP_HOST') ? SMTP_HOST : '';
         $port     = defined('SMTP_PORT') ? (int)SMTP_PORT : 587;
@@ -41,15 +70,16 @@ class EmailService
         // Use PHPMailer if available (preferred: proper TLS, DKIM-ready, RFC-compliant)
         if (class_exists(\PHPMailer\PHPMailer\PHPMailer::class)) {
             return self::sendWithPhpMailer($to, $subject, $bodyHtml, $bodyText ?? strip_tags($bodyHtml),
-                                           $host, $port, $user, $pass, $from, $fromName);
+                                           $host, $port, $user, $pass, $from, $fromName, $messageId, $inReplyTo);
         }
 
-        return self::sendWithRawSocket($to, $subject, $bodyHtml, $bodyText, $host, $port, $user, $pass, $from, $fromName);
+        return self::sendWithRawSocket($to, $subject, $bodyHtml, $bodyText, $host, $port, $user, $pass, $from, $fromName, $messageId, $inReplyTo);
     }
 
     private static function sendWithPhpMailer(
         string $to, string $subject, string $bodyHtml, string $bodyText,
-        string $host, int $port, string $user, string $pass, string $from, string $fromName
+        string $host, int $port, string $user, string $pass, string $from, string $fromName,
+        ?string $messageId = null, ?string $inReplyTo = null
     ): bool {
         try {
             $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
@@ -78,6 +108,14 @@ class EmailService
             $mail->AltBody = $bodyText;
             $mail->isHTML(true);
 
+            if ($messageId !== null) {
+                $mail->MessageID = $messageId;
+            }
+            if ($inReplyTo !== null) {
+                $mail->addCustomHeader('In-Reply-To', $inReplyTo);
+                $mail->addCustomHeader('References', $inReplyTo);
+            }
+
             return $mail->send();
         } catch (\Throwable $e) {
             error_log('EmailService PHPMailer: ' . $e->getMessage());
@@ -90,7 +128,8 @@ class EmailService
      */
     private static function sendWithRawSocket(
         string $to, string $subject, string $bodyHtml, ?string $bodyText,
-        string $host, int $port, string $user, string $pass, string $from, string $fromName
+        string $host, int $port, string $user, string $pass, string $from, string $fromName,
+        ?string $messageId = null, ?string $inReplyTo = null
     ): bool {
         // Build multipart message
         $boundary = md5(uniqid((string)time(), true));
@@ -112,18 +151,37 @@ class EmailService
         $headers .= "To: {$to}\r\n";
         $headers .= "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n";
         $headers .= "Date: " . date('r') . "\r\n";
+        if ($messageId !== null) {
+            $headers .= "Message-ID: {$messageId}\r\n";
+        }
+        if ($inReplyTo !== null) {
+            $headers .= "In-Reply-To: {$inReplyTo}\r\n";
+            $headers .= "References: {$inReplyTo}\r\n";
+        }
         $headers .= $message;
 
         try {
+            $sslCtx = stream_context_create([
+                'ssl' => [
+                    'verify_peer' => true,
+                    'verify_peer_name' => true,
+                    'allow_self_signed' => false,
+                ],
+            ]);
+
             if ($port === 465) {
-                $socket = @fsockopen("ssl://{$host}", $port, $errno, $errstr, 15);
+                $socket = @stream_socket_client("ssl://{$host}:{$port}", $errno, $errstr, 15, STREAM_CLIENT_CONNECT, $sslCtx);
             } else {
-                $socket = @fsockopen($host, $port, $errno, $errstr, 15);
+                $socket = @stream_socket_client("tcp://{$host}:{$port}", $errno, $errstr, 15, STREAM_CLIENT_CONNECT, $sslCtx);
             }
             if (!$socket) {
                 error_log("EmailService::sendSmtp: connect failed: {$errstr} ({$errno})");
                 return false;
             }
+
+            // Cap every blocking read: without this fgets() can hang forever if the
+            // SMTP server accepts the connection but never replies, freezing the cron.
+            stream_set_timeout($socket, 15);
 
             // Read server greeting (may be multi-line)
             if (!self::smtpReadGreeting($socket, '220')) {
@@ -145,7 +203,7 @@ class EmailService
                     fclose($socket);
                     return false;
                 }
-                if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+                if (!@stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT, $sslCtx)) {
                     fclose($socket);
                     error_log('EmailService::sendSmtp: TLS negotiation failed');
                     return false;
@@ -204,16 +262,31 @@ class EmailService
         }
     }
 
+    /** Максимум попыток отправки одного письма до перевода в 'failed'. */
+    private const MAX_ATTEMPTS = 3;
+
+    /** Строки в 'processing' старше этого числа минут считаются зависшими (воркер упал). */
+    private const STUCK_MINUTES = 15;
+
     /**
      * Process the email queue: send up to $batchSize queued emails.
-     * Uses a file lock to prevent parallel runs from double-sending.
+     *
+     * Защита от двойной отправки при параллельных прогонах — атомарный claim:
+     * строка переводится 'queued' -> 'processing' одним UPDATE, и отправляет
+     * только процесс, чей rowCount()==1. flock() оставлен как дешёвая защита от
+     * лишней работы на одном хосте, но корректность обеспечивает именно claim в БД
+     * (работает и между хостами/контейнерами, и на MySQL/MariaDB/sqlite).
+     *
      * Returns ['sent' => N, 'failed' => N, 'skipped' => N].
      */
     public static function processQueue(PDO $db, int $batchSize = 10): array
     {
         $result = ['sent' => 0, 'failed' => 0, 'skipped' => 0];
+        $batchSize = max(1, min(50, $batchSize));
 
-        // Exclusive file lock prevents two cron processes from claiming the same rows
+        $nowExpr = self::nowExpr($db);
+
+        // Exclusive file lock reduces contention between cron processes on the same host.
         $lockPath = sys_get_temp_dir() . '/os_journal_email_queue.lock';
         $lock = fopen($lockPath, 'c');
         if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
@@ -225,14 +298,20 @@ class EmailService
         }
 
         try {
+            // 1) Восстановление зависших: строки, застрявшие в 'processing' после
+            //    падения воркера, возвращаем в 'queued' (или 'failed', если исчерпаны попытки).
+            self::recoverStuck($db);
+
+            // 2) Кандидаты на отправку.
             $stmt = $db->prepare("
-                SELECT id, recipient_email, subject, body_html, body_text
+                SELECT id, recipient_email, subject, body_html, body_text, message_id, in_reply_to
                 FROM email_queue
-                WHERE status = 'queued'
+                WHERE status = 'queued' AND attempts < ?
                 ORDER BY id ASC
                 LIMIT ?
             ");
-            $stmt->bindValue(1, $batchSize, PDO::PARAM_INT);
+            $stmt->bindValue(1, self::MAX_ATTEMPTS, PDO::PARAM_INT);
+            $stmt->bindValue(2, $batchSize, PDO::PARAM_INT);
             $stmt->execute();
             $rows = $stmt->fetchAll();
 
@@ -240,31 +319,61 @@ class EmailService
                 return $result;
             }
 
+            // Атомарный claim: только выигравший процесс переведёт 'queued' -> 'processing'.
+            // attempts++ здесь же — упавший воркер, оставивший строку в 'processing',
+            // всё равно израсходует попытку и не зациклит «ядовитое» письмо навсегда.
+            $stmtClaim = $db->prepare("
+                UPDATE email_queue
+                SET status = 'processing', processing_at = {$nowExpr}, attempts = attempts + 1
+                WHERE id = ? AND status = 'queued'
+            ");
             $stmtSent = $db->prepare("
-                UPDATE email_queue SET status = 'sent', sent_at = NOW(), error = NULL WHERE id = ?
+                UPDATE email_queue SET status = 'sent', sent_at = {$nowExpr}, processing_at = NULL, error = NULL WHERE id = ?
             ");
             $stmtFail = $db->prepare("
-                UPDATE email_queue SET status = 'failed', error = ? WHERE id = ?
+                UPDATE email_queue SET status = 'failed', processing_at = NULL, error = ? WHERE id = ?
+            ");
+            // Не последняя попытка — возвращаем в очередь для следующего прогона.
+            $stmtRetry = $db->prepare("
+                UPDATE email_queue SET status = 'queued', processing_at = NULL, error = ? WHERE id = ?
             ");
 
             foreach ($rows as $row) {
                 $id = (int)$row['id'];
+
+                // Проигравший гонку процесс получит rowCount()==0 и пропустит строку.
+                $stmtClaim->execute([$id]);
+                if ($stmtClaim->rowCount() !== 1) {
+                    continue;
+                }
+                // attempts в выборке ещё старое значение; после claim попытка израсходована.
+                $attemptsAfter = (int)($row['attempts'] ?? 0) + 1;
+
                 try {
                     $ok = self::sendSmtp(
                         $row['recipient_email'],
                         $row['subject'],
                         $row['body_html'] ?? '',
-                        $row['body_text'] ?? null
+                        $row['body_text'] ?? null,
+                        $row['message_id'] ?? null,
+                        $row['in_reply_to'] ?? null
                     );
                     if ($ok) {
                         $stmtSent->execute([$id]);
                         $result['sent']++;
-                    } else {
+                    } elseif ($attemptsAfter >= self::MAX_ATTEMPTS) {
                         $stmtFail->execute(['SMTP send returned false', $id]);
+                        $result['failed']++;
+                    } else {
+                        $stmtRetry->execute(['SMTP send returned false', $id]);
                         $result['failed']++;
                     }
                 } catch (\Throwable $e) {
-                    $stmtFail->execute([$e->getMessage(), $id]);
+                    if ($attemptsAfter >= self::MAX_ATTEMPTS) {
+                        $stmtFail->execute([$e->getMessage(), $id]);
+                    } else {
+                        $stmtRetry->execute([$e->getMessage(), $id]);
+                    }
                     $result['failed']++;
                     error_log("EmailService::processQueue id={$id} error: " . $e->getMessage());
                 }
@@ -278,6 +387,39 @@ class EmailService
     }
 
     /**
+     * Вернуть в очередь письма, зависшие в 'processing' дольше STUCK_MINUTES
+     * (воркер упал между claim и завершением). Исчерпавшие попытки — в 'failed'.
+     * Порог времени считаем в PHP и передаём параметром, чтобы не зависеть от
+     * различий синтаксиса интервалов между MySQL и sqlite.
+     */
+    private static function recoverStuck(PDO $db): void
+    {
+        $cutoff = date('Y-m-d H:i:s', time() - self::STUCK_MINUTES * 60);
+
+        $db->prepare("
+            UPDATE email_queue
+            SET status = 'failed', processing_at = NULL, error = 'timed out in processing'
+            WHERE status = 'processing' AND processing_at IS NOT NULL
+              AND processing_at < ? AND attempts >= ?
+        ")->execute([$cutoff, self::MAX_ATTEMPTS]);
+
+        $db->prepare("
+            UPDATE email_queue
+            SET status = 'queued', processing_at = NULL
+            WHERE status = 'processing' AND processing_at IS NOT NULL
+              AND processing_at < ? AND attempts < ?
+        ")->execute([$cutoff, self::MAX_ATTEMPTS]);
+    }
+
+    /** SQL-выражение текущего времени для активного драйвера (MySQL/pgsql vs sqlite). */
+    private static function nowExpr(PDO $db): string
+    {
+        $driver = (string)$db->getAttribute(PDO::ATTR_DRIVER_NAME);
+        return (stripos($driver, 'mysql') !== false || stripos($driver, 'pgsql') !== false)
+            ? 'NOW()' : "datetime('now')";
+    }
+
+    /**
      * Send an SMTP command and drain all response lines (handles multi-line responses
      * like EHLO where the server sends 250-capability lines followed by a final 250 line).
      * Lines with a hyphen in position 3 (e.g. "250-AUTH LOGIN") are continuation lines.
@@ -287,10 +429,13 @@ class EmailService
     {
         fputs($socket, $cmd . "\r\n");
 
+        // Mask credentials in logs
+        $logCmd = preg_match('/^(AUTH LOGIN|AUTH PLAIN)/i', $cmd) ? preg_replace('/\s+.*/', ' ***', $cmd) : $cmd;
+
         do {
             $line = fgets($socket, 512);
             if ($line === false) {
-                error_log("EmailService SMTP cmd '{$cmd}': connection closed unexpectedly");
+                error_log("EmailService SMTP cmd '{$logCmd}': connection closed unexpectedly");
                 return false;
             }
             // position 3 is '-' for continuation lines, ' ' for the last line
@@ -298,7 +443,7 @@ class EmailService
         } while ($isContinued);
 
         if (strpos($line, $expectedCode) !== 0) {
-            error_log("EmailService SMTP cmd '{$cmd}' expected {$expectedCode}, got: " . trim($line));
+            error_log("EmailService SMTP cmd '{$logCmd}' expected {$expectedCode}, got: " . trim($line));
             return false;
         }
         return true;

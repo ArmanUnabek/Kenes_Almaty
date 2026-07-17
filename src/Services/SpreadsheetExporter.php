@@ -12,6 +12,23 @@ use ZipArchive;
  */
 class SpreadsheetExporter
 {
+    /**
+     * Sanitize a cell value to prevent CSV/XLSX formula injection.
+     * Prefixes cells starting with formula characters with a tab.
+     */
+    public static function sanitizeCell(mixed $v): string
+    {
+        $s = (string)$v;
+        if ($s === '') {
+            return $s;
+        }
+        $trimmed = ltrim($s, " \t\n\r\0\x0B");
+        if ($trimmed !== '' && in_array($trimmed[0], ['=', '+', '-', '@'], true)) {
+            return "\t" . $s;
+        }
+        return $s;
+    }
+
     public static function build(array $incoming, array $outgoing): string
     {
         // Sheet 1: incoming
@@ -111,7 +128,7 @@ class SpreadsheetExporter
         if ($v === null || $v === '') {
             return '';
         }
-        return htmlspecialchars((string)$v, ENT_XML1, 'UTF-8');
+        return htmlspecialchars(self::sanitizeCell($v), ENT_XML1, 'UTF-8');
     }
 
     private static function cell(mixed $v, string $type = 'inlineStr'): string

@@ -10,6 +10,7 @@ abstract class ApiController
     protected \PDO $db;
     protected int $JSON_FLAGS = JSON_ENCODE_FLAGS;
     protected ?array $currentUser = null;
+    protected bool $userLoaded = false;
 
     public function __construct()
     {
@@ -26,7 +27,15 @@ abstract class ApiController
 
         $this->db = getDBConnection();
         CsrfMiddleware::init();
-        $this->currentUser = getCurrentUser();
+    }
+
+    protected function getCurrentUser(): ?array
+    {
+        if (!$this->userLoaded) {
+            $this->currentUser = getCurrentUser();
+            $this->userLoaded = true;
+        }
+        return $this->currentUser;
     }
 
     protected function json($data, int $code = 200): void
@@ -77,8 +86,8 @@ abstract class ApiController
     protected function requireAuth(): void
     {
         checkAuth();
-        $this->currentUser = getCurrentUser();
-        if (!$this->currentUser) {
+        $this->userLoaded = false;
+        if (!$this->getCurrentUser()) {
             $this->error('Требуется авторизация', 401);
         }
     }
@@ -86,7 +95,7 @@ abstract class ApiController
     protected function requireRole(array $roles): void
     {
         $this->requireAuth();
-        $userRole = normalizeRole($this->currentUser['role'] ?? 'viewer');
+        $userRole = normalizeRole($this->getCurrentUser()['role'] ?? 'viewer');
         if (!in_array($userRole, $roles, true)) {
             $this->error('Недостаточно прав', 403);
         }
@@ -165,7 +174,7 @@ abstract class ApiController
                 $action,
                 \App\Services\AuditSanitizer::sanitize($oldData),
                 \App\Services\AuditSanitizer::sanitize($newData),
-                (int)($this->currentUser['id'] ?? 0)
+                (int)($this->getCurrentUser()['id'] ?? 0)
             );
         } catch (\Exception $e) {
             error_log('Audit log failed: ' . $e->getMessage());
@@ -174,6 +183,10 @@ abstract class ApiController
 
     protected function handleException(\Throwable $e, string $context = ''): void
     {
+        $code = $e->getCode();
+        if (is_int($code) && $code >= 400 && $code < 600) {
+            $this->error($e->getMessage(), $code);
+        }
         error_log("Exception in $context: " . $e->getMessage() . "\n" . $e->getTraceAsString());
         $this->error('Внутренняя ошибка сервера', 500);
     }

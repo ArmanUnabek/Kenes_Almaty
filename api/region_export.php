@@ -43,10 +43,10 @@ $members->execute([$regionId]);
 $commissions = $db->prepare('SELECT id, name, description, color, sort_order FROM commissions WHERE region_id = ? ORDER BY sort_order, name');
 $commissions->execute([$regionId]);
 
-$incoming = $db->prepare('SELECT id, seq, date, organization, kk_number, category, subject, note FROM incoming_letters WHERE region_id = ? ORDER BY date DESC LIMIT 5000');
+$incoming = $db->prepare('SELECT id, seq, date, organization, kk_number, category, subject, note FROM incoming_letters WHERE region_id = ? AND (deleted_at IS NULL OR deleted_at = \'0000-00-00 00:00:00\') ORDER BY date DESC LIMIT 5000');
 $incoming->execute([$regionId]);
 
-$outgoing = $db->prepare('SELECT id, seq, date, outgoing_number, organization, subject, note FROM outgoing_letters WHERE region_id = ? ORDER BY date DESC LIMIT 5000');
+$outgoing = $db->prepare('SELECT id, seq, date, outgoing_number, organization, subject, note FROM outgoing_letters WHERE region_id = ? AND (deleted_at IS NULL OR deleted_at = \'0000-00-00 00:00:00\') ORDER BY date DESC LIMIT 5000');
 $outgoing->execute([$regionId]);
 
 $incomingRows = $incoming->fetchAll();
