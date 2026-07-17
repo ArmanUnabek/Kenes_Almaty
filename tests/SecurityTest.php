@@ -103,16 +103,39 @@ class SecurityTest extends TestCase
         $this->assertNotSame($originalToken, $newToken, 'CSRF token must rotate after successful mutation verification');
     }
 
-    public function testOldTokenInvalidAfterRotation(): void
+    public function testOldTokenStaysValidWithinGraceWindow(): void
+    {
+        // After rotation the previous token is intentionally accepted for a short
+        // grace window (CsrfMiddleware::PREV_TOKEN_TTL) so parallel in-flight
+        // requests carrying the pre-rotation token don't get spurious 403s.
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $originalToken = CsrfMiddleware::getToken();
+        $_SERVER['HTTP_X_CSRF_TOKEN'] = $originalToken;
+        CsrfMiddleware::verify(); // rotates the token, remembers $originalToken as prev
+
+        // The old token was just captured, so it is still inside the grace window.
+        $_SERVER['HTTP_X_CSRF_TOKEN'] = $originalToken;
+        $this->assertTrue(
+            CsrfMiddleware::verify(),
+            'Old CSRF token must remain valid within the rotation grace window'
+        );
+    }
+
+    public function testOldTokenInvalidAfterGraceWindowExpires(): void
     {
         $_SERVER['REQUEST_METHOD'] = 'POST';
         $originalToken = CsrfMiddleware::getToken();
         $_SERVER['HTTP_X_CSRF_TOKEN'] = $originalToken;
-        CsrfMiddleware::verify(); // rotates the token
+        CsrfMiddleware::verify(); // rotates the token, remembers $originalToken as prev
 
-        // Now try to use the old token again
+        // Push the previous-token timestamp past the grace window (60s TTL).
+        $_SESSION['_csrf_token_prev_at'] = time() - 3600;
+
         $_SERVER['HTTP_X_CSRF_TOKEN'] = $originalToken;
-        $this->assertFalse(CsrfMiddleware::verify(), 'Old CSRF token must be invalid after rotation');
+        $this->assertFalse(
+            CsrfMiddleware::verify(),
+            'Old CSRF token must be invalid once the rotation grace window has expired'
+        );
     }
 
     public function testPutWithCorrectTokenPasses(): void

@@ -2,8 +2,7 @@
  * Frontend build driver.
  *
  * The app has three HTML entry points with different, classic (non-ESM) script
- * sets. IIFE library builds can only take a single entry each, so we drive
- * Vite's build API once per page, emitting stable-named bundles into dist/:
+ * sets. Each is bundled once into a stable-named, minified IIFE bundle in dist/:
  *
  *   frontend/app.entry.js   -> dist/app.js    (api/index.html)
  *   frontend/login.entry.js -> dist/login.js  (login.html)
@@ -12,38 +11,32 @@
  * Stable names (not content-hashed) keep working with the existing ?v=N
  * cache-busting (scripts/bump-assets.sh) and the File-Manager upload flow. The
  * built bundles are committed; CI (scripts/check-frontend-build.sh) rebuilds and
- * fails if dist/ is stale.
+ * fails if any bundle is missing or invalid.
+ *
+ * We use esbuild (a single, fast dependency). Within CI (fresh `npm ci`) its
+ * minified output is deterministic, so an unchanged source tree produces no diff.
  */
-import { build } from 'vite';
+import { build } from 'esbuild';
 import { rmSync } from 'node:fs';
 
 const entries = [
-  { entry: 'frontend/app.entry.js', name: 'OsJournalApp', file: 'app.js' },
-  { entry: 'frontend/login.entry.js', name: 'OsJournalLogin', file: 'login.js' },
-  { entry: 'frontend/admin.entry.js', name: 'OsJournalAdmin', file: 'admin.js' },
+  { entry: 'frontend/app.entry.js', file: 'dist/app.js' },
+  { entry: 'frontend/login.entry.js', file: 'dist/login.js' },
+  { entry: 'frontend/admin.entry.js', file: 'dist/admin.js' },
 ];
 
-// Clean once up front; per-entry builds then append (emptyOutDir: false).
-// Also drop Vite's optimize cache so output doesn't depend on prior cache state.
+// Clean up front so a removed source never leaves a stale bundle behind.
 rmSync('dist', { recursive: true, force: true });
-rmSync('node_modules/.vite', { recursive: true, force: true });
 
 for (const e of entries) {
   await build({
-    configFile: false,
-    logLevel: 'warn',
-    build: {
-      outDir: 'dist',
-      emptyOutDir: false,
-      assetsInlineLimit: 0,
-      minify: true,
-      lib: {
-        entry: e.entry,
-        name: e.name,
-        formats: ['iife'],
-        fileName: () => e.file,
-      },
-    },
+    entryPoints: [e.entry],
+    outfile: e.file,
+    bundle: true,
+    minify: true,
+    format: 'iife',
+    charset: 'utf8',
+    logLevel: 'warning',
   });
 }
 

@@ -16,14 +16,23 @@ class EmailServiceTest extends RepositoryTestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Mirrors the production email_queue schema (deploy_database.sql +
+        // migrations/2026_07_13_queue_processing.sql): message threading columns
+        // written by enqueue(), plus the processing_at/attempts claim columns read
+        // by processQueue(). SQLite has no ENUM, so status stays TEXT.
         $this->db->exec("CREATE TABLE email_queue (
             id INTEGER PRIMARY KEY,
             recipient_email TEXT,
             subject TEXT,
             body_html TEXT,
             body_text TEXT,
+            message_id TEXT,
+            in_reply_to TEXT,
+            thread_id TEXT,
             status TEXT DEFAULT 'queued',
             error TEXT,
+            processing_at TEXT,
+            attempts INTEGER NOT NULL DEFAULT 0,
             sent_at TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )");

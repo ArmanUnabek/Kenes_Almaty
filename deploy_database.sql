@@ -183,6 +183,9 @@ CREATE TABLE IF NOT EXISTS letter_scans (
     file_size INT COMMENT 'Размер файла в байтах',
     version INT NOT NULL DEFAULT 1 COMMENT 'Номер версии файла',
     parent_scan_id INT NULL COMMENT 'ID предыдущей версии (NULL для первой)',
+    replaced_by INT NULL COMMENT 'letter_scans.id заменяющего скана (NULL — актуальная версия)',
+    replaced_at DATETIME NULL COMMENT 'Когда версия была заменена',
+    uploaded_by INT NULL COMMENT 'users.id загрузившего (LEFT JOIN users)',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_letter (letter_type, letter_id),
     INDEX idx_created_at (created_at),
@@ -402,13 +405,16 @@ CREATE TABLE IF NOT EXISTS email_queue (
     message_id VARCHAR(255) NULL COMMENT 'RFC 2822 Message-ID header',
     in_reply_to VARCHAR(255) NULL COMMENT 'References original Message-ID for replies',
     thread_id VARCHAR(255) NULL COMMENT 'Groups related emails in same thread',
-    status ENUM('queued','sent','failed') NOT NULL DEFAULT 'queued' COMMENT 'Статус отправки',
+    status ENUM('queued','processing','sent','failed') NOT NULL DEFAULT 'queued' COMMENT 'Статус отправки',
     error TEXT NULL COMMENT 'Текст ошибки при отправке',
+    processing_at DATETIME NULL COMMENT 'Когда строка захвачена воркером (для восстановления зависших)',
+    attempts INT NOT NULL DEFAULT 0 COMMENT 'Число попыток отправки',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     sent_at TIMESTAMP NULL COMMENT 'Время отправки',
     INDEX idx_status (status),
     INDEX idx_created (created_at),
     INDEX idx_status_created (status, created_at),
+    INDEX idx_status_processing (status, processing_at),
     INDEX idx_dedup (recipient_email, status, created_at),
     INDEX idx_message_id (message_id),
     INDEX idx_thread_id (thread_id)
@@ -586,15 +592,19 @@ CREATE TABLE IF NOT EXISTS approval_decisions (
 -- SMS-очередь
 CREATE TABLE IF NOT EXISTS sms_queue (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL COMMENT 'Отправитель (users.id), для атрибуции',
     phone VARCHAR(20) NOT NULL,
     message TEXT NOT NULL,
-    status ENUM('queued','sent','failed') DEFAULT 'queued',
+    status ENUM('queued','processing','sent','failed') DEFAULT 'queued',
     provider VARCHAR(50) DEFAULT 'mobizon',
     error TEXT NULL,
+    attempts INT NOT NULL DEFAULT 0 COMMENT 'Число попыток отправки (сравнивается с < 3)',
+    processing_at DATETIME NULL COMMENT 'Когда строка захвачена воркером (для восстановления зависших)',
     sent_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_status (status),
-    INDEX idx_created (created_at)
+    INDEX idx_created (created_at),
+    INDEX idx_status_processing (status, processing_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Web Push подписки (VAPID)

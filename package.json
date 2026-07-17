@@ -2,7 +2,7 @@
   "name": "aaa-frontend",
   "private": true,
   "scripts": {
-    "build": "esbuild frontend/app.entry.js --bundle --minify --format=iife --charset=utf8 --outfile=dist/app.js"
+    "build": "node scripts/build-frontend.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.1"
