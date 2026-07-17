@@ -1,0 +1,55 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.DEPLOY_PATH }}
+
+            echo "=== Pulling latest changes ==="
+            git pull origin main
+
+            echo "=== Installing PHP dependencies ==="
+            composer install --no-dev --optimize-autoloader --no-interaction
+
+            echo "=== Running migrations ==="
+            php migrate.php up
+
+            echo "=== Clearing OPcache ==="
+            # Restart php-fpm to clear OPcache
+            sudo systemctl reload php-fpm || sudo systemctl reload php8.2-fpm || sudo systemctl reload php8.1-fpm || sudo systemctl reload php8.0-fpm || true
+
+            echo "=== Deploy complete ==="
+
+      - name: Health check
+        run: |
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.DEPLOY_URL || format('https://{0}', secrets.SSH_HOST) }}" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed (HTTP $STATUS)"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $STATUS — retrying in 5s..."
+            sleep 5
+          done
+          echo "Health check failed after 5 attempts"
+          exit 1

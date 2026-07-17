@@ -5,6 +5,7 @@ require_once __DIR__ . '/../auth_middleware.php';
 require_once __DIR__ . '/../src/ApiController.php';
 
 use App\ApiController;
+use App\Services\GlobalSearchService;
 use App\Services\SearchRanker;
 
 class SearchController extends ApiController
@@ -23,7 +24,8 @@ class SearchController extends ApiController
             }
 
             $regionId = $this->resolveRegionIdForRead();
-            $like = '%' . $q . '%';
+            $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q);
+            $like = '%' . $escaped . '%';
             $items = [];
 
             if ($scope === 'all' || $scope === 'letters' || $scope === 'archived') {
@@ -32,7 +34,7 @@ class SearchController extends ApiController
             }
 
             if ($scope === 'all' || $scope === 'members') {
-                $this->searchMembers($like, $limit, $regionId, $items);
+                $this->searchMembers($q, $like, $limit, $regionId, $items);
             }
 
             $items = SearchRanker::sort($items);
@@ -63,20 +65,31 @@ class SearchController extends ApiController
         $numberCol = $type === 'incoming' ? 'kk_number' : 'outgoing_number';
         $table = $type . '_letters';
         $regionClause = $regionId ? ' AND region_id = ?' : '';
+        $isMysql = stripos($this->db->getAttribute(\PDO::ATTR_DRIVER_NAME), 'mysql') !== false;
 
         $archivedFilter = $scope === 'archived'
             ? " AND (deleted_at IS NOT NULL AND deleted_at != '0000-00-00 00:00:00')"
             : " AND (deleted_at IS NULL OR deleted_at = '0000-00-00 00:00:00')";
 
+        // FULLTEXT при наличии индекса (migrations/2026_07_13_fulltext.sql), иначе LIKE.
+        // Запросы короче 3 символов — сразу LIKE (ft_min_word_len).
+        $useFt = $isMysql
+            && mb_strlen($q) >= 3
+            && GlobalSearchService::fulltextIndexExists($this->db, $table, 'ft_' . $type . '_search', ['subject', 'note', 'organization']);
+
+        $textCondition = $useFt
+            ? "MATCH(subject, note, organization) AGAINST(? IN NATURAL LANGUAGE MODE) OR {$numberCol} LIKE ?"
+            : "subject LIKE ? OR note LIKE ? OR organization LIKE ? OR {$numberCol} LIKE ?";
+
         $select = "
             SELECT '{$type}' AS source, id, date, organization, subject, {$numberCol} AS number_label
             FROM {$table}
-            WHERE (subject LIKE ? OR note LIKE ? OR organization LIKE ? OR {$numberCol} LIKE ?)
+            WHERE ({$textCondition})
         ";
         $order = " ORDER BY date DESC LIMIT ?";
 
-        $buildParams = function () use ($like, $regionId, $limit): array {
-            $params = [$like, $like, $like, $like];
+        $buildParams = function () use ($useFt, $q, $like, $regionId, $limit): array {
+            $params = $useFt ? [$q, $like] : [$like, $like, $like, $like];
             if ($regionId) {
                 $params[] = $regionId;
             }
@@ -103,22 +116,34 @@ class SearchController extends ApiController
         }
     }
 
-    private function searchMembers(string $like, int $limit, ?int $regionId, array &$items): void
+    private function searchMembers(string $q, string $like, int $limit, ?int $regionId, array &$items): void
     {
         $regionClause = $regionId ? ' AND m.region_id = ?' : '';
+        $isMysql = stripos($this->db->getAttribute(\PDO::ATTR_DRIVER_NAME), 'mysql') !== false;
+
+        $useFt = $isMysql
+            && mb_strlen($q) >= 3
+            && GlobalSearchService::fulltextIndexExists($this->db, 'os_members', 'ft_members_fullname', ['full_name']);
+
+        if ($useFt) {
+            $nameCondition = "MATCH(m.full_name) AGAINST(? IN NATURAL LANGUAGE MODE)";
+        } else {
+            $nameCondition = "m.full_name LIKE ?";
+        }
+
         $sql = "
             SELECT 'member' AS source, m.id, m.full_name AS subject, m.position AS organization,
                    c.name AS number_label, '' AS date
             FROM os_members m
             LEFT JOIN commissions c ON m.commission_id = c.id
             WHERE m.status = 'active'
-              AND (m.full_name LIKE ? OR m.position LIKE ? OR m.organization LIKE ?)
+              AND ({$nameCondition} OR m.position LIKE ? OR m.organization LIKE ?)
               {$regionClause}
             ORDER BY m.full_name ASC
             LIMIT ?
         ";
         $stmt = $this->db->prepare($sql);
-        $params = [$like, $like, $like];
+        $params = [$useFt ? $q : $like, $like, $like];
         if ($regionId) {
             $params[] = $regionId;
         }

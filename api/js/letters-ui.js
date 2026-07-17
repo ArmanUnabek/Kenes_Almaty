@@ -7,19 +7,14 @@
   const t = (k, fb) => window.AppI18n?.t(k, fb) ?? fb;
   const canWrite = () => window.canWrite?.() ?? false;
   const canDelete = () => window.canDelete?.() ?? false;
+  let _isSubmitting = false;
   const confirmDelete = (...args) => window.confirmDelete?.(...args);
   const debounce = window.AppUtils?.debounce || window.debounce || ((fn, w) => {
     let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), w); };
   });
 
-  function unique(values) {
-    return Array.from(new Set(values));
-  }
-
-  function monthKey(iso) {
-    const d = new Date(iso);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  }
+  const unique = window.AppUtils?.unique || ((values) => Array.from(new Set(values)));
+  const monthKey = window.AppUtils?.monthKey || ((iso) => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
 
   function formatMonthLabel(key) {
     // Delegate to the single, language-aware implementation in i18n.js
@@ -264,11 +259,7 @@ function renderLetterScans(letter, type, container) {
       const detail = await fetchLetterDetail(type, Number(letter.id));
       const scans = (detail.scans || []).map(normalizeScanFromApi).filter(Boolean);
       if (!scans.length) {
-        if (window.showWarning) {
-          showWarning(t('letters.no_scans', 'Сканы не найдены'));
-        } else {
-          alert(t('letters.no_scans', 'Сканы не найдены'));
-        }
+        window.showWarning?.(t('letters.no_scans', 'Сканы не найдены'));
         return;
       }
       currentViewingScans = scans;
@@ -278,7 +269,7 @@ function renderLetterScans(letter, type, container) {
       if (window.showError) {
         showError(t('letters.scans_load_error', 'Не удалось загрузить сканы'));
       } else {
-        alert(t('letters.scans_load_error', 'Не удалось загрузить сканы'));
+        window.showError?.(t('letters.scans_load_error', 'Не удалось загрузить сканы'));
       }
     }
   });
@@ -506,9 +497,13 @@ function clearMultiselect(selectEl) {
   Array.from(selectEl.options).forEach(opt => opt.selected = false);
 }
 async function refreshLetters() {
-  const [incoming, outgoing] = await Promise.all([fetchLetters('incoming'), fetchLetters('outgoing')]);
-  store.incoming = incoming;
-  store.outgoing = outgoing;
+  try {
+    const [incoming, outgoing] = await Promise.all([fetchLetters('incoming'), fetchLetters('outgoing')]);
+    store.incoming = incoming;
+    store.outgoing = outgoing;
+  } catch (e) {
+    console.error('refreshLetters error:', e);
+  }
 }
 
 async function fetchLetters(type) {
@@ -619,11 +614,13 @@ function applySelectedOutgoingForForm(outgoingId) {
 
 async function handleIncomingSubmit(event) {
   event.preventDefault();
+  if (_isSubmitting) return;
   if (!canWrite()) {
     window.showError?.(t('letters.no_permission', 'Недостаточно прав для сохранения'));
     return;
   }
   try {
+    _isSubmitting = true;
     autoFillIncomingNumber(false);
     const respondsId = incRespondsOutgoing?.value ? Number(incRespondsOutgoing.value) : null;
     const seqValue = incSeq.value ? Number(incSeq.value) : getNextIncomingSeq();
@@ -676,18 +673,22 @@ async function handleIncomingSubmit(event) {
     if (window.showError) {
       showError(t('letters.save_incoming_error', 'Не удалось сохранить входящее письмо'));
     } else {
-      alert(t('letters.save_incoming_error', 'Не удалось сохранить входящее письмо'));
+      window.showError?.(t('letters.save_incoming_error', 'Не удалось сохранить входящее письмо'));
     }
+  } finally {
+    _isSubmitting = false;
   }
 }
 
 async function handleOutgoingSubmit(event) {
   event.preventDefault();
+  if (_isSubmitting) return;
   if (!canWrite()) {
     window.showError?.(t('letters.no_permission', 'Недостаточно прав для сохранения'));
     return;
   }
   try {
+    _isSubmitting = true;
     const incomingId = outLinkedIncoming.value;
     const incomingItem = store.incoming.find((i) => String(i.id) === String(incomingId));
     const manualNumber = outNumber.value.trim();
@@ -697,20 +698,12 @@ async function handleOutgoingSubmit(event) {
       recipientsList = [incomingItem.organization];
     }
     if (!recipientsList.length) {
-      if (window.showWarning) {
-        showWarning(t('letters.add_recipient_warn', 'Добавьте хотя бы одного адресата или укажите организацию'));
-      } else {
-        alert(t('letters.add_recipient_warn', 'Добавьте хотя бы одного адресата или укажите организацию'));
-      }
+      window.showWarning?.(t('letters.add_recipient_warn', 'Добавьте хотя бы одного адресата или укажите организацию'));
       return;
     }
     const organization = (incomingItem?.organization || recipientsList[0] || '').trim();
     if (!organization) {
-      if (window.showWarning) {
-        showWarning(t('letters.org_required', 'Укажите организацию получателя'));
-      } else {
-        alert(t('letters.org_required', 'Укажите организацию получателя'));
-      }
+      window.showWarning?.(t('letters.org_required', 'Укажите организацию получателя'));
       return;
     }
     const payload = {
@@ -758,8 +751,10 @@ async function handleOutgoingSubmit(event) {
     if (window.showError) {
       showError(t('letters.save_outgoing_error', 'Не удалось сохранить исходящее письмо'));
     } else {
-      alert(t('letters.save_outgoing_error', 'Не удалось сохранить исходящее письмо'));
+      window.showError?.(t('letters.save_outgoing_error', 'Не удалось сохранить исходящее письмо'));
     }
+  } finally {
+    _isSubmitting = false;
   }
 }
 
@@ -853,7 +848,7 @@ async function editIncoming(id) {
           wrapper.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:#f0f0f0;flex-direction:column;"><small>PDF</small></div>`;
         } else {
           const img = document.createElement('img');
-          img.src = scan.scan_data;
+          img.src = scan.scan_url || scan.scan_data || '';
           img.alt = scan.file_name || 'scan';
           wrapper.appendChild(img);
         }
@@ -873,7 +868,7 @@ async function editIncoming(id) {
     }
   } catch (e) {
     console.error('Ошибка редактирования входящего', e);
-    alert(t('letters.load_edit_error', 'Не удалось загрузить письмо для редактирования'));
+    window.showError?.(t('letters.load_edit_error', 'Не удалось загрузить письмо для редактирования'));
   }
 }
 
@@ -909,7 +904,7 @@ async function editOutgoing(id) {
           wrapper.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:#f0f0f0;flex-direction:column;"><small>PDF</small></div>`;
         } else {
           const img = document.createElement('img');
-          img.src = scan.scan_data;
+          img.src = scan.scan_url || scan.scan_data || '';
           img.alt = scan.file_name || 'scan';
           wrapper.appendChild(img);
         }
@@ -929,7 +924,7 @@ async function editOutgoing(id) {
     }
   } catch (e) {
     console.error('Ошибка редактирования исходящего', e);
-    alert(t('letters.load_edit_error', 'Не удалось загрузить письмо для редактирования'));
+    window.showError?.(t('letters.load_edit_error', 'Не удалось загрузить письмо для редактирования'));
   }
 }
 
@@ -1059,7 +1054,7 @@ async function viewLetterDetail(type, id) {
     bootstrap.Modal.getOrCreateInstance(modalEl).show();
   } catch (e) {
     console.error(e);
-    window.showError?.(t('letters.load_error', 'Не удалось загрузить письмо')) || alert(t('letters.load_error', 'Не удалось загрузить письмо'));
+    window.showError?.(t('letters.load_error', 'Не удалось загрузить письмо'));
   }
 }
 
@@ -1079,7 +1074,7 @@ async function viewLetterRecipients(type, id) {
     modal.show();
   } catch (e) {
     console.error(e);
-    alert(t('letters.recipients_load_error', 'Не удалось загрузить адресатов'));
+    window.showError?.(t('letters.recipients_load_error', 'Не удалось загрузить адресатов'));
   }
 }
 function renderIncoming() {
@@ -1193,10 +1188,10 @@ function renderIncoming() {
           <td data-label="Сканы" id="${scansCellId}"></td>
           <td data-label="Ответ">${linkHtml}</td>
           <td class="text-end table-actions" data-label="">
-            <button class="btn btn-sm btn-outline-info" data-action="detail-incoming" data-id="${i.id}" title="Детали / Комментарии"><i class="bi bi-chat-dots"></i></button>
-            <button class="btn btn-sm btn-outline-secondary" data-action="print-incoming" data-id="${i.id}" title="Печать"><i class="bi bi-printer"></i></button>
-            <button class="btn btn-sm btn-outline-primary" data-action="edit-incoming" data-id="${i.id}" title="Изменить"><i class="bi bi-pencil"></i></button>
-            ${canDelete() ? `<button class="btn btn-sm btn-outline-danger" data-action="del-incoming" data-id="${i.id}" title="Удалить"><i class="bi bi-trash"></i></button>` : ''}
+            <button class="btn btn-sm btn-outline-info" data-action="detail-incoming" data-id="${i.id}" title="Детали / Комментарии" aria-label="Детали / Комментарии"><i class="bi bi-chat-dots" aria-hidden="true"></i></button>
+            <button class="btn btn-sm btn-outline-secondary" data-action="print-incoming" data-id="${i.id}" title="Печать" aria-label="Печать"><i class="bi bi-printer" aria-hidden="true"></i></button>
+            <button class="btn btn-sm btn-outline-primary" data-action="edit-incoming" data-id="${i.id}" title="Изменить" aria-label="Изменить"><i class="bi bi-pencil" aria-hidden="true"></i></button>
+            ${canDelete() ? `<button class="btn btn-sm btn-outline-danger" data-action="del-incoming" data-id="${i.id}" title="Удалить" aria-label="Удалить"><i class="bi bi-trash" aria-hidden="true"></i></button>` : ''}
           </td>
         </tr>`;
     });
@@ -1220,24 +1215,6 @@ function renderIncoming() {
     }
   });
   
-  tableIncomingBody.querySelectorAll("[data-action='detail-incoming']").forEach((btn) => {
-    btn.addEventListener('click', () => openLetterDetailTabs('incoming', btn.dataset.id));
-  });
-  tableIncomingBody.querySelectorAll("[data-action='del-incoming']").forEach((btn) => {
-    btn.addEventListener("click", () => deleteIncoming(btn.dataset.id));
-  });
-  tableIncomingBody.querySelectorAll("[data-action='edit-incoming']").forEach((btn) => {
-    btn.addEventListener("click", () => editIncoming(btn.dataset.id));
-  });
-  tableIncomingBody.querySelectorAll("[data-action='print-incoming']").forEach((btn) => {
-    btn.addEventListener("click", () => window.open(`/api/letter_print.php?type=incoming&id=${btn.dataset.id}`, '_blank'));
-  });
-  tableIncomingBody.querySelectorAll("[data-action='respond-incoming']").forEach((btn) => {
-    btn.addEventListener("click", () => startOutgoingResponse(btn.dataset.id));
-  });
-  tableIncomingBody.querySelectorAll("[data-action='attach-outgoing']").forEach((btn) => {
-    btn.addEventListener("click", () => openLinkOutgoingModal({ type: 'incoming-table', incomingId: btn.dataset.id }));
-  });
   // Batch checkboxes
   tableIncomingBody.querySelectorAll('.batch-check-incoming').forEach((cb) => {
     cb.addEventListener('change', () => updateBatchBar('incoming'));
@@ -1414,11 +1391,7 @@ async function linkExistingOutgoing(outgoingId) {
   } catch (error) {
     console.error('Ошибка привязки исходящего', error);
     const msg = t('letters.link_error', 'Не удалось привязать исходящее письмо');
-    if (window.showError) {
-      showError(msg);
-    } else {
-      alert(msg);
-    }
+    window.showError?.(msg);
   }
 }
 
@@ -1508,17 +1481,17 @@ function renderOutgoing() {
           <td data-label="Ответственные" id="${membersCellId}"></td>
           <td data-label="Сканы" id="${scansCellId}"></td>
           <td class="text-end table-actions" data-label="">
-            <button class="btn btn-sm btn-outline-info" title="Детали / Комментарии" data-action="detail-outgoing" data-id="${i.id}">
-              <i class="bi bi-chat-dots"></i>
+            <button class="btn btn-sm btn-outline-info" title="Детали / Комментарии" aria-label="Детали / Комментарии" data-action="detail-outgoing" data-id="${i.id}">
+              <i class="bi bi-chat-dots" aria-hidden="true"></i>
             </button>
-            <button class="btn btn-sm btn-outline-secondary" title="Печать" data-action="print-outgoing" data-id="${i.id}">
-              <i class="bi bi-printer"></i>
+            <button class="btn btn-sm btn-outline-secondary" title="Печать" aria-label="Печать" data-action="print-outgoing" data-id="${i.id}">
+              <i class="bi bi-printer" aria-hidden="true"></i>
             </button>
-            <button class="btn btn-sm btn-outline-primary" title="Изменить" data-action="edit-outgoing" data-id="${i.id}">
-              <i class="bi bi-pencil"></i>
+            <button class="btn btn-sm btn-outline-primary" title="Изменить" aria-label="Изменить" data-action="edit-outgoing" data-id="${i.id}">
+              <i class="bi bi-pencil" aria-hidden="true"></i>
             </button>
-            ${canDelete() ? `<button class="btn btn-sm btn-outline-danger" title="Удалить" data-action="del-outgoing" data-id="${i.id}">
-              <i class="bi bi-trash"></i>
+            ${canDelete() ? `<button class="btn btn-sm btn-outline-danger" title="Удалить" aria-label="Удалить" data-action="del-outgoing" data-id="${i.id}">
+              <i class="bi bi-trash" aria-hidden="true"></i>
             </button>` : ''}
           </td>
         </tr>`;
@@ -1541,18 +1514,6 @@ function renderOutgoing() {
     }
   });
   
-  tableOutgoingBody.querySelectorAll("[data-action='detail-outgoing']").forEach((btn) => {
-    btn.addEventListener('click', () => openLetterDetailTabs('outgoing', btn.dataset.id));
-  });
-  tableOutgoingBody.querySelectorAll("[data-action='del-outgoing']").forEach((btn) => {
-    btn.addEventListener("click", () => deleteOutgoing(btn.dataset.id));
-  });
-  tableOutgoingBody.querySelectorAll("[data-action='edit-outgoing']").forEach((btn) => {
-    btn.addEventListener("click", () => editOutgoing(btn.dataset.id));
-  });
-  tableOutgoingBody.querySelectorAll("[data-action='print-outgoing']").forEach((btn) => {
-    btn.addEventListener("click", () => window.open(`/api/letter_print.php?type=outgoing&id=${btn.dataset.id}`, '_blank'));
-  });
   // Batch checkboxes
   tableOutgoingBody.querySelectorAll('.batch-check-outgoing').forEach((cb) => {
     cb.addEventListener('change', () => updateBatchBar('outgoing'));
@@ -1586,11 +1547,7 @@ async function deleteIncoming(id) {
         }
       } catch (error) {
         console.error('Ошибка удаления входящего письма', error);
-        if (window.showError) {
-          showError(errorMsg);
-        } else {
-          alert(errorMsg);
-        }
+        window.showError?.(errorMsg);
       }
     });
   } else {
@@ -1599,7 +1556,7 @@ async function deleteIncoming(id) {
       await deleteLetter('incoming', id);
     } catch (error) {
       console.error('Ошибка удаления входящего письма', error);
-      alert(errorMsg);
+      window.showError?.(errorMsg);
     }
   }
 }
@@ -1616,11 +1573,7 @@ async function deleteOutgoing(id) {
         }
       } catch (error) {
         console.error('Ошибка удаления исходящего письма', error);
-        if (window.showError) {
-          showError(errorMsg);
-        } else {
-          alert(errorMsg);
-        }
+        window.showError?.(errorMsg);
       }
     });
   } else {
@@ -1629,7 +1582,7 @@ async function deleteOutgoing(id) {
       await deleteLetter('outgoing', id);
     } catch (error) {
       console.error('Ошибка удаления исходящего письма', error);
-      alert(errorMsg);
+      window.showError?.(errorMsg);
     }
   }
 }
@@ -1828,7 +1781,7 @@ async function deleteOutgoing(id) {
           renderScanPreview(prepared, incScansPreview, true);
         } catch (error) {
           console.error('Ошибка обработки файла:', error);
-          alert(t('letters.file_error', 'Ошибка при обработке файла {name}').replace('{name}', file.name));
+          window.showError?.(t('letters.file_error', 'Ошибка при обработке файла {name}').replace('{name}', file.name));
         }
       }
       statusEl.remove();
@@ -1855,7 +1808,7 @@ async function deleteOutgoing(id) {
           renderScanPreview(prepared, outScansPreview, true);
         } catch (error) {
           console.error('Ошибка обработки файла:', error);
-          alert(t('letters.file_error', 'Ошибка при обработке файла {name}').replace('{name}', file.name));
+          window.showError?.(t('letters.file_error', 'Ошибка при обработке файла {name}').replace('{name}', file.name));
         }
       }
       statusEl.remove();
@@ -1875,6 +1828,34 @@ async function deleteOutgoing(id) {
       });
     });
   }
+
+  // Event delegation for incoming table actions
+  tableIncomingBody?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const { action, id } = btn.dataset;
+    switch (action) {
+      case 'detail-incoming': openLetterDetailTabs('incoming', id); break;
+      case 'del-incoming': deleteIncoming(id); break;
+      case 'edit-incoming': editIncoming(id); break;
+      case 'print-incoming': window.open(`/api/letter_print.php?type=incoming&id=${id}`, '_blank'); break;
+      case 'respond-incoming': startOutgoingResponse(id); break;
+      case 'attach-outgoing': openLinkOutgoingModal({ type: 'incoming-table', incomingId: id }); break;
+    }
+  });
+
+  // Event delegation for outgoing table actions
+  tableOutgoingBody?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const { action, id } = btn.dataset;
+    switch (action) {
+      case 'detail-outgoing': openLetterDetailTabs('outgoing', id); break;
+      case 'del-outgoing': deleteOutgoing(id); break;
+      case 'edit-outgoing': editOutgoing(id); break;
+      case 'print-outgoing': window.open(`/api/letter_print.php?type=outgoing&id=${id}`, '_blank'); break;
+    }
+  });
 
   }
 
@@ -1908,6 +1889,11 @@ async function deleteOutgoing(id) {
     if (!bar) return;
     bar.classList.toggle('d-none', ids.length === 0);
     if (count) count.textContent = (window.AppI18n?.fmt('letters.selected_count', { n: ids.length })) ?? `${ids.length} выбрано`;
+    // Архив/удаление — только для ролей с правом удаления (как одиночные операции)
+    const suffix = type === 'incoming' ? 'Incoming' : 'Outgoing';
+    const allowed = canDelete();
+    document.getElementById(`batchArchive${suffix}`)?.classList.toggle('d-none', !allowed);
+    document.getElementById(`batchDelete${suffix}`)?.classList.toggle('d-none', !allowed);
   }
 
   function batchExportSelected(type) {
@@ -1916,35 +1902,68 @@ async function deleteOutgoing(id) {
     const items = type === 'incoming'
       ? store.incoming.filter((i) => ids.includes(Number(i.id)))
       : store.outgoing.filter((i) => ids.includes(Number(i.id)));
-    const payload = type === 'incoming'
-      ? { incoming: items, outgoing: [] }
-      : { incoming: [], outgoing: items };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const esc = window.sanitizeCsv || ((s) => String(s ?? ''));
+    const membersText = (l) => (Array.isArray(l.members) ? l.members.map((m) => m.name || m.full_name || '').filter(Boolean).join('; ') : '');
+    let header;
+    let rowOf;
+    if (type === 'incoming') {
+      header = ['ID', 'Рег. №', 'Дата', 'Организация', 'Категория', 'Номер (ҚК)', 'Тема', 'Примечание', 'Ответственные'];
+      rowOf = (l) => [l.id, l.seq, l.date, l.organization, l.category, l.kk_number, l.subject, l.note, membersText(l)];
+    } else {
+      header = ['ID', 'Рег. №', 'Дата', 'Исх. номер', 'Организация', 'Тип', 'Тема', 'Примечание', 'Ответственные'];
+      rowOf = (l) => [l.id, l.seq, l.date, l.outgoing_number, l.organization, l.outgoing_type, l.subject, l.note, membersText(l)];
+    }
+    const lines = [header, ...items.map(rowOf)].map((row) => row.map((c) => esc(c ?? '')).join(','));
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${type}_selected_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `${type}_selected_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
-  async function batchArchiveSelected(type) {
-    const ids = getSelectedIds(type);
-    if (!ids.length) return;
-    if (!confirm((window.AppI18n?.fmt('letters.archive_confirm', { n: ids.length })) ?? `Переместить ${ids.length} писем(а) в архив?`)) return;
+  async function runBulk(type, action, ids) {
     try {
-      const res = await fetch(`letters.php?type=${type}&action=bulk`, {
-        method: 'DELETE',
+      const res = await fetch(`${API_BASE}/letters.php?type=${type}&action=bulk`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
+        body: JSON.stringify({ action, ids }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ошибка архивации');
-      window.showSuccess((window.AppI18n?.fmt('letters.archived_ok', { n: data.archived ?? ids.length })) ?? `Архивировано: ${data.archived ?? ids.length}`);
+      if (!res.ok) throw new Error(data.error || 'Ошибка массовой операции');
+      const n = data.updated ?? ids.length;
+      const okMsg = action === 'archive'
+        ? ((window.AppI18n?.fmt('letters.archived_ok', { n })) ?? `Архивировано: ${n}`)
+        : ((window.AppI18n?.fmt('letters.deleted_ok', { n })) ?? `Удалено: ${n}`);
+      window.showSuccess(okMsg);
       clearBatchSelection(type);
-      refreshLetters();
+      await refreshLetters();
+      renderAll();
     } catch (e) {
       window.showError(e.message);
+    }
+  }
+
+  function batchArchiveSelected(type) {
+    const ids = getSelectedIds(type);
+    if (!ids.length) return;
+    const msg = (window.AppI18n?.fmt('letters.archive_confirm', { n: ids.length })) ?? `Переместить ${ids.length} писем(а) в архив?`;
+    if (window.confirmDelete) {
+      confirmDelete(msg, () => runBulk(type, 'archive', ids));
+    } else if (confirm(msg)) {
+      runBulk(type, 'archive', ids);
+    }
+  }
+
+  function batchDeleteSelected(type) {
+    const ids = getSelectedIds(type);
+    if (!ids.length) return;
+    const msg = (window.AppI18n?.fmt('letters.delete_confirm_bulk', { n: ids.length })) ?? `Удалить ${ids.length} писем(а)? Они будут перемещены в архив.`;
+    if (window.confirmDelete) {
+      confirmDelete(msg, () => runBulk(type, 'delete', ids));
+    } else if (confirm(msg)) {
+      runBulk(type, 'delete', ids);
     }
   }
 
@@ -1962,6 +1981,8 @@ async function deleteOutgoing(id) {
     document.getElementById('batchExportOutgoing')?.addEventListener('click', () => batchExportSelected('outgoing'));
     document.getElementById('batchArchiveIncoming')?.addEventListener('click', () => batchArchiveSelected('incoming'));
     document.getElementById('batchArchiveOutgoing')?.addEventListener('click', () => batchArchiveSelected('outgoing'));
+    document.getElementById('batchDeleteIncoming')?.addEventListener('click', () => batchDeleteSelected('incoming'));
+    document.getElementById('batchDeleteOutgoing')?.addEventListener('click', () => batchDeleteSelected('outgoing'));
     document.getElementById('batchClearIncoming')?.addEventListener('click', () => clearBatchSelection('incoming'));
     document.getElementById('batchClearOutgoing')?.addEventListener('click', () => clearBatchSelection('outgoing'));
   }
@@ -2300,6 +2321,65 @@ async function deleteOutgoing(id) {
 
   let _templatePickerModal = null;
   let _templateTargetType = null;
+  let _templateSelected = null;
+
+  // Плейсхолдеры вида {организация}/{organization} и т.п.
+  const TEMPLATE_ALIASES = {
+    'номер': 'number', 'number': 'number',
+    'организация': 'organization', 'organization': 'organization',
+    'дата': 'date', 'date': 'date',
+    'тема': 'subject', 'subject': 'subject',
+  };
+  const TEMPLATE_PLACEHOLDER_RE = /\{\s*([^{}\s][^{}]*?)\s*\}/g;
+  const TEMPLATE_EMPTY_MARK = '___';
+
+  function formatDateLocalized(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const lang = window.AppI18n?.getLang?.() === 'kz' ? 'kk-KZ' : 'ru-RU';
+    return d.toLocaleDateString(lang);
+  }
+
+  /** Собирает реальные значения из текущей формы письма. */
+  function collectTemplateValues(type) {
+    const val = (id) => document.getElementById(id)?.value.trim() || '';
+    if (type === 'incoming') {
+      return {
+        number: val('incNumber'),
+        organization: val('incOrg'),
+        date: formatDateLocalized(val('incDate')),
+        subject: val('incSubject'),
+      };
+    }
+    return {
+      number: val('outNumber'),
+      organization: val('outOrg') || document.querySelector('#outRecipientsList .recipient-chip')?.textContent.trim() || '',
+      date: formatDateLocalized(val('outDate')),
+      subject: val('outSubject'),
+    };
+  }
+
+  /** Подставляет значения; незаполненные известные переменные → «___». */
+  function substituteTemplateText(text, values) {
+    return String(text || '').replace(TEMPLATE_PLACEHOLDER_RE, (match, rawKey) => {
+      const key = TEMPLATE_ALIASES[rawKey.toLowerCase()];
+      if (!key) return match; // неизвестный плейсхолдер оставляем как есть
+      return values[key] ? values[key] : TEMPLATE_EMPTY_MARK;
+    });
+  }
+
+  /**
+   * HTML предпросмотра: текст экранируется, значения подставляются экранированными,
+   * незаполненные/неизвестные плейсхолдеры подсвечиваются <mark>.
+   */
+  function renderTemplatePreviewHtml(text, values) {
+    return escapeHtml(String(text || '')).replace(TEMPLATE_PLACEHOLDER_RE, (match, rawKey) => {
+      const key = TEMPLATE_ALIASES[rawKey.toLowerCase()];
+      if (key && values[key]) return `<span class="text-success">${escapeHtml(values[key])}</span>`;
+      return `<mark>${match}</mark>`;
+    });
+  }
 
   function getTemplatePickerModal() {
     if (!_templatePickerModal) {
@@ -2309,10 +2389,31 @@ async function deleteOutgoing(id) {
     return _templatePickerModal;
   }
 
+  function showTemplatePreview(tpl) {
+    _templateSelected = tpl;
+    const previewEl = document.getElementById('templatePickerPreview');
+    const bodyEl = document.getElementById('templatePreviewBody');
+    if (!previewEl || !bodyEl) return;
+    const values = collectTemplateValues(_templateTargetType);
+    const rows = [
+      ['tpl.field_org', 'Организация', tpl.organization],
+      ['tpl.field_subject', 'Тема', tpl.subject],
+      ['tpl.field_note', 'Примечание', tpl.note],
+    ].filter(([, , v]) => v);
+    bodyEl.innerHTML = rows.length
+      ? rows.map(([key, fb, v]) =>
+          `<div class="mb-1"><span class="text-muted small">${escapeHtml(t(key, fb))}:</span> ${renderTemplatePreviewHtml(v, values)}</div>`
+        ).join('')
+      : `<div class="text-muted small">${escapeHtml(t('tpl.preview_empty', 'Шаблон не содержит текста'))}</div>`;
+    previewEl.classList.remove('d-none');
+  }
+
   async function openTemplatePicker(type) {
     _templateTargetType = type;
+    _templateSelected = null;
     const listEl = document.getElementById('templatePickerList');
     if (!listEl) return;
+    document.getElementById('templatePickerPreview')?.classList.add('d-none');
     listEl.innerHTML = '<div class="text-muted text-center py-3">Загрузка шаблонов...</div>';
     getTemplatePickerModal()?.show();
     try {
@@ -2331,9 +2432,11 @@ async function deleteOutgoing(id) {
       listEl.querySelectorAll('[data-tpl-id]').forEach((btn) => {
         const tplId = btn.dataset.tplId;
         btn.addEventListener('click', () => {
-          const tpl = templates.find((t) => String(t.id) === String(tplId));
-          if (tpl) applyTemplate(tpl, _templateTargetType);
-          getTemplatePickerModal()?.hide();
+          const tpl = templates.find((tp) => String(tp.id) === String(tplId));
+          if (!tpl) return;
+          listEl.querySelectorAll('.active').forEach((el) => el.classList.remove('active'));
+          btn.classList.add('active');
+          showTemplatePreview(tpl);
         });
       });
     } catch (err) {
@@ -2342,22 +2445,24 @@ async function deleteOutgoing(id) {
   }
 
   function applyTemplate(tpl, type) {
+    const values = collectTemplateValues(type);
+    const sub = (text) => substituteTemplateText(text, values);
     if (type === 'incoming') {
       const orgEl = document.getElementById('incOrg');
       const subjEl = document.getElementById('incSubject');
       const noteEl = document.getElementById('incNote');
       const catEl = document.getElementById('incType');
-      if (orgEl && tpl.organization) orgEl.value = tpl.organization;
-      if (subjEl && tpl.subject) subjEl.value = tpl.subject;
-      if (noteEl && tpl.note) noteEl.value = tpl.note;
+      if (orgEl && tpl.organization) orgEl.value = sub(tpl.organization);
+      if (subjEl && tpl.subject) subjEl.value = sub(tpl.subject);
+      if (noteEl && tpl.note) noteEl.value = sub(tpl.note);
       if (catEl && tpl.category) catEl.value = tpl.category;
     } else {
       const orgEl = document.getElementById('outOrg');
       const subjEl = document.getElementById('outSubject');
       const noteEl = document.getElementById('outNote');
-      if (orgEl && tpl.organization) orgEl.value = tpl.organization;
-      if (subjEl && tpl.subject) subjEl.value = tpl.subject;
-      if (noteEl && tpl.note) noteEl.value = tpl.note;
+      if (orgEl && tpl.organization) orgEl.value = sub(tpl.organization);
+      if (subjEl && tpl.subject) subjEl.value = sub(tpl.subject);
+      if (noteEl && tpl.note) noteEl.value = sub(tpl.note);
     }
     window.showSuccess?.('Шаблон применён');
   }
@@ -2391,4 +2496,37 @@ async function deleteOutgoing(id) {
 
   window.openTemplatePicker = openTemplatePicker;
   window.saveCurrentFormAsTemplate = saveCurrentFormAsTemplate;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('btnOpenTemplatePickerIncoming')
+      ?.addEventListener('click', () => openTemplatePicker('incoming'));
+    document.getElementById('btnSaveTemplateIncoming')
+      ?.addEventListener('click', () => saveCurrentFormAsTemplate('incoming'));
+    document.getElementById('btnOpenTemplatePickerOutgoing')
+      ?.addEventListener('click', () => openTemplatePicker('outgoing'));
+    document.getElementById('btnSaveTemplateOutgoing')
+      ?.addEventListener('click', () => saveCurrentFormAsTemplate('outgoing'));
+    document.getElementById('btnApplyTemplate')?.addEventListener('click', () => {
+      if (!_templateSelected) return;
+      applyTemplate(_templateSelected, _templateTargetType);
+      getTemplatePickerModal()?.hide();
+    });
+  });
+
+  /** Локализованный текст подсказки с <code>-обёрткой плейсхолдеров. */
+  function renderTemplateVarsHint() {
+    const el = document.getElementById('templateVarsHintBody');
+    if (!el) return;
+    const body = t('tpl.vars_body', 'Поддерживаются плейсхолдеры: {номер}, {организация}, {дата}, {тема} (или {number}, {organization}, {date}, {subject}). При применении они заменяются значениями из текущей формы письма; незаполненные — маркером ___.');
+    el.innerHTML = escapeHtml(body).replace(/\{[^{}]+\}|___/g, (m) => `<code>${m}</code>`);
+  }
+  document.addEventListener('DOMContentLoaded', renderTemplateVarsHint);
+
+  // Обновляем предпросмотр и подсказку при смене языка (локале-зависимая дата и подписи)
+  window.addEventListener('app:langchange', () => {
+    renderTemplateVarsHint();
+    if (_templateSelected && !document.getElementById('templatePickerPreview')?.classList.contains('d-none')) {
+      showTemplatePreview(_templateSelected);
+    }
+  });
 })(window);

@@ -56,12 +56,13 @@ class UsersController extends ApiController
 
     private function handleGet($id): void
     {
-        if ($id) {
+        if ($id !== null && $id !== '' && is_numeric($id) && (int)$id > 0) {
             $user = $this->repo->getById((int)$id);
             if (!$user) {
                 $this->error('Пользователь не найден', 404);
             }
             $this->json($user);
+            return;
         }
 
         $regionFilter = $this->getQueryParam('region_id');
@@ -97,6 +98,11 @@ class UsersController extends ApiController
             'password' => 'required|string|min:8|max:255',
             'role' => 'required|in:admin,moderator,viewer',
         ]);
+
+        $passError = validatePasswordStrength($data['password']);
+        if ($passError) {
+            $this->error($passError, 400);
+        }
 
         if ($this->repo->usernameExists($data['username'])) {
             $this->error('Пользователь с таким логином уже существует', 409);
@@ -138,6 +144,10 @@ class UsersController extends ApiController
             $this->error('Пользователь не найден', 404);
         }
 
+        // Whitelist allowed fields to prevent mass assignment
+        $allowed = ['username', 'full_name', 'email', 'role', 'region_id', 'member_id', 'password', 'is_active', 'telegram_chat_id'];
+        $data = array_intersect_key($data, array_flip($allowed));
+
         if (!empty($data['username']) && $this->repo->usernameExists($data['username'], $id)) {
             $this->error('Пользователь с таким логином уже существует', 409);
         }
@@ -149,9 +159,44 @@ class UsersController extends ApiController
             }
         }
 
+        $newRole = !empty($data['role']) ? $data['role'] : normalizeRole($existing['role'] ?? '');
+        $newActive = array_key_exists('is_active', $data)
+            ? filter_var($data['is_active'], FILTER_VALIDATE_BOOLEAN)
+            : (bool)($existing['is_active'] ?? true);
+
+        $currentUserId = (int)($this->currentUser['id'] ?? 0);
+        if ($id === $currentUserId) {
+            $roleChanged = !empty($data['role']) && $data['role'] !== normalizeRole($existing['role'] ?? '');
+            $deactivating = array_key_exists('is_active', $data) && !$newActive;
+            if ($roleChanged || $deactivating) {
+                $this->error('Нельзя изменить собственную роль/статус', 422);
+            }
+        }
+
+        // Защита от lockout: нельзя лишить admin-роли или деактивировать последнего активного администратора
+        $wasAdmin = \App\Auth\AccessPolicy::isAdmin($existing['role'] ?? '');
+        if ($wasAdmin && ($newRole !== 'admin' || !$newActive) && $this->countOtherActiveAdmins($id) === 0) {
+            $this->error('Нельзя деактивировать последнего администратора', 422);
+        }
+
         if (!empty($data['password'])) {
-            if (strlen($data['password']) < 8) {
-                $this->error('Пароль должен быть не менее 8 символов', 400);
+            $passError = validatePasswordStrength($data['password']);
+            if ($passError) {
+                $this->error($passError, 400);
+            }
+            // Проверка истории паролей (запрет повторного использования последних 5)
+            $histStmt = $this->db->prepare('SELECT password_hash, password_history FROM users WHERE id = ?');
+            $histStmt->execute([$id]);
+            $histData = $histStmt->fetch();
+            if ($histData) {
+                $history = json_decode($histData['password_history'] ?? '[]', true) ?: [];
+                foreach (array_filter(array_merge([$histData['password_hash']], $history)) as $oldHash) {
+                    if ($oldHash && password_verify($data['password'], (string)$oldHash)) {
+                        $this->error('Нельзя использовать один из последних 5 паролей', 422);
+                    }
+                }
+                $newHistory = array_slice(array_filter(array_merge([$histData['password_hash']], $history)), 0, 4);
+                $data['password_history'] = json_encode($newHistory, JSON_ENCODE_FLAGS);
             }
         }
 
@@ -177,9 +222,29 @@ class UsersController extends ApiController
             $this->error('Пользователь не найден', 404);
         }
 
+        if (\App\Auth\AccessPolicy::isAdmin($existing['role'] ?? '')
+            && !empty($existing['is_active'])
+            && $this->countOtherActiveAdmins($id) === 0) {
+            $this->error('Нельзя деактивировать последнего администратора', 422);
+        }
+
         $this->repo->deactivate($id);
         $this->logAction('users', $id, 'DELETE', $existing, null);
         $this->json(['message' => 'Пользователь деактивирован']);
+    }
+
+    /**
+     * Количество других активных администраторов (кроме указанного пользователя).
+     * Роли нормализуются через AccessPolicy: админом считается только строка "admin"
+     * (без учёта регистра); legacy "manager" — модератор.
+     */
+    private function countOtherActiveAdmins(int $excludeId): int
+    {
+        $stmt = $this->db->prepare(
+            "SELECT COUNT(*) FROM users WHERE LOWER(role) = 'admin' AND is_active = TRUE AND id != ?"
+        );
+        $stmt->execute([$excludeId]);
+        return (int)$stmt->fetchColumn();
     }
 }
 

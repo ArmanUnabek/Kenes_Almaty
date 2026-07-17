@@ -7,6 +7,9 @@ class CsrfMiddleware
     private const TOKEN_LENGTH = 32;
     private const TOKEN_NAME = '_csrf_token';
     private const HEADER_NAME = 'X-CSRF-Token';
+    private const PREV_TOKEN_NAME = '_csrf_token_prev';
+    private const PREV_TOKEN_TIME = '_csrf_token_prev_at';
+    private const PREV_TOKEN_TTL = 60;
 
     public static function init(): void
     {
@@ -46,11 +49,36 @@ class CsrfMiddleware
 
         $sessionToken = $_SESSION[self::TOKEN_NAME] ?? null;
 
-        if (!$sessionToken || !hash_equals($sessionToken, $token)) {
-            return false;
+        $matchesCurrent = $sessionToken && hash_equals($sessionToken, $token);
+
+        if (!$matchesCurrent) {
+            // Accept the previous token within a short grace window
+            // to tolerate parallel requests during rotation.
+            $prevToken  = $_SESSION[self::PREV_TOKEN_NAME] ?? null;
+            $prevTime   = $_SESSION[self::PREV_TOKEN_TIME] ?? null;
+            $prevValid  = $prevToken
+                && is_numeric($prevTime)
+                && (time() - (int)$prevTime) <= self::PREV_TOKEN_TTL
+                && hash_equals($prevToken, $token);
+
+            if (!$prevValid) {
+                return false;
+            }
+
+            // Matched the previous token: do NOT rotate again, just expose
+            // the current token so the client can resynchronize.
+            if (!headers_sent()) {
+                header('X-New-CSRF-Token: ' . $sessionToken);
+            }
+
+            return true;
         }
 
         // Rotate token after each successful mutation to limit the validity window.
+        // Keep the old token valid for a short grace window for in-flight requests.
+        $_SESSION[self::PREV_TOKEN_NAME] = $sessionToken;
+        $_SESSION[self::PREV_TOKEN_TIME] = time();
+
         $newToken = bin2hex(random_bytes(self::TOKEN_LENGTH));
         $_SESSION[self::TOKEN_NAME] = $newToken;
         if (!headers_sent()) {

@@ -18,7 +18,7 @@ header('Content-Type: application/json; charset=utf-8');
 $expectedSecret = defined('TELEGRAM_WEBHOOK_SECRET') ? TELEGRAM_WEBHOOK_SECRET : '';
 $incomingSecret = $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ?? '';
 
-if ($expectedSecret === '' || $incomingSecret !== $expectedSecret) {
+if ($expectedSecret === '' || !hash_equals($expectedSecret, $incomingSecret)) {
     http_response_code(403);
     echo json_encode(['error' => 'Forbidden']);
     exit;
@@ -237,27 +237,28 @@ function botStatus(\PDO $db, string $chatId): void
 
     $regionId = $user['region_id'] ? (int)$user['region_id'] : null;
 
-    $today = date('Y-m-d');
+    $today     = date('Y-m-d');
+    $in3days   = date('Y-m-d', strtotime('+3 days'));
 
     if ($regionId) {
         $stmt = $db->prepare("
             SELECT
                 SUM(CASE WHEN deadline_date < ? AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS overdue,
-                SUM(CASE WHEN deadline_date BETWEEN ? AND DATE_ADD(?, INTERVAL 3 DAY) AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS urgent,
-                SUM(CASE WHEN deadline_date > DATE_ADD(?, INTERVAL 3 DAY) AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS pending
+                SUM(CASE WHEN deadline_date BETWEEN ? AND ? AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS urgent,
+                SUM(CASE WHEN deadline_date > ? AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS pending
             FROM incoming_letters
             WHERE region_id = ?
         ");
-        $stmt->execute([$today, $today, $today, $today, $regionId]);
+        $stmt->execute([$today, $today, $in3days, $in3days, $regionId]);
     } else {
         $stmt = $db->prepare("
             SELECT
                 SUM(CASE WHEN deadline_date < ? AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS overdue,
-                SUM(CASE WHEN deadline_date BETWEEN ? AND DATE_ADD(?, INTERVAL 3 DAY) AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS urgent,
-                SUM(CASE WHEN deadline_date > DATE_ADD(?, INTERVAL 3 DAY) AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS pending
+                SUM(CASE WHEN deadline_date BETWEEN ? AND ? AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS urgent,
+                SUM(CASE WHEN deadline_date > ? AND deleted_at IS NULL AND linked_outgoing_id IS NULL THEN 1 ELSE 0 END) AS pending
             FROM incoming_letters
         ");
-        $stmt->execute([$today, $today, $today, $today]);
+        $stmt->execute([$today, $today, $in3days, $in3days]);
     }
 
     $stats = $stmt->fetch();

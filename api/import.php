@@ -224,7 +224,8 @@ foreach ($lines as $line) {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        $errors[] = ['row' => $rowNum, 'message' => 'Ошибка вставки: ' . $e->getMessage()];
+        $detail = (getenv('APP_ENV') === 'development') ? $e->getMessage() : 'Внутренняя ошибка';
+        $errors[] = ['row' => $rowNum, 'message' => 'Ошибка вставки: ' . $detail];
         $skipped++;
         error_log('import.php row ' . $rowNum . ': ' . $e->getMessage());
     }

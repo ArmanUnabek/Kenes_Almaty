@@ -20,7 +20,12 @@ $isCli = php_sapi_name() === 'cli';
 if (!$isCli) {
     header('Content-Type: application/json; charset=utf-8');
     $expectedToken = envValue('CRON_TOKEN');
-    $providedToken = $_GET['token'] ?? '';
+    $headerToken = '';
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+        $headerToken = $headers['X-Cron-Token'] ?? $headers['x-cron-token'] ?? '';
+    }
+    $providedToken = $headerToken ?: ($_GET['token'] ?? '');
     if (!is_string($expectedToken) || $expectedToken === ''
         || !is_string($providedToken)
         || !hash_equals($expectedToken, $providedToken)) {
@@ -110,6 +115,24 @@ try {
     $result['rate_limit_files_deleted'] = $cleaned;
 } catch (\Throwable $e) {
     $errors[] = 'rate_limit_files: ' . $e->getMessage();
+}
+
+// ─── 7. Application logs (older than 30 days) ──────────────────────────────
+try {
+    $logDir = __DIR__ . '/logs';
+    $logCleaned = 0;
+    if (is_dir($logDir)) {
+        $threshold = time() - (30 * 86400);
+        foreach (glob($logDir . '/*.log') as $file) {
+            if (is_file($file) && filemtime($file) < $threshold) {
+                unlink($file);
+                $logCleaned++;
+            }
+        }
+    }
+    $result['log_files_deleted'] = $logCleaned;
+} catch (\Throwable $e) {
+    $errors[] = 'log_files: ' . $e->getMessage();
 }
 
 $result['errors'] = $errors;

@@ -44,7 +44,7 @@ try {
 
     if ($isInstalled) {
         // В проекте вся логика авторизации/SPA в статичных файлах.
-        $entry = file_exists(__DIR__ . '/login.html') ? 'login.html' : 'index.html';
+        $entry = file_exists(__DIR__ . '/login.php') ? 'login.php' : 'index.html';
         safeRedirect($entry);
     } else {
         // Database not installed - show error instead of redirecting to non-existent file
@@ -85,6 +85,7 @@ try {
     }
 } catch (\Throwable $e) {
     http_response_code(500);
+    error_log('DB connection error in index.php: ' . $e->getMessage());
     $message = 'Не удалось подключиться к базе данных. Проверьте config.php.';
     if (php_sapi_name() !== 'cli') {
         ?>
@@ -110,10 +111,7 @@ try {
                 Проверьте параметры <code>DB_HOST</code>, <code>DB_USER</code>, <code>DB_PASS</code> и <code>DB_NAME</code> в файле <code>config.php</code>.<br>
                 После исправления обновите страницу.
             </p>
-            <details class="trace">
-                <summary>Технические детали</summary>
-                <?= htmlspecialchars($e->getMessage(), ENT_NOQUOTES, 'UTF-8'); ?>
-            </details>
+            <p class="hint">Подробности ошибки записаны в системный лог.</p>
         </div>
         </body>
         </html>

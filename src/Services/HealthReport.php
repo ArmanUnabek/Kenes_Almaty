@@ -17,7 +17,13 @@ final class HealthReport
      */
     public static function isHealthy(array $checks): bool
     {
-        return !empty($checks['database']) && !empty($checks['uploads_writable']);
+        if (empty($checks['database']) || empty($checks['uploads_writable'])) {
+            return false;
+        }
+        if (isset($checks['disk_space_ok']) && !$checks['disk_space_ok']) {
+            return false;
+        }
+        return true;
     }
 
     /**

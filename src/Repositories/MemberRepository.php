@@ -80,14 +80,25 @@ class MemberRepository
             $params[] = $commissionId;
         }
 
-        $countQuery = str_replace(
-            ['SELECT m.*, c.name as commission_name, c.color as commission_color, c.sort_order as commission_sort_order', 'ORDER BY'],
-            ['SELECT COUNT(*) as cnt', 'LIMIT 1 ORDER BY'],
-            $query
-        );
+        $countQuery = "
+            SELECT COUNT(*) as cnt
+            FROM os_members m
+            LEFT JOIN commissions c ON m.commission_id = c.id
+            WHERE m.status = 'active'
+        ";
+
+        $countParams = [];
+        if ($regionId) {
+            $countQuery .= " AND m.region_id = ?";
+            $countParams[] = $regionId;
+        }
+        if ($commissionId) {
+            $countQuery .= " AND m.commission_id = ?";
+            $countParams[] = $commissionId;
+        }
 
         $stmtCount = $this->db->prepare($countQuery);
-        $stmtCount->execute($params);
+        $stmtCount->execute($countParams);
         $total = (int)$stmtCount->fetch()['cnt'];
 
         $query .= " ORDER BY (m.commission_id IS NULL) DESC, COALESCE(c.sort_order, 999), m.full_name LIMIT ? OFFSET ?";
@@ -185,7 +196,7 @@ class MemberRepository
         return $stmt->execute($params);
     }
 
-    public function getByCommission(int $commissionId, ?int $regionId = null): array
+    public function getByCommission(int $commissionId, ?int $regionId = null, int $limit = 200, int $offset = 0): array
     {
         $query = "
             SELECT * FROM os_members 
@@ -198,7 +209,9 @@ class MemberRepository
             $params[] = $regionId;
         }
 
-        $query .= " ORDER BY full_name";
+        $query .= " ORDER BY full_name LIMIT ? OFFSET ?";
+        $params[] = $limit;
+        $params[] = $offset;
 
         $stmt = $this->db->prepare($query);
         $stmt->execute($params);

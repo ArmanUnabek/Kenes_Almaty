@@ -60,27 +60,27 @@ class PhotoUploadController extends ApiController
             $dbPath  = 'uploads/photos/' . $filename;      // относительный, хранится в БД
 
             $oldPhoto = $this->memberRepo->getPhotoPath($member_id);
-            if ($oldPhoto) {
-                // The stored path comes from the DB — confine deletion to the
-                // uploads directory so a tampered value can't unlink elsewhere.
-                $candidate = APP_ROOT . '/' . ltrim($oldPhoto, '/');
-                $safeOld = \App\Services\FileStorage::pathWithinBase(APP_ROOT . '/uploads', $candidate);
-                if ($safeOld !== null && is_file($safeOld)) {
-                    @unlink($safeOld);
-                }
-            }
 
             if (!move_uploaded_file($file['tmp_name'], $absPath)) {
                 $this->error('Ошибка сохранения файла', 500);
             }
 
             $this->memberRepo->updatePhotoPath($member_id, $dbPath);
+
+            // Delete old file only after new one is safely written and DB updated
+            if ($oldPhoto) {
+                $candidate = APP_ROOT . '/' . ltrim($oldPhoto, '/');
+                $safeOld = \App\Services\FileStorage::pathWithinBase(APP_ROOT . '/uploads', $candidate);
+                if ($safeOld !== null && is_file($safeOld)) {
+                    @unlink($safeOld);
+                }
+            }
             $this->logAction('os_members', $member_id, 'UPDATE_PHOTO', null, ['photo_path' => $dbPath]);
 
             $this->success([
                 'photo_url' => MemberRepository::photoApiUrl($member_id, (string)time()),
             ], 'Фото успешно загружено', 201);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->handleException($e, 'PhotoUploadController');
         }
     }
@@ -89,7 +89,8 @@ class PhotoUploadController extends ApiController
     {
         $allowedMimeMap = [
             'image/jpeg' => 'jpg',
-            'image/png' => 'png',
+            'image/png'  => 'png',
+            'image/webp' => 'webp',
         ];
 
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
@@ -99,7 +100,7 @@ class PhotoUploadController extends ApiController
         }
 
         if (!$detectedMime || !isset($allowedMimeMap[$detectedMime])) {
-            $this->error('Недопустимый тип файла. Разрешены только JPG и PNG', 400);
+            $this->error('Недопустимый тип файла. Разрешены только JPG, PNG и WebP', 400);
         }
 
         if ($file['size'] > MAX_FILE_SIZE) {
@@ -111,7 +112,8 @@ class PhotoUploadController extends ApiController
     {
         $allowedMimeMap = [
             'image/jpeg' => 'jpg',
-            'image/png' => 'png',
+            'image/png'  => 'png',
+            'image/webp' => 'webp',
         ];
 
         $finfo = finfo_open(FILEINFO_MIME_TYPE);

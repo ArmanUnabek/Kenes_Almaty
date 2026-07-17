@@ -1,8 +1,3 @@
-SET NAMES utf8mb4;
--- База данных для журнала Общественного Совета
--- Мульти-региональная версия для всех городов Казахстана
--- Создание базы данных
-
 
 
 -- Таблица регионов/городов
@@ -15,7 +10,6 @@ CREATE TABLE IF NOT EXISTS regions (
     settings JSON COMMENT 'Настройки региона',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_code (code),
     INDEX idx_active (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -24,36 +18,45 @@ CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(100) UNIQUE NOT NULL COMMENT 'Логин',
     email VARCHAR(255) UNIQUE NOT NULL COMMENT 'Email',
-    password_hash VARCHAR(255) NOT NULL COMMENT 'Хеш пароля',
+    password_hash VARCHAR(255) NOT NULL COMMENT 'Хеш пароля',       
     full_name VARCHAR(255) NOT NULL COMMENT 'ФИО',
-    role ENUM('admin', 'manager', 'viewer') DEFAULT 'viewer' COMMENT 'Роль',
+    role ENUM('admin', 'moderator', 'viewer') DEFAULT 'viewer' COMMENT 'Роль',
     region_id INT COMMENT 'ID региона (NULL для админов)',
+    member_id INT NULL COMMENT 'ID связанного члена ОС (os_members.id)',
+    photo VARCHAR(500) NULL COMMENT 'Путь к фото профиля',
     is_active BOOLEAN DEFAULT TRUE COMMENT 'Активен ли пользователь',
     last_login TIMESTAMP NULL COMMENT 'Последний вход',
     totp_secret VARCHAR(64) NULL COMMENT 'Base32 секрет TOTP (2FA)',
     totp_enabled BOOLEAN DEFAULT FALSE COMMENT 'Включена ли двухфакторная аутентификация',
     totp_backup_codes TEXT NULL COMMENT 'JSON: хэши резервных кодов 2FA',
+    password_history TEXT NULL COMMENT 'JSON: хэши последних 5 паролей (для запрета повторного использования)',
     telegram_chat_id VARCHAR(50) NULL DEFAULT NULL COMMENT 'Telegram chat_id для уведомлений',
+    allowed_ips TEXT NULL COMMENT 'JSON массив разрешённых IP (null = без ограничений)',
+    sms_phone VARCHAR(20) NULL COMMENT 'Телефон для SMS-уведомлений',
+    push_enabled BOOLEAN DEFAULT TRUE COMMENT 'Разрешить web push-уведомления',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE SET NULL,
-    INDEX idx_username (username),
-    INDEX idx_email (email),
     INDEX idx_region (region_id),
-    INDEX idx_role (role)
+    INDEX idx_role (role),
+    INDEX idx_is_active (is_active),
+    INDEX idx_full_name (full_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Таблица сессий
 CREATE TABLE IF NOT EXISTS user_sessions (
     id VARCHAR(128) PRIMARY KEY COMMENT 'ID сессии',
-    user_id INT NOT NULL COMMENT 'ID пользователя',
+    user_id INT NULL COMMENT 'ID пользователя (NULL для анонимных сессий)',
+    data TEXT COMMENT 'Данные сессии (PdoSessionHandler)',
     ip_address VARCHAR(45) COMMENT 'IP адрес',
     user_agent TEXT COMMENT 'User Agent',
     expires_at TIMESTAMP NOT NULL COMMENT 'Время истечения',
+    last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Последняя активность',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_user (user_id),
-    INDEX idx_expires (expires_at)
+    INDEX idx_expires (expires_at),
+    INDEX idx_last_active (last_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Таблица комиссий (теперь с привязкой к региону)
@@ -68,7 +71,8 @@ CREATE TABLE IF NOT EXISTS commissions (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE CASCADE,
     INDEX idx_region (region_id),
-    INDEX idx_name (name)
+    INDEX idx_name (name),
+    INDEX idx_sort_order (sort_order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Таблица членов ОС (теперь с привязкой к региону)
@@ -95,7 +99,10 @@ CREATE TABLE IF NOT EXISTS os_members (
     FOREIGN KEY (commission_id) REFERENCES commissions(id) ON DELETE SET NULL,
     INDEX idx_region (region_id),
     INDEX idx_commission (commission_id),
-    INDEX idx_status (status)
+    INDEX idx_status (status),
+    INDEX idx_region_status (region_id, status),
+    INDEX idx_email (email),
+    INDEX idx_full_name (full_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Таблица входящих писем (обновленная структура с регионом)
@@ -109,18 +116,27 @@ CREATE TABLE IF NOT EXISTS incoming_letters (
     category ENUM('KK', 'N', 'JT', 'ZT') DEFAULT 'KK' COMMENT 'Категория',
     subject TEXT COMMENT 'Тема/Краткое содержание',
     note TEXT COMMENT 'Примечание',
+    deadline_date DATE NULL COMMENT 'Срок ответа (15 рабочих дней от date)',
     linked_outgoing_id INT NULL COMMENT 'ID связанного исходящего письма',
     responds_to_outgoing_id INT NULL COMMENT 'ID исходящего, на которое это входящее является ответом',
+    deleted_at TIMESTAMP NULL DEFAULT NULL COMMENT 'Мягкое удаление',
+    deleted_by INT NULL COMMENT 'Кто удалил',
     created_by INT COMMENT 'ID пользователя, создавшего запись',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (deleted_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_region (region_id),
     INDEX idx_date (date),
     INDEX idx_seq (seq),
     INDEX idx_category (category),
     INDEX idx_linked (linked_outgoing_id),
+    INDEX idx_region_date (region_id, date),
+    INDEX idx_kk_number (kk_number),
+    INDEX idx_deadline (deadline_date),
+    INDEX idx_deleted (deleted_at),
+    INDEX idx_responds_to (responds_to_outgoing_id),
     UNIQUE KEY unique_region_seq (region_id, seq)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -136,16 +152,22 @@ CREATE TABLE IF NOT EXISTS outgoing_letters (
     outgoing_type ENUM('gov','jt','zt','recommend','other') NOT NULL DEFAULT 'gov' COMMENT 'Тип исходящего письма',
     subject TEXT COMMENT 'Тема/Краткое содержание',
     note TEXT COMMENT 'Примечание',
+    deleted_at TIMESTAMP NULL DEFAULT NULL COMMENT 'Мягкое удаление',
+    deleted_by INT NULL COMMENT 'Кто удалил',
     created_by INT COMMENT 'ID пользователя, создавшего запись',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE CASCADE,
     FOREIGN KEY (incoming_ref_id) REFERENCES incoming_letters(id) ON DELETE CASCADE,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (deleted_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_region (region_id),
     INDEX idx_date (date),
     INDEX idx_seq (seq),
     INDEX idx_incoming_ref (incoming_ref_id),
+    INDEX idx_region_date (region_id, date),
+    INDEX idx_outgoing_number (outgoing_number),
+    INDEX idx_deleted (deleted_at),
     UNIQUE KEY unique_region_seq (region_id, seq)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -154,12 +176,17 @@ CREATE TABLE IF NOT EXISTS letter_scans (
     id INT AUTO_INCREMENT PRIMARY KEY,
     letter_type ENUM('incoming', 'outgoing') NOT NULL COMMENT 'Тип письма',
     letter_id INT NOT NULL COMMENT 'ID письма',
-    scan_data LONGTEXT NOT NULL COMMENT 'Base64 данные скана',
+    file_path VARCHAR(500) NULL COMMENT 'Путь к файлу на диске (uploads/scans/)',
+    scan_data LONGTEXT NULL COMMENT 'Base64 данные скана (legacy, если нет file_path)',
     scan_type VARCHAR(50) NOT NULL COMMENT 'Тип файла (image/jpeg, application/pdf)',
     file_name VARCHAR(255) COMMENT 'Имя файла',
     file_size INT COMMENT 'Размер файла в байтах',
+    version INT NOT NULL DEFAULT 1 COMMENT 'Номер версии файла',
+    parent_scan_id INT NULL COMMENT 'ID предыдущей версии (NULL для первой)',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_letter (letter_type, letter_id)
+    INDEX idx_letter (letter_type, letter_id),
+    INDEX idx_created_at (created_at),
+    INDEX idx_parent (parent_scan_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Таблица связи писем с комиссиями
@@ -190,7 +217,8 @@ CREATE TABLE IF NOT EXISTS activity_logs (
     INDEX idx_user (user_id),
     INDEX idx_region (region_id),
     INDEX idx_action (action),
-    INDEX idx_created (created_at)
+    INDEX idx_created (created_at),
+    INDEX idx_entity (entity_type, entity_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Ответственные члены ОС по письмам
@@ -203,8 +231,519 @@ CREATE TABLE IF NOT EXISTS letter_members (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_letter_member (letter_type, letter_id, member_id),
     INDEX idx_letter (letter_type, letter_id),
+    INDEX idx_member_id (member_id),
+    INDEX idx_is_lead (is_lead),
     CONSTRAINT fk_letter_members_member FOREIGN KEY (member_id) REFERENCES os_members(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Адресаты писем (получатели)
+CREATE TABLE IF NOT EXISTS letter_recipients (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    letter_type ENUM('incoming','outgoing') NOT NULL COMMENT 'Тип письма',
+    letter_id INT NOT NULL COMMENT 'ID письма',
+    recipient VARCHAR(255) NOT NULL COMMENT 'Адресат',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_letter (letter_type, letter_id),
+    INDEX idx_recipient (recipient)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Кэш приложения
+CREATE TABLE IF NOT EXISTS cache (
+    key_name VARCHAR(255) PRIMARY KEY,
+    value LONGTEXT NOT NULL,
+    expires_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Rate limiting
+CREATE TABLE IF NOT EXISTS rate_limits (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ip_address VARCHAR(45) NOT NULL,
+    endpoint VARCHAR(255) NOT NULL,
+    request_count INT DEFAULT 1,
+    reset_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_ip_endpoint (ip_address, endpoint),
+    INDEX idx_reset (reset_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- CSRF-токены
+CREATE TABLE IF NOT EXISTS csrf_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    token VARCHAR(255) UNIQUE NOT NULL,
+    user_id INT,
+    ip_address VARCHAR(45),
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Аудит (расширенная версия activity_logs)
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    region_id INT,
+    table_name VARCHAR(100),
+    operation VARCHAR(50) COMMENT 'INSERT, UPDATE, DELETE, EXPORT, DOWNLOAD',
+    record_id INT,
+    old_values JSON,
+    new_values JSON,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE SET NULL,
+    INDEX idx_user (user_id),
+    INDEX idx_region (region_id),
+    INDEX idx_table (table_name),
+    INDEX idx_record_id (record_id),
+    INDEX idx_operation (operation),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- In-app уведомления
+CREATE TABLE IF NOT EXISTS notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT,
+    type VARCHAR(50) COMMENT 'info, warning, error, success',
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMP NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user (user_id),
+    INDEX idx_read (is_read),
+    INDEX idx_created (created_at),
+    INDEX idx_user_read (user_id, is_read)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Статистика
+CREATE TABLE IF NOT EXISTS statistics (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    region_id INT NOT NULL,
+    metric_name VARCHAR(100) NOT NULL,
+    metric_value INT DEFAULT 0,
+    metric_date DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_metric (region_id, metric_name, metric_date),
+    INDEX idx_region (region_id),
+    INDEX idx_date (metric_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Мероприятия
+CREATE TABLE IF NOT EXISTS events (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    region_id INT COMMENT 'ID региона',
+    title VARCHAR(255) NOT NULL COMMENT 'Название мероприятия',
+    event_date DATE NOT NULL COMMENT 'Дата проведения',
+    location VARCHAR(255) COMMENT 'Место проведения',
+    location_url VARCHAR(500) NULL COMMENT 'Ссылка 2GIS на место проведения',
+    participants_total INT DEFAULT 0 COMMENT 'Всего участников',
+    attendance_percent DECIMAL(5,2) DEFAULT 0 COMMENT 'Процент явки',
+    notes TEXT COMMENT 'Примечание',
+    description TEXT NULL COMMENT 'Описание мероприятия (программа, цели)',
+    created_by INT COMMENT 'ID пользователя, создавшего запись',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_region (region_id),
+    INDEX idx_event_date (event_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS event_kpi (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    event_id INT NOT NULL COMMENT 'ID мероприятия',
+    metric VARCHAR(255) NOT NULL COMMENT 'Название метрики',
+    value_numeric DECIMAL(15,2) NULL COMMENT 'Числовое значение',
+    value_text VARCHAR(255) NULL COMMENT 'Текстовое значение',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+    INDEX idx_event (event_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS event_attendees (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    event_id INT NOT NULL COMMENT 'ID мероприятия',
+    full_name VARCHAR(255) NOT NULL COMMENT 'ФИО участника',
+    attended TINYINT(1) DEFAULT 0 COMMENT 'Присутствовал ли (1/0)',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+    INDEX idx_event (event_id),
+    INDEX idx_full_name (full_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- RSVP членов ОС на мероприятия (предварительный отклик)
+CREATE TABLE IF NOT EXISTS event_rsvp (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    event_id INT NOT NULL COMMENT 'ID мероприятия',
+    member_id INT NOT NULL COMMENT 'ID члена ОС',
+    status ENUM('confirmed','declined','maybe') NOT NULL DEFAULT 'confirmed' COMMENT 'Отклик',
+    responded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_event_member (event_id, member_id),
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+    FOREIGN KEY (member_id) REFERENCES os_members(id) ON DELETE CASCADE,
+    INDEX idx_event (event_id),
+    INDEX idx_member (member_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Отклики членов ОС на мероприятия';
+
+-- Очередь исходящих email
+CREATE TABLE IF NOT EXISTS email_queue (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    recipient_email VARCHAR(255) NOT NULL COMMENT 'Email получателя',
+    subject VARCHAR(255) NOT NULL COMMENT 'Тема',
+    body_html LONGTEXT COMMENT 'HTML тело письма',
+    body_text LONGTEXT COMMENT 'Текстовое тело письма',
+    message_id VARCHAR(255) NULL COMMENT 'RFC 2822 Message-ID header',
+    in_reply_to VARCHAR(255) NULL COMMENT 'References original Message-ID for replies',
+    thread_id VARCHAR(255) NULL COMMENT 'Groups related emails in same thread',
+    status ENUM('queued','sent','failed') NOT NULL DEFAULT 'queued' COMMENT 'Статус отправки',
+    error TEXT NULL COMMENT 'Текст ошибки при отправке',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    sent_at TIMESTAMP NULL COMMENT 'Время отправки',
+    INDEX idx_status (status),
+    INDEX idx_created (created_at),
+    INDEX idx_status_created (status, created_at),
+    INDEX idx_dedup (recipient_email, status, created_at),
+    INDEX idx_message_id (message_id),
+    INDEX idx_thread_id (thread_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Комментарии к письмам
+CREATE TABLE IF NOT EXISTS letter_comments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    letter_type ENUM('incoming','outgoing') NOT NULL COMMENT 'Тип письма',
+    letter_id INT NOT NULL COMMENT 'ID письма',
+    user_id INT NOT NULL COMMENT 'ID пользователя',
+    comment TEXT NOT NULL COMMENT 'Текст комментария',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_letter (letter_type, letter_id),
+    INDEX idx_user (user_id),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Шаблоны писем
+CREATE TABLE IF NOT EXISTS letter_templates (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    region_id INT NOT NULL COMMENT 'ID региона',
+    name VARCHAR(255) NOT NULL COMMENT 'Название шаблона',
+    letter_type ENUM('incoming','outgoing') NOT NULL COMMENT 'Тип письма',
+    organization VARCHAR(255) COMMENT 'Организация по умолчанию',
+    subject TEXT COMMENT 'Тема по умолчанию',
+    note TEXT COMMENT 'Примечание по умолчанию',
+    category ENUM('KK','N','JT','ZT') DEFAULT 'KK' COMMENT 'Категория',
+    created_by INT COMMENT 'ID пользователя, создавшего шаблон',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_region_type (region_id, letter_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Сброс пароля
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    token CHAR(64) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_prt_token (token),
+    INDEX idx_prt_expires (expires_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Telegram: вход и привязка аккаунта
+CREATE TABLE IF NOT EXISTS telegram_login_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    token VARCHAR(64) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_tlt_token (token),
+    INDEX idx_tlt_expires (expires_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS telegram_link_codes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    code VARCHAR(6) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_tlc_code (code),
+    INDEX idx_tlc_expires (expires_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- =============================================================================
+-- Новые таблицы расширенного функционала
+-- =============================================================================
+
+-- Активные сессии пользователей (реальное использование user_sessions)
+-- Таблица уже создана выше; сессии теперь записываются при логине.
+
+-- Webhook-система
+CREATE TABLE IF NOT EXISTS webhooks (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    url TEXT NOT NULL,
+    secret VARCHAR(128) NOT NULL COMMENT 'Для подписи HMAC-SHA256',
+    events JSON NOT NULL COMMENT 'Массив событий: letter.created, letter.updated, etc.',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS webhook_deliveries (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    webhook_id INT NOT NULL,
+    event VARCHAR(100) NOT NULL,
+    payload JSON NOT NULL,
+    response_code SMALLINT NULL,
+    response_body TEXT NULL,
+    delivered_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (webhook_id) REFERENCES webhooks(id) ON DELETE CASCADE,
+    INDEX idx_webhook (webhook_id),
+    INDEX idx_event (event),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- API-ключи для машинного доступа
+CREATE TABLE IF NOT EXISTS api_keys (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    key_hash CHAR(64) NOT NULL COMMENT 'SHA-256 хэш ключа',
+    permissions JSON NULL COMMENT 'NULL = все права; иначе массив эндпоинтов',
+    last_used_at TIMESTAMP NULL,
+    expires_at DATETIME NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_key_hash (key_hash),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user (user_id),
+    INDEX idx_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Маршруты согласования писем
+CREATE TABLE IF NOT EXISTS approval_chains (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    region_id INT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    letter_type ENUM('incoming','outgoing','both') DEFAULT 'both',
+    steps JSON NOT NULL COMMENT '[{role, user_id, label}]',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE CASCADE,
+    INDEX idx_region (region_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS letter_approvals (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    letter_type ENUM('incoming','outgoing') NOT NULL,
+    letter_id INT NOT NULL,
+    chain_id INT NOT NULL,
+    current_step INT DEFAULT 0,
+    status ENUM('pending','approved','rejected','cancelled') DEFAULT 'pending',
+    started_by INT NOT NULL,
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP NULL,
+    FOREIGN KEY (chain_id) REFERENCES approval_chains(id),
+    FOREIGN KEY (started_by) REFERENCES users(id),
+    INDEX idx_letter (letter_type, letter_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS approval_decisions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    approval_id INT NOT NULL,
+    step_index INT NOT NULL,
+    user_id INT NOT NULL,
+    decision ENUM('approved','rejected') NOT NULL,
+    comment TEXT NULL,
+    decided_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (approval_id) REFERENCES letter_approvals(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    INDEX idx_approval (approval_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- SMS-очередь
+CREATE TABLE IF NOT EXISTS sms_queue (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    phone VARCHAR(20) NOT NULL,
+    message TEXT NOT NULL,
+    status ENUM('queued','sent','failed') DEFAULT 'queued',
+    provider VARCHAR(50) DEFAULT 'mobizon',
+    error TEXT NULL,
+    sent_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_status (status),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Web Push подписки (VAPID)
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    endpoint TEXT NOT NULL,
+    p256dh VARCHAR(512) NOT NULL,
+    auth VARCHAR(255) NOT NULL,
+    user_agent VARCHAR(500) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Сохранённые поисковые запросы
+CREATE TABLE IF NOT EXISTS saved_searches (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    params JSON NOT NULL COMMENT 'Параметры: q, type, date_from, date_to, status, etc.',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Правила авто-назначения писем
+CREATE TABLE IF NOT EXISTS auto_assignment_rules (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    region_id INT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    letter_type ENUM('incoming','outgoing','both') DEFAULT 'incoming',
+    conditions JSON NOT NULL COMMENT '{category, keywords[], sender_pattern}',
+    commission_id INT NULL,
+    member_id INT NULL,
+    priority INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE CASCADE,
+    FOREIGN KEY (commission_id) REFERENCES commissions(id) ON DELETE SET NULL,
+    FOREIGN KEY (member_id) REFERENCES os_members(id) ON DELETE SET NULL,
+    INDEX idx_region (region_id),
+    INDEX idx_priority (priority)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- История входов (обнаружение аномалий)
+CREATE TABLE IF NOT EXISTS login_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,
+    username VARCHAR(100) NULL,
+    ip_address VARCHAR(45) NOT NULL,
+    user_agent TEXT NULL,
+    status ENUM('success','failed','blocked') NOT NULL,
+    failure_reason VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_user (user_id),
+    INDEX idx_ip (ip_address),
+    INDEX idx_status (status),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Обращения граждан (публичная форма appeal.php)
+CREATE TABLE IF NOT EXISTS citizen_appeals (
+    id                 INT AUTO_INCREMENT PRIMARY KEY,
+    appeal_number      VARCHAR(50)  UNIQUE NULL COMMENT 'ОС-2026-0001',
+    region_id          INT          NULL COMMENT 'Район ОС',
+    full_name          VARCHAR(255) NOT NULL COMMENT 'ФИО заявителя',
+    email              VARCHAR(255) NULL,
+    phone              VARCHAR(50)  NULL,
+    subject            VARCHAR(500) NOT NULL COMMENT 'Тема обращения',
+    message            TEXT         NOT NULL COMMENT 'Текст обращения',
+    category           ENUM('complaint','suggestion','question','request','other') DEFAULT 'other',
+    status             ENUM('new','in_review','responded','closed') DEFAULT 'new',
+    assigned_member_id INT          NULL COMMENT 'Назначенный член ОС',
+    response_text      TEXT         NULL COMMENT 'Текст ответа',
+    responded_at       TIMESTAMP    NULL,
+    responded_by       INT          NULL COMMENT 'ID пользователя, ответившего',
+    ip_address         VARCHAR(45)  NULL,
+    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (region_id)          REFERENCES regions(id)    ON DELETE SET NULL,
+    FOREIGN KEY (assigned_member_id) REFERENCES os_members(id) ON DELETE SET NULL,
+    FOREIGN KEY (responded_by)       REFERENCES users(id)      ON DELETE SET NULL,
+    INDEX idx_status  (status),
+    INDEX idx_region  (region_id),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Обращения граждан';
+
+-- Система миграций схемы
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version VARCHAR(255) NOT NULL PRIMARY KEY,
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================================================
+-- Автоматический расчёт deadline_date (15 рабочих дней, пн–пт)
+-- =============================================================================
+
+DROP FUNCTION IF EXISTS fn_add_working_days;
+DROP TRIGGER IF EXISTS trg_incoming_letters_deadline_ins;
+DROP TRIGGER IF EXISTS trg_incoming_letters_deadline_upd;
+
+DELIMITER //
+CREATE FUNCTION fn_add_working_days(start_date DATE, num_days INT)
+RETURNS DATE
+DETERMINISTIC
+READS SQL DATA
+BEGIN
+    DECLARE result DATE;
+    DECLARE remaining INT;
+    SET result = start_date;
+    SET remaining = num_days;
+    WHILE remaining > 0 DO
+        SET result = DATE_ADD(result, INTERVAL 1 DAY);
+        IF DAYOFWEEK(result) NOT IN (1, 7) THEN
+            SET remaining = remaining - 1;
+        END IF;
+    END WHILE;
+    RETURN result;
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_incoming_letters_deadline_ins
+BEFORE INSERT ON incoming_letters
+FOR EACH ROW
+BEGIN
+    IF NEW.date IS NOT NULL THEN
+        SET NEW.deadline_date = fn_add_working_days(NEW.date, 15);
+    END IF;
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_incoming_letters_deadline_upd
+BEFORE UPDATE ON incoming_letters
+FOR EACH ROW
+BEGIN
+    IF NEW.date IS NOT NULL AND (OLD.date IS NULL OR NEW.date <> OLD.date) THEN
+        SET NEW.deadline_date = fn_add_working_days(NEW.date, 15);
+    END IF;
+END //
+DELIMITER ;
+
+-- =============================================================================
+-- Начальные данные
+-- =============================================================================
 
 -- Вставка регионов (начиная с Алматы)
 INSERT INTO regions (name_kz, name_ru, code, is_active) VALUES
@@ -317,249 +856,50 @@ COMMIT;
 
 
 
--- Создание администратора по умолчанию (пароль: admin123)
--- ВАЖНО: Измените пароль после первого входа!
+-- Пользователи по умолчанию (пароль: admin123). Смените пароль после первого входа!
 INSERT INTO users (username, email, password_hash, full_name, role, region_id, is_active) VALUES
 ('admin', 'admin@os.kz', '$2y$10$TbciE4B1a553Q.yz6lrMq.KmpA74QGWOxpPrn6nAHk8do3aDfk6mK', 'Администратор системы', 'admin', NULL, TRUE),
-('moderator', 'moderator@os.kz', '$2y$10$TbciE4B1a553Q.yz6lrMq.KmpA74QGWOxpPrn6nAHk8do3aDfk6mK', 'Модератор', 'manager', 1, TRUE),
+('moderator', 'moderator@os.kz', '$2y$10$TbciE4B1a553Q.yz6lrMq.KmpA74QGWOxpPrn6nAHk8do3aDfk6mK', 'Модератор', 'moderator', 1, TRUE),
 ('viewer', 'viewer@os.kz', '$2y$10$TbciE4B1a553Q.yz6lrMq.KmpA74QGWOxpPrn6nAHk8do3aDfk6mK', 'Просмотрщик', 'viewer', 1, TRUE)
 ON DUPLICATE KEY UPDATE username=username;
 
--- Таблица для кэширования
-CREATE TABLE IF NOT EXISTS cache (
-    key_name VARCHAR(255) PRIMARY KEY,
-    value LONGTEXT NOT NULL,
-    expires_at TIMESTAMP NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_expires (expires_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- =============================================================================
+-- Дополнительные составные индексы (результат аудита)
+-- =============================================================================
 
--- Таблица для rate limiting
-CREATE TABLE IF NOT EXISTS rate_limits (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    ip_address VARCHAR(45) NOT NULL,
-    endpoint VARCHAR(255) NOT NULL,
-    request_count INT DEFAULT 1,
-    reset_at TIMESTAMP NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_ip_endpoint (ip_address, endpoint),
-    INDEX idx_reset (reset_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX IF NOT EXISTS idx_incoming_region_deleted_date ON incoming_letters (region_id, deleted_at, date DESC);
+CREATE INDEX IF NOT EXISTS idx_outgoing_region_deleted_date ON outgoing_letters (region_id, deleted_at, date DESC);
+CREATE INDEX IF NOT EXISTS idx_letter_comments_created_at ON letter_comments (created_at);
 
--- Таблица для CSRF токенов
-CREATE TABLE IF NOT EXISTS csrf_tokens (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    token VARCHAR(255) UNIQUE NOT NULL,
-    user_id INT,
-    ip_address VARCHAR(45),
-    expires_at TIMESTAMP NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_token (token),
-    INDEX idx_expires (expires_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- =============================================================================
+-- FULLTEXT индексы для поиска
+-- MySQL не поддерживает "ADD FULLTEXT INDEX IF NOT EXISTS" — используем процедуру.
+-- =============================================================================
 
--- Таблица для аудит логов (расширенная версия activity_logs)
-CREATE TABLE IF NOT EXISTS audit_logs (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    region_id INT,
-    table_name VARCHAR(100),
-    operation VARCHAR(50) COMMENT 'INSERT, UPDATE, DELETE',
-    record_id INT,
-    old_values JSON,
-    new_values JSON,
-    ip_address VARCHAR(45),
-    user_agent TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
-    FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE SET NULL,
-    INDEX idx_user (user_id),
-    INDEX idx_region (region_id),
-    INDEX idx_table (table_name),
-    INDEX idx_created (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DELIMITER $$
 
--- Таблица для уведомлений
-CREATE TABLE IF NOT EXISTS notifications (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    title VARCHAR(255) NOT NULL,
-    message TEXT,
-    type VARCHAR(50) COMMENT 'info, warning, error, success',
-    is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    read_at TIMESTAMP NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_user (user_id),
-    INDEX idx_read (is_read),
-    INDEX idx_created (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DROP PROCEDURE IF EXISTS _add_ft $$
+CREATE PROCEDURE _add_ft(IN p_table VARCHAR(64), IN p_index VARCHAR(64), IN p_cols VARCHAR(255))
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name   = p_table
+          AND index_name   = p_index
+          AND index_type   = 'FULLTEXT'
+    ) THEN
+        SET @ddl = CONCAT('ALTER TABLE `', p_table, '` ADD FULLTEXT INDEX `', p_index, '` (', p_cols, ')');
+        PREPARE stmt FROM @ddl;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END $$
 
--- Таблица для статистики
-CREATE TABLE IF NOT EXISTS statistics (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    region_id INT NOT NULL,
-    metric_name VARCHAR(100) NOT NULL,
-    metric_value INT DEFAULT 0,
-    metric_date DATE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_metric (region_id, metric_name, metric_date),
-    INDEX idx_region (region_id),
-    INDEX idx_date (metric_date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DELIMITER ;
 
--- Адресаты писем (получатели), используется в letters/kpi/advanced_stats
-CREATE TABLE IF NOT EXISTS letter_recipients (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    letter_type ENUM('incoming','outgoing') NOT NULL COMMENT 'Тип письма',
-    letter_id INT NOT NULL COMMENT 'ID письма',
-    recipient VARCHAR(255) NOT NULL COMMENT 'Адресат',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_letter (letter_type, letter_id),
-    INDEX idx_recipient (recipient)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CALL _add_ft('incoming_letters', 'ft_incoming_search',  'organization, kk_number, subject, note');
+CALL _add_ft('outgoing_letters', 'ft_outgoing_search',  'outgoing_number, subject, note');
+CALL _add_ft('os_members',       'ft_members_search',   'full_name, position, organization');
+CALL _add_ft('citizen_appeals',  'ft_appeals_search',   'full_name, subject, message');
 
--- Мероприятия (используется api/events.php и api/kpi.php)
-CREATE TABLE IF NOT EXISTS events (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    region_id INT COMMENT 'ID региона',
-    title VARCHAR(255) NOT NULL COMMENT 'Название мероприятия',
-    event_date DATE NOT NULL COMMENT 'Дата проведения',
-    location VARCHAR(255) COMMENT 'Место проведения',
-    participants_total INT DEFAULT 0 COMMENT 'Всего участников',
-    attendance_percent DECIMAL(5,2) DEFAULT 0 COMMENT 'Процент явки',
-    notes TEXT COMMENT 'Примечание',
-    created_by INT COMMENT 'ID пользователя, создавшего запись',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE SET NULL,
-    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
-    INDEX idx_region (region_id),
-    INDEX idx_event_date (event_date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- KPI мероприятий
-CREATE TABLE IF NOT EXISTS event_kpi (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    event_id INT NOT NULL COMMENT 'ID мероприятия',
-    metric VARCHAR(255) NOT NULL COMMENT 'Название метрики',
-    value_numeric DECIMAL(15,2) NULL COMMENT 'Числовое значение',
-    value_text VARCHAR(255) NULL COMMENT 'Текстовое значение',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
-    INDEX idx_event (event_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Участники мероприятий
-CREATE TABLE IF NOT EXISTS event_attendees (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    event_id INT NOT NULL COMMENT 'ID мероприятия',
-    full_name VARCHAR(255) NOT NULL COMMENT 'ФИО участника',
-    attended TINYINT(1) DEFAULT 0 COMMENT 'Присутствовал ли (1/0)',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
-    INDEX idx_event (event_id),
-    INDEX idx_full_name (full_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Очередь исходящих email (используется api/notifications.php и src/Services/EmailService.php)
-CREATE TABLE IF NOT EXISTS email_queue (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    recipient_email VARCHAR(255) NOT NULL COMMENT 'Email получателя',
-    subject VARCHAR(255) NOT NULL COMMENT 'Тема',
-    body_html LONGTEXT COMMENT 'HTML тело письма',
-    body_text LONGTEXT COMMENT 'Текстовое тело письма',
-    status ENUM('queued','sent','failed') NOT NULL DEFAULT 'queued' COMMENT 'Статус отправки',
-    error TEXT NULL COMMENT 'Текст ошибки при отправке',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    sent_at TIMESTAMP NULL COMMENT 'Время отправки',
-    INDEX idx_status (status),
-    INDEX idx_created (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Комментарии к письмам
-CREATE TABLE IF NOT EXISTS letter_comments (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    letter_type ENUM('incoming','outgoing') NOT NULL COMMENT 'Тип письма',
-    letter_id INT NOT NULL COMMENT 'ID письма',
-    user_id INT NOT NULL COMMENT 'ID пользователя',
-    comment TEXT NOT NULL COMMENT 'Текст комментария',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_letter (letter_type, letter_id),
-    INDEX idx_user (user_id),
-    INDEX idx_created (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Шаблоны писем
-CREATE TABLE IF NOT EXISTS letter_templates (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    region_id INT NOT NULL COMMENT 'ID региона',
-    name VARCHAR(255) NOT NULL COMMENT 'Название шаблона',
-    letter_type ENUM('incoming','outgoing') NOT NULL COMMENT 'Тип письма',
-    organization VARCHAR(255) COMMENT 'Организация по умолчанию',
-    subject TEXT COMMENT 'Тема по умолчанию',
-    note TEXT COMMENT 'Примечание по умолчанию',
-    category ENUM('KK','N','JT','ZT') DEFAULT 'KK' COMMENT 'Категория',
-    created_by INT COMMENT 'ID пользователя, создавшего шаблон',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE CASCADE,
-    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
-    INDEX idx_region_type (region_id, letter_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ============================================================
--- Таблицы функций #20 (сброс пароля, Telegram-бот, кэш переводов).
--- Создаются и в рантайме (db.php), но включены сюда для полноты схемы.
--- ============================================================
-
-CREATE TABLE IF NOT EXISTS password_reset_tokens (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    token CHAR(64) NOT NULL,
-    expires_at DATETIME NOT NULL,
-    used_at DATETIME NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_prt_token (token),
-    INDEX idx_prt_expires (expires_at),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS telegram_login_tokens (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    token VARCHAR(64) NOT NULL,
-    expires_at DATETIME NOT NULL,
-    used_at DATETIME NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_tlt_token (token),
-    INDEX idx_tlt_expires (expires_at),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS telegram_link_codes (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    code VARCHAR(6) NOT NULL,
-    expires_at DATETIME NOT NULL,
-    used_at DATETIME NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_tlc_code (code),
-    INDEX idx_tlc_expires (expires_at),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS translation_cache (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    source_hash CHAR(64) NOT NULL,
-    source_lang VARCHAR(5) NOT NULL,
-    target_lang VARCHAR(5) NOT NULL,
-    source_text TEXT NOT NULL,
-    translated_text TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_translation_hash (source_hash, source_lang, target_lang)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DROP PROCEDURE IF EXISTS _add_ft;

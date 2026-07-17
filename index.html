@@ -10,18 +10,9 @@
     </style>
 </head>
 <body>
+    <noscript>
+        <p style="text-align:center;padding:40px;font-family:Inter,sans-serif;">Для работы приложения необходимо включить JavaScript.</p>
+    </noscript>
     <p id="redirectMsg">Перенаправление…</p>
-    <script>
-      (function () {
-        const lang = localStorage.getItem('os_journal_lang') === 'kz' ? 'kk' : 'ru';
-        document.documentElement.lang = lang;
-        if (lang === 'kk') {
-          document.title = 'ОС журналы — бағыттау';
-          const el = document.getElementById('redirectMsg');
-          if (el) el.textContent = 'Бағыттау…';
-        }
-        window.location.replace('/api/');
-      })();
-    </script>
 </body>
 </html>

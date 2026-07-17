@@ -26,7 +26,7 @@ window.fetch = async function(...args) {
     const method = (config?.method || 'GET').toUpperCase();
 
     // Add CSRF token for state-changing requests
-    if (['POST', 'PUT', 'DELETE'].includes(method)) {
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
         const token = await getCsrfToken();
         if (token) {
             if (!config) args[1] = {};

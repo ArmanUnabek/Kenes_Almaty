@@ -42,7 +42,7 @@ class FileCache
             'expires_at' => time() + max(1, $ttlSeconds),
             'value' => $value,
         ];
-        @file_put_contents($this->pathFor($key), json_encode($payload, JSON_ENCODE_FLAGS));
+        @file_put_contents($this->pathFor($key), json_encode($payload, JSON_ENCODE_FLAGS), LOCK_EX);
     }
 
     public function forget(string $key): void

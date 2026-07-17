@@ -82,7 +82,7 @@
   function syncUserToStorage(user) {
     if (!user) return;
     try {
-      localStorage.setItem('user', JSON.stringify(user));
+      sessionStorage.setItem('user', JSON.stringify(user));
     } catch (_) { /* ignore */ }
   }
 
@@ -113,12 +113,28 @@
    * `window.fetch` из csrf-handler.js, поэтому CSRF-токен подставляется как обычно.
    */
   async function fetchJson(url, opts) {
-    const response = await fetch(url, opts);
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error || body.message || `HTTP ${response.status}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const mergedOpts = { ...opts, signal: controller.signal };
+    try {
+      const response = await fetch(url, mergedOpts);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || body.message || `HTTP ${response.status}`);
+      }
+      return response.json().catch((e) => { console.error('JSON parse error:', e); return null; });
+    } finally {
+      clearTimeout(timeoutId);
     }
-    return response.json().catch(() => ({}));
+  }
+
+  function monthKey(iso) {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  function unique(values) {
+    return Array.from(new Set(values));
   }
 
   window.AppUtils = {
@@ -135,6 +151,8 @@
     getPendingLettersSummary,
     asList,
     fetchJson,
+    monthKey,
+    unique,
     RESPONSE_WORKING_DAYS,
     WARN_WORKING_DAYS_BEFORE,
   };

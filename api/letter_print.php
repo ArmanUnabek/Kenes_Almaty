@@ -6,8 +6,15 @@
 
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../auth_middleware.php';
+require_once __DIR__ . '/../src/Middleware/RateLimiter.php';
+require_once __DIR__ . '/../src/Services/QrService.php';
+
+use App\Middleware\RateLimiter;
+use App\Services\QrService;
 
 checkAuth();
+$userId = (int)$_SESSION['user_id'];
+RateLimiter::requireCheck('print_' . $userId, 60, 3600);
 
 $type = $_GET['type'] ?? 'incoming';
 $id   = (int)($_GET['id'] ?? 0);
@@ -63,6 +70,9 @@ $recipients = array_column($stmtR->fetchAll(), 'recipient');
 
 $typeLabel = $type === 'incoming' ? 'Входящее письмо' : 'Исходящее письмо';
 
+$qrUrl  = (APP_URL ?: '') . '/api/?view=letters&id=' . $id;
+$qrSrc  = QrService::toBase64Src($qrUrl, 150);
+
 if ($type === 'incoming') {
     $num = 'Вх. №' . ($letter['seq'] ?? '—');
     if (!empty($letter['kk_number'])) $num .= ' / ' . $letter['kk_number'];
@@ -89,10 +99,13 @@ header('Content-Type: text/html; charset=utf-8');
     color: #000;
     background: #fff;
   }
-  .header { text-align: center; margin-bottom: 1.5cm; }
+  .header { text-align: center; margin-bottom: 1.5cm; position: relative; }
   .header h1 { font-size: 16pt; font-weight: bold; margin: 0 0 4pt; }
   .header .num { font-size: 13pt; color: #444; margin: 0; }
   .header .date { font-size: 9pt; color: #777; margin-top: 4pt; }
+  .qr-code { position: absolute; top: 0; right: 0; text-align: center; }
+  .qr-code img { display: block; }
+  .qr-code .qr-label { font-size: 7pt; color: #999; margin-top: 2pt; }
   table.fields {
     width: 100%;
     border-collapse: collapse;
@@ -159,6 +172,12 @@ header('Content-Type: text/html; charset=utf-8');
 </div>
 
 <div class="header">
+  <?php if ($qrSrc): ?>
+  <div class="qr-code">
+    <img src="<?= $qrSrc ?>" width="100" height="100" alt="QR-код">
+    <span class="qr-label">Сканируйте для просмотра</span>
+  </div>
+  <?php endif; ?>
   <h1><?= htmlspecialchars($typeLabel) ?></h1>
   <p class="num"><?= htmlspecialchars($num) ?></p>
   <p class="date">Распечатано: <?= htmlspecialchars($printDate) ?></p>

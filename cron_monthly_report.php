@@ -17,7 +17,12 @@ $isCli = php_sapi_name() === 'cli';
 if (!$isCli) {
     header('Content-Type: application/json; charset=utf-8');
     $expectedToken = envValue('CRON_TOKEN');
-    $providedToken = $_GET['token'] ?? '';
+    $headerToken = '';
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+        $headerToken = $headers['X-Cron-Token'] ?? $headers['x-cron-token'] ?? '';
+    }
+    $providedToken = $headerToken ?: ($_GET['token'] ?? '');
     if (!is_string($expectedToken) || $expectedToken === ''
         || !is_string($providedToken)
         || !hash_equals($expectedToken, $providedToken)) {
@@ -40,44 +45,111 @@ try {
 
     // Fetch regions
     $regions = $db->query("SELECT id, name_ru FROM regions WHERE is_active = TRUE ORDER BY name_ru")->fetchAll();
+    $regionIds = array_map(fn($r) => (int)$r['id'], $regions);
+
+    if (empty($regionIds)) {
+        if ($isCli) {
+            echo '[' . date('Y-m-d H:i:s') . '] regions=0 emails_queued=0' . PHP_EOL;
+        } else {
+            echo json_encode([
+                'regions_processed' => 0,
+                'emails_queued'     => 0,
+                'period'            => "{$monthFrom} — {$monthTo}",
+                'timestamp'         => (new DateTime('now'))->format(DATE_ATOM),
+            ], JSON_ENCODE_FLAGS);
+        }
+        exit;
+    }
 
     $reportsQueued = 0;
     $smtpEnabled   = defined('SMTP_HOST') && SMTP_HOST !== '';
+
+    // Batch: counts per region (1 query for incoming, 1 for outgoing)
+    $countsByRegion = [];
+    if (!empty($regionIds)) {
+        $inList = implode(',', $regionIds);
+        $stmtCounts = $db->prepare("
+            SELECT region_id, 'incoming' AS t, COUNT(*) AS cnt
+            FROM incoming_letters WHERE region_id IN ($inList) AND date BETWEEN ? AND ?
+            GROUP BY region_id
+            UNION ALL
+            SELECT region_id, 'outgoing' AS t, COUNT(*) AS cnt
+            FROM outgoing_letters WHERE region_id IN ($inList) AND date BETWEEN ? AND ?
+            GROUP BY region_id
+        ");
+        $stmtCounts->execute([$monthFrom, $monthTo, $monthFrom, $monthTo]);
+        foreach ($stmtCounts->fetchAll() as $row) {
+            $rid = (int)$row['region_id'];
+            $countsByRegion[$rid][$row['t']] = (int)$row['cnt'];
+        }
+    }
+
+    // Batch: top organizations per region (1 query, grouped in PHP)
+    $topOrgsByRegion = [];
+    if (!empty($regionIds)) {
+        $stmtOrgs = $db->prepare("
+            SELECT region_id, organization, cnt FROM (
+                SELECT region_id, organization, COUNT(*) AS cnt,
+                       ROW_NUMBER() OVER (PARTITION BY region_id ORDER BY COUNT(*) DESC) AS rn
+                FROM incoming_letters
+                WHERE region_id IN ($inList) AND date BETWEEN ? AND ?
+                GROUP BY region_id, organization
+            ) ranked WHERE rn <= 5
+        ");
+        $stmtOrgs->execute([$monthFrom, $monthTo]);
+        foreach ($stmtOrgs->fetchAll() as $row) {
+            $topOrgsByRegion[(int)$row['region_id']][] = $row;
+        }
+    }
+
+    // Batch: most active members per region (1 query, grouped in PHP)
+    $topMembersByRegion = [];
+    if (!empty($regionIds)) {
+        $stmtMembers = $db->prepare("
+            SELECT il.region_id, m.full_name, cnt FROM (
+                SELECT il2.region_id, lm.member_id, COUNT(DISTINCT lm.letter_id) AS cnt,
+                       ROW_NUMBER() OVER (PARTITION BY il2.region_id ORDER BY COUNT(DISTINCT lm.letter_id) DESC) AS rn
+                FROM letter_members lm
+                JOIN incoming_letters il2 ON lm.letter_type = 'incoming' AND lm.letter_id = il2.id
+                WHERE il2.region_id IN ($inList) AND il2.date BETWEEN ? AND ?
+                GROUP BY il2.region_id, lm.member_id
+            ) ranked
+            JOIN os_members m ON ranked.member_id = m.id
+            WHERE rn <= 5
+        ");
+        $stmtMembers->execute([$monthFrom, $monthTo]);
+        foreach ($stmtMembers->fetchAll() as $row) {
+            $topMembersByRegion[(int)$row['region_id']][] = $row;
+        }
+    }
+
+    // Batch: recipients per region (1 query)
+    $recipientsByRegion = [];
+    if ($smtpEnabled && !empty($regionIds)) {
+        $stmtRecip = $db->prepare("
+            SELECT region_id, email FROM users
+            WHERE is_active = TRUE
+              AND email IS NOT NULL AND email != ''
+              AND role IN ('admin', 'moderator')
+              AND (region_id IN ($inList) OR role = 'admin')
+        ");
+        $stmtRecip->execute();
+        foreach ($stmtRecip->fetchAll() as $row) {
+            $recipientsByRegion[(int)$row['region_id']][] = $row['email'];
+            if ((int)$row['region_id'] === 0) {
+                continue;
+            }
+        }
+    }
 
     foreach ($regions as $region) {
         $regionId   = (int)$region['id'];
         $regionName = $region['name_ru'];
 
-        // Count letters
-        $stmtIn = $db->prepare("SELECT COUNT(*) FROM incoming_letters WHERE region_id = ? AND date BETWEEN ? AND ?");
-        $stmtIn->execute([$regionId, $monthFrom, $monthTo]);
-        $incomingCount = (int)$stmtIn->fetchColumn();
-
-        $stmtOut = $db->prepare("SELECT COUNT(*) FROM outgoing_letters WHERE region_id = ? AND date BETWEEN ? AND ?");
-        $stmtOut->execute([$regionId, $monthFrom, $monthTo]);
-        $outgoingCount = (int)$stmtOut->fetchColumn();
-
-        // Top organizations by incoming
-        $stmtOrgs = $db->prepare("
-            SELECT organization, COUNT(*) AS cnt
-            FROM incoming_letters
-            WHERE region_id = ? AND date BETWEEN ? AND ?
-            GROUP BY organization ORDER BY cnt DESC LIMIT 5
-        ");
-        $stmtOrgs->execute([$regionId, $monthFrom, $monthTo]);
-        $topOrgs = $stmtOrgs->fetchAll();
-
-        // Most active members
-        $stmtMembers = $db->prepare("
-            SELECT m.full_name, COUNT(DISTINCT lm.letter_id) AS cnt
-            FROM letter_members lm
-            JOIN os_members m ON lm.member_id = m.id
-            JOIN incoming_letters il ON lm.letter_type = 'incoming' AND lm.letter_id = il.id
-            WHERE il.region_id = ? AND il.date BETWEEN ? AND ?
-            GROUP BY m.id ORDER BY cnt DESC LIMIT 5
-        ");
-        $stmtMembers->execute([$regionId, $monthFrom, $monthTo]);
-        $topMembers = $stmtMembers->fetchAll();
+        $incomingCount = $countsByRegion[$regionId]['incoming'] ?? 0;
+        $outgoingCount = $countsByRegion[$regionId]['outgoing'] ?? 0;
+        $topOrgs = $topOrgsByRegion[$regionId] ?? [];
+        $topMembers = $topMembersByRegion[$regionId] ?? [];
 
         // Build HTML email
         $regionNameEsc = htmlspecialchars($regionName, ENT_QUOTES, 'UTF-8');
@@ -135,15 +207,10 @@ try {
         }
 
         // Send to all moderators/admins of this region
-        $stmtRecip = $db->prepare("
-            SELECT DISTINCT email FROM users
-            WHERE is_active = TRUE
-              AND email IS NOT NULL AND email != ''
-              AND (region_id = ? OR role = 'admin')
-              AND role IN ('admin', 'manager')
-        ");
-        $stmtRecip->execute([$regionId]);
-        $recipients = $stmtRecip->fetchAll(\PDO::FETCH_COLUMN);
+        $recipients = array_unique(array_merge(
+            $recipientsByRegion[$regionId] ?? [],
+            $recipientsByRegion[0] ?? []  // admins (region_id=0 or NULL)
+        ));
 
         $subject = "Отчёт за " . $firstOfMonth->format('m.Y') . " — {$regionName}";
         foreach ($recipients as $email) {

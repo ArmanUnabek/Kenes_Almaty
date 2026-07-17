@@ -6,7 +6,7 @@
 
   function redirectToLogin() {
     if (!window.location.pathname.endsWith('login.html')) {
-      localStorage.removeItem('user');
+      sessionStorage.removeItem('user');
       window.location.href = LOGIN_URL;
     }
   }

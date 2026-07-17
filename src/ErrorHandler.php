@@ -60,6 +60,11 @@ class ErrorHandler
 
     public static function handleException(\Throwable $e): void
     {
+        if ($e instanceof \App\Auth\AccessDenied) {
+            self::sendErrorResponse($e->getMessage(), $e->getStatus());
+            exit(1);
+        }
+
         $message = sprintf(
             "%s: %s in %s on line %d\nStack trace:\n%s",
             get_class($e),
@@ -104,7 +109,7 @@ class ErrorHandler
 
         echo json_encode(
             ['error' => $message, 'code' => $code],
-            JSON_ENCODE_FLAGS
+            defined('JSON_ENCODE_FLAGS') ? JSON_ENCODE_FLAGS : (JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
         );
     }
 }

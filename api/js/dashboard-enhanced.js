@@ -1,6 +1,32 @@
 (function () {
-  const API = '/api';
+  const API = window.AppCore?.API_BASE || '/api';
   let advancedStatsCache = null;
+  let funnelChart = null;
+
+  window.AppI18n?.register?.({
+    ru: {
+      'dash.funnel.title': 'Воронка сроков',
+      'dash.funnel.on_track': 'В срок',
+      'dash.funnel.due_soon': 'Дедлайн ≤3 дня',
+      'dash.funnel.overdue': 'Просрочено',
+      'dash.funnel.answered': 'Отвечено',
+      'dash.funnel.letters': 'Писем',
+      'dash.heatmap.title': 'Теплокарта нагрузки',
+      'dash.heatmap.cell': '{letters} писем · {people} чел.',
+      'dash.export.chart': 'Скачать график PNG'
+    },
+    kz: {
+      'dash.funnel.title': 'Мерзімдер воронкасы',
+      'dash.funnel.on_track': 'Мерзімінде',
+      'dash.funnel.due_soon': 'Дедлайн ≤3 күн',
+      'dash.funnel.overdue': 'Мерзімі өткен',
+      'dash.funnel.answered': 'Жауап берілді',
+      'dash.funnel.letters': 'Хаттар',
+      'dash.heatmap.title': 'Жүктеме жылу картасы',
+      'dash.heatmap.cell': '{letters} хат · {people} адам',
+      'dash.export.chart': 'Графикті PNG форматында жүктеу'
+    }
+  });
 
   function t(key, fb) {
     return window.AppI18n?.t(key, fb) ?? fb;
@@ -53,6 +79,114 @@
     }).join('');
   }
 
+  function renderDeadlineFunnel(stats) {
+    const canvas = document.getElementById('chartDeadlineFunnel');
+    const funnel = stats?.deadline_funnel;
+    if (!canvas || !funnel || typeof Chart === 'undefined') return;
+
+    const labels = [
+      t('dash.funnel.on_track', 'В срок'),
+      t('dash.funnel.due_soon', 'Дедлайн ≤3 дня'),
+      t('dash.funnel.overdue', 'Просрочено'),
+      t('dash.funnel.answered', 'Отвечено')
+    ];
+    const data = [
+      Number(funnel.on_track) || 0,
+      Number(funnel.due_soon) || 0,
+      Number(funnel.overdue) || 0,
+      Number(funnel.answered) || 0
+    ];
+
+    if (funnelChart) funnelChart.destroy();
+    funnelChart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: t('dash.funnel.letters', 'Писем'),
+          data,
+          backgroundColor: ['#10B981', '#F59E0B', '#EF4444', '#1D4ED8'],
+          borderRadius: 4
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { backgroundColor: 'rgba(15, 27, 51, 0.92)', padding: 12, cornerRadius: 8 }
+        },
+        scales: {
+          x: { beginAtZero: true, ticks: { color: '#6B7280', precision: 0 }, grid: { borderDash: [2, 4], color: 'rgba(107,114,128,0.25)' } },
+          y: { grid: { display: false }, ticks: { color: '#6B7280' } }
+        }
+      }
+    });
+  }
+
+  function renderCommissionHeatmap(stats) {
+    const wrap = document.getElementById('commissionHeatmapWrap');
+    const grid = document.getElementById('commissionHeatmap');
+    const rows = stats?.commission_performance;
+    if (!wrap || !grid) return;
+    if (!rows?.length) {
+      wrap.classList.add('d-none');
+      return;
+    }
+    const totals = rows.map((c) => (Number(c.incoming_count) || 0) + (Number(c.outgoing_count) || 0));
+    const max = Math.max(...totals, 1);
+    grid.innerHTML = rows.map((c, i) => {
+      const total = totals[i];
+      const level = Math.min(4, Math.round((total / max) * 4));
+      const meta = fmt('dash.heatmap.cell', { letters: total, people: Number(c.members_count) || 0 });
+      return `
+        <div class="heatmap-cell heat-${level}" title="${escapeHtml(c.name || '')} — ${escapeHtml(meta)}">
+          <div class="heatmap-cell__name">${escapeHtml(c.name || t('dash.enh.commission', 'Комиссия'))}</div>
+          <div class="heatmap-cell__meta">${escapeHtml(meta)}</div>
+        </div>`;
+    }).join('');
+    const title = document.getElementById('commissionHeatmapTitle');
+    if (title) title.textContent = t('dash.heatmap.title', 'Теплокарта нагрузки');
+    wrap.classList.remove('d-none');
+  }
+
+  function exportChartPng(canvasId) {
+    const src = document.getElementById(canvasId);
+    if (!src || !src.width) return;
+    const tmp = document.createElement('canvas');
+    tmp.width = src.width;
+    tmp.height = src.height;
+    const ctx = tmp.getContext('2d');
+    ctx.fillStyle = document.body.classList.contains('dark-mode') ? '#1F2937' : '#FFFFFF';
+    ctx.fillRect(0, 0, tmp.width, tmp.height);
+    ctx.drawImage(src, 0, 0);
+    const link = document.createElement('a');
+    link.href = tmp.toDataURL('image/png');
+    link.download = `${canvasId}-${new Date().toISOString().slice(0, 10)}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  function updateExportButtonLabels() {
+    const label = t('dash.export.chart', 'Скачать график PNG');
+    document.querySelectorAll('.chart-export-btn').forEach((btn) => {
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('title', label);
+    });
+  }
+
+  function setupChartExportButtons() {
+    document.querySelectorAll('.chart-export-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const chartId = btn.getAttribute('data-chart');
+        if (chartId) exportChartPng(chartId);
+      });
+    });
+    updateExportButtonLabels();
+  }
+
   function enhanceDashboardInsights(stats) {
     if (!stats) return;
 
@@ -103,6 +237,8 @@
     }
 
     renderCommissionPerformance(stats);
+    renderDeadlineFunnel(stats);
+    renderCommissionHeatmap(stats);
   }
 
   function applyTopOrganizations(stats) {
@@ -126,6 +262,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    setupChartExportButtons();
     const dashTab = document.getElementById('tab-dashboard');
     dashTab?.addEventListener('shown.bs.tab', () => refreshDashboardEnhanced());
     if (document.getElementById('pane-dashboard')?.classList.contains('active')) {
@@ -134,6 +271,7 @@
   });
 
   window.addEventListener('app:langchange', () => {
+    updateExportButtonLabels();
     if (advancedStatsCache) {
       enhanceDashboardInsights(advancedStatsCache);
     }

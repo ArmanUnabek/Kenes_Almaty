@@ -12,12 +12,21 @@ use App\Services\TotpService;
 use App\Services\SecurityAuditService;
 use App\Services\EmailService;
 use App\Services\FileCache;
+use App\Services\SessionManager;
+use App\Services\IpAllowlist;
 
 class AuthController extends ApiController
 {
     public function handle(): void
     {
         $action = $this->getQueryParam('action') ?? $this->getPostParam('action') ?? 'check';
+        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+
+        // Mutations require POST
+        $mutations = ['login', 'logout', 'switch_region', 'totp_setup', 'totp_enable', 'totp_disable', 'tg_link_code', 'forgot_password', 'reset_password'];
+        if (in_array($action, $mutations, true) && $method !== 'POST') {
+            $this->error('Метод не поддерживается. Используйте POST.', 405);
+        }
 
         try {
             switch ($action) {
@@ -66,7 +75,8 @@ class AuthController extends ApiController
     private function handleLogin(): void
     {
         $db = $this->db;
-        $username = $_POST['username'] ?? '';
+        CsrfMiddleware::requireVerification();
+        $username = trim($_POST['username'] ?? '');
         $password = $_POST['password'] ?? '';
         $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 
@@ -84,10 +94,37 @@ class AuthController extends ApiController
             $this->json(['error' => 'Слишком много попыток входа в этот аккаунт. Попробуйте позже.'], 429);
         }
 
-        $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, password_hash, totp_secret, totp_enabled FROM users WHERE username = ? AND is_active = TRUE');
+        // Жёсткая блокировка аккаунта: 8 последовательных неудачных попыток → 15 минут.
+        // Порог поднят с 5 до 8, чтобы затруднить умышленную блокировку чужого аккаунта;
+        // основную защиту от перебора даёт мягкая прогрессивная задержка ниже.
+        $lockCache  = new FileCache();
+        $lockKey    = 'acct_lock_' . md5(strtolower($username));
+        $failKey    = 'acct_fail_' . md5(strtolower($username));
+        $lockedUntil = $lockCache->get($lockKey);
+        if ($lockedUntil && (int)$lockedUntil > time()) {
+            $minLeft = (int)ceil(((int)$lockedUntil - time()) / 60);
+            try {
+                $db->prepare('INSERT INTO login_history (user_id, username, ip_address, user_agent, status, failure_reason) VALUES (NULL, ?, ?, ?, ?, ?)')
+                    ->execute([$username, $ip, $_SERVER['HTTP_USER_AGENT'] ?? null, 'blocked', 'account_locked']);
+            } catch (\Throwable $e) {}
+            $this->json(['error' => "Аккаунт временно заблокирован из-за многократных неудачных попыток входа. Попробуйте через {$minLeft} мин."], 429);
+        }
+
+        // Мягкая прогрессивная задержка перед проверкой пароля: со 2-й неудачи
+        // 1с, 1.5с, 2с... максимум 3с — замедляет перебор, не блокируя аккаунт.
+        $failCount = (int)($lockCache->get($failKey) ?? 0);
+        if ($failCount >= 2) {
+            usleep(min($failCount * 500, 3000) * 1000);
+        }
+
+        $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, password_hash, totp_secret, totp_enabled, updated_at FROM users WHERE username = ? AND is_active = TRUE');
         $stmt->execute([$username]);
         $user = $stmt->fetch();
 
+        if (!$user) {
+            // Dummy hash check to equalize response time and prevent timing-based user enumeration
+            password_verify($password, '$2y$10$usesomesillystringfore7hnbRJHxXVLeakoG8K30oukPsA.ztMG');
+        }
         if (!$user || !password_verify($password, $user['password_hash'])) {
             try {
                 $db->prepare('INSERT INTO activity_logs (user_id, action, entity_type, ip_address) VALUES (NULL, ?, ?, ?)')
@@ -99,6 +136,20 @@ class AuthController extends ApiController
                 SecurityAuditService::log($db, 'LOGIN_FAILED', 'security_events', 0,
                     ['username' => $username, 'ip' => $ip], null);
             } catch (\Throwable $e) {
+            }
+            try {
+                $db->prepare('INSERT INTO login_history (user_id, username, ip_address, user_agent, status, failure_reason) VALUES (?, ?, ?, ?, ?, ?)')
+                    ->execute([$user ? (int)$user['id'] : null, $username, $ip, $_SERVER['HTTP_USER_AGENT'] ?? null, 'failed', 'bad_credentials']);
+            } catch (\Throwable $e) {
+                error_log('login_history insert failed: ' . $e->getMessage());
+            }
+            // Track consecutive failures; hard lock after 8 (progressive delay applies from 2)
+            $failCount = (int)($lockCache->get($failKey) ?? 0) + 1;
+            if ($failCount >= 8) {
+                $lockCache->set($lockKey, time() + 900, 900);
+                $lockCache->forget($failKey);
+            } else {
+                $lockCache->set($failKey, $failCount, 600);
             }
             $this->json(['error' => 'Неверный логин или пароль'], 401);
         }
@@ -145,13 +196,40 @@ class AuthController extends ApiController
             ], 403);
         }
 
+        // IP allowlist check for admin accounts
+        $ipAllowlist = new IpAllowlist($db);
+        if ($isAdminRole && !$ipAllowlist->isAllowed((int)$user['id'], $ip)) {
+            try {
+                SecurityAuditService::log($db, 'IP_BLOCKED_LOGIN', 'security_events', (int)$user['id'],
+                    ['ip' => $ip, 'username' => $user['username']], (int)$user['id']);
+            } catch (\Throwable $e) {}
+            $this->json(['error' => 'Доступ с этого IP-адреса запрещён для вашего аккаунта. Обратитесь к администратору.'], 403);
+        }
+
+        // Сброс счётчика блокировки при успешном входе
+        $lockCache->forget($lockKey);
+        $lockCache->forget($failKey);
+
         session_regenerate_id(true);
+
+        // Remember me — extend session cookie to 30 days
+        $remember = !empty($_POST['remember']);
+        if ($remember) {
+            $params = session_get_cookie_params();
+            setcookie(session_name(), session_id(), time() + 86400 * 30, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+            $_SESSION['_remember'] = true;
+            // Extend server-side session lifetime to 30 days
+            ini_set('session.gc_maxlifetime', 86400 * 30);
+        }
 
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['username'] = $user['username'];
         $_SESSION['role'] = $user['role'];
         $_SESSION['region_id'] = $user['region_id'];
         $_SESSION['last_activity_at'] = time();
+        $_SESSION['_created_at'] = time();
+        // Храним отпечаток хэша пароля (не сам bcrypt-хэш) для инвалидации сессии при смене пароля
+        $_SESSION['pwd_fingerprint'] = hash('sha256', $user['password_hash']);
 
         if ($isAdminRole) {
             $defaultRegion = $user['region_id'] ? (int)$user['region_id'] : 1;
@@ -161,8 +239,63 @@ class AuthController extends ApiController
         $now = date('Y-m-d H:i:s');
         $db->prepare('UPDATE users SET last_login = ? WHERE id = ?')->execute([$now, $user['id']]);
 
+        $freshStmt = $db->prepare('SELECT password_hash FROM users WHERE id = ?');
+        $freshStmt->execute([$user['id']]);
+        $_SESSION['pwd_fingerprint'] = hash('sha256', $freshStmt->fetchColumn() ?: $user['password_hash']);
+
         $db->prepare('INSERT INTO activity_logs (user_id, action, entity_type, ip_address) VALUES (?, ?, ?, ?)')
             ->execute([$user['id'], 'login', 'user', $_SERVER['REMOTE_ADDR'] ?? '']);
+
+        // Login history — success
+        try {
+            $db->prepare('INSERT INTO login_history (user_id, username, ip_address, user_agent, status) VALUES (?, ?, ?, ?, ?)')
+                ->execute([(int)$user['id'], $user['username'], $ip, $_SERVER['HTTP_USER_AGENT'] ?? null, 'success']);
+        } catch (\Throwable $e) {
+            error_log('login_history insert: ' . $e->getMessage());
+        }
+
+        // Record active session via SessionManager
+        $sessionId = session_id();
+        $sessionManager = new SessionManager($db);
+        $sessionManager->trackSession((int)$user['id'], $sessionId, $ip, $_SERVER['HTTP_USER_AGENT'] ?? null);
+
+        // Anomaly detection: alert if new IP for this user and send email notification
+        $isNewIp = false;
+        try {
+            $since30d = date('Y-m-d H:i:s', strtotime('-30 days'));
+            $knownIps = $db->prepare('SELECT DISTINCT ip_address FROM login_history WHERE user_id = ? AND status = ? AND created_at >= ? LIMIT 20');
+            $knownIps->execute([(int)$user['id'], 'success', $since30d]);
+            $knownList = array_column($knownIps->fetchAll(), 'ip_address');
+            if (!empty($knownList) && !in_array($ip, $knownList, true)) {
+                $isNewIp = true;
+                SecurityAuditService::log($db, 'NEW_IP_LOGIN', 'security_events', (int)$user['id'],
+                    ['ip' => $ip, 'known_ips' => $knownList], null);
+            }
+        } catch (\Throwable $e) {
+            // Non-critical
+        }
+
+        // Send email notification for suspicious logins (new IP for admin, or IP not in allowlist)
+        if ($isAdminRole && ($isNewIp || $ipAllowlist->needsConfirmation((int)$user['id'], $ip))) {
+            try {
+                $userEmail = $db->prepare('SELECT email FROM users WHERE id = ?');
+                $userEmail->execute([(int)$user['id']]);
+                $email = $userEmail->fetchColumn();
+                if ($email) {
+                    $ua = htmlspecialchars($_SERVER['HTTP_USER_AGENT'] ?? 'Неизвестно', ENT_QUOTES, 'UTF-8');
+                    $safeIp = htmlspecialchars($ip, ENT_QUOTES, 'UTF-8');
+                    $time = date('d.m.Y H:i:s');
+                    EmailService::enqueue($db, $email,
+                        '⚠️ Вход в аккаунт с нового IP — Журнал ОС',
+                        "<p>В аккаунт <strong>" . htmlspecialchars($user['username'], ENT_QUOTES, 'UTF-8') . "</strong> выполнен вход с нового IP-адреса.</p>
+                         <p><strong>IP:</strong> {$safeIp}<br><strong>Время:</strong> {$time}<br><strong>Браузер:</strong> {$ua}</p>
+                         <p>Если это были не вы — немедленно смените пароль и отзовите активные сессии.</p>"
+                    );
+                }
+            } catch (\Throwable $e) {
+                error_log('Suspicious login email notification failed: ' . $e->getMessage());
+            }
+        }
 
         unset($user['password_hash'], $user['totp_secret']);
         $user = enrichUserPayload($user);
@@ -185,38 +318,45 @@ class AuthController extends ApiController
             return false;
         }
         try {
-            $stmt = $db->prepare('SELECT totp_backup_codes FROM users WHERE id = ?');
+            $db->beginTransaction();
+            $isMysql = stripos($db->getAttribute(\PDO::ATTR_DRIVER_NAME), 'mysql') !== false;
+            $stmt = $db->prepare('SELECT totp_backup_codes FROM users WHERE id = ?' . ($isMysql ? ' FOR UPDATE' : ''));
             $stmt->execute([$userId]);
             $raw = $stmt->fetchColumn();
-        } catch (\Throwable $e) {
-            return false;
-        }
-        if (!$raw) {
-            return false;
-        }
-        $hashes = json_decode((string)$raw, true);
-        if (!is_array($hashes) || !$hashes) {
-            return false;
-        }
-        $idx = TotpService::matchBackupCode($input, $hashes);
-        if ($idx < 0) {
-            return false;
-        }
-        unset($hashes[$idx]);
-        $remaining = array_values($hashes);
-        try {
+            if (!$raw) {
+                $db->rollBack();
+                return false;
+            }
+            $hashes = json_decode((string)$raw, true);
+            if (!is_array($hashes) || !$hashes) {
+                $db->rollBack();
+                return false;
+            }
+            $idx = TotpService::matchBackupCode($input, $hashes);
+            if ($idx < 0) {
+                $db->rollBack();
+                return false;
+            }
+            unset($hashes[$idx]);
+            $remaining = array_values($hashes);
             $db->prepare('UPDATE users SET totp_backup_codes = ? WHERE id = ?')
                 ->execute([json_encode($remaining, JSON_ENCODE_FLAGS), $userId]);
+            $db->commit();
+            return true;
         } catch (\Throwable $e) {
-            error_log('consumeBackupCode update failed: ' . $e->getMessage());
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            error_log('consumeBackupCode failed: ' . $e->getMessage());
+            return false;
         }
-        return true;
     }
 
     private function handleTotpSetup(): void
     {
         $db = $this->db;
         checkAuth();
+        CsrfMiddleware::requireVerification();
         $userId = (int)($_SESSION['user_id'] ?? 0);
         $stmt = $db->prepare('SELECT username, totp_secret, totp_enabled FROM users WHERE id = ?');
         $stmt->execute([$userId]);
@@ -299,13 +439,25 @@ class AuthController extends ApiController
     private function handleLogout(): void
     {
         $db = $this->db;
+        CsrfMiddleware::requireVerification();
         if (isset($_SESSION['user_id'])) {
             $db->prepare('INSERT INTO activity_logs (user_id, action, entity_type, ip_address) VALUES (?, ?, ?, ?)')
                 ->execute([$_SESSION['user_id'], 'logout', 'user', $_SERVER['REMOTE_ADDR'] ?? '']);
         }
+        // Remove active session record
+        try {
+            $sid = session_id();
+            if ($sid) {
+                $db->prepare('DELETE FROM user_sessions WHERE id = ?')->execute([$sid]);
+            }
+        } catch (\Throwable $e) {}
 
         $_SESSION = [];
         session_destroy();
+
+        // Delete session cookie on client
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 3600, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
 
         $this->json([
             'authenticated' => false,
@@ -327,7 +479,7 @@ class AuthController extends ApiController
             $this->json(['error' => 'Только супер-админ может переключать регион'], 403);
         }
 
-        $regionId = (int)($_POST['region_id'] ?? $_GET['region_id'] ?? 0);
+        $regionId = (int)($_POST['region_id'] ?? 0);
         if ($regionId <= 0) {
             $this->json(['error' => 'region_id обязателен'], 400);
         }
@@ -355,11 +507,23 @@ class AuthController extends ApiController
     /**
      * Telegram one-tap login: redirects to the app instead of returning JSON, so
      * it is handled separately (before the controller sets the JSON content-type).
+     *
+     * NOTE: This endpoint uses GET to support redirect-based flows from Telegram.
+     * The one-time token (64-char random, single-use, short-lived) provides CSRF
+     * protection — an attacker cannot craft a valid link without knowing the token.
+     * Ideally this should be POST with CSRF token, but that would break the
+     * Telegram bot redirect flow.
      */
     public static function handleTgLogin(\PDO $db): void
     {
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+            http_response_code(405);
+            echo 'Method not allowed';
+            return;
+        }
+
         $token = $_GET['token'] ?? '';
-        if ($token === '' || strlen($token) !== 64) {
+        if ($token === '' || strlen($token) !== 64 || !ctype_xdigit($token)) {
             http_response_code(400);
             echo 'Invalid token';
             return;
@@ -381,13 +545,20 @@ class AuthController extends ApiController
             return;
         }
 
-        $stmt2 = $db->prepare('SELECT id, username, full_name, role, region_id FROM users WHERE id = ? AND is_active = TRUE');
+        $stmt2 = $db->prepare('SELECT id, username, full_name, role, region_id, totp_enabled FROM users WHERE id = ? AND is_active = TRUE');
         $stmt2->execute([$row['user_id']]);
         $user = $stmt2->fetch();
 
         if (!$user) {
             http_response_code(403);
             echo 'Пользователь не найден';
+            return;
+        }
+
+        // Block Telegram login if 2FA is enabled — user must login with password + TOTP
+        if (!empty($user['totp_enabled'])) {
+            http_response_code(403);
+            echo 'Для пользователя с включённой 2FA вход через Telegram недоступен. Используйте пароль и код аутентификации.';
             return;
         }
 
@@ -408,15 +579,31 @@ class AuthController extends ApiController
         $_SESSION['role']             = $user['role'];
         $_SESSION['region_id']        = $user['region_id'];
         $_SESSION['last_activity_at'] = time();
+        $_SESSION['_created_at']      = time();
 
         $db->prepare('UPDATE users SET last_login = ? WHERE id = ?')->execute([date('Y-m-d H:i:s'), $user['id']]);
+        $freshStmt = $db->prepare('SELECT password_hash FROM users WHERE id = ?');
+        $freshStmt->execute([$user['id']]);
+        $freshHash = $freshStmt->fetchColumn();
+        // Отпечаток хэша пароля (не сам bcrypt-хэш) для инвалидации сессии при смене пароля
+        $_SESSION['pwd_fingerprint'] = $freshHash ? hash('sha256', (string)$freshHash) : null;
         try {
             $db->prepare('INSERT INTO activity_logs (user_id, action, entity_type, ip_address) VALUES (?, ?, ?, ?)')
                ->execute([$user['id'], 'tg_login', 'user', $_SERVER['REMOTE_ADDR'] ?? '']);
         } catch (\Throwable $e) {
         }
 
-        header('Location: /api/');
+        // Register the session in user_sessions — otherwise checkAuth()/validateSession
+        // won't find it and will kill the session on the next request.
+        try {
+            $sessionManager = new SessionManager($db);
+            $sessionManager->trackSession((int)$user['id'], session_id(), $_SERVER['REMOTE_ADDR'] ?? '', $_SERVER['HTTP_USER_AGENT'] ?? null);
+        } catch (\Throwable $e) {
+            error_log('tg_login trackSession failed: ' . $e->getMessage());
+        }
+
+        $appUrl = defined('APP_URL') && APP_URL !== '' ? rtrim(APP_URL, '/') : '';
+        header('Location: ' . $appUrl . '/api/');
     }
 
     private function handleTgLinkCode(): void
@@ -452,6 +639,7 @@ class AuthController extends ApiController
     private function handleForgotPassword(): void
     {
         $db = $this->db;
+        CsrfMiddleware::requireVerification();
         $data = json_decode(file_get_contents('php://input'), true) ?: [];
         $email = trim($data['email'] ?? $_POST['email'] ?? '');
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -478,7 +666,7 @@ class AuthController extends ApiController
                ->execute([$user['id'], $token, $expiresAt]);
 
             $appUrl   = defined('APP_URL') ? rtrim(APP_URL, '/') : '';
-            $resetUrl = $appUrl . '/login.html?action=reset&token=' . $token;
+            $resetUrl = $appUrl . '/login.php?action=reset&token=' . $token;
             $name     = htmlspecialchars($user['full_name'] ?? $user['username'], ENT_QUOTES, 'UTF-8');
 
             $bodyHtml = "
@@ -493,6 +681,11 @@ class AuthController extends ApiController
             } catch (\Throwable $e) {
                 error_log('handleForgotPassword: email enqueue failed: ' . $e->getMessage());
             }
+        } else {
+            // Constant-time dummy operation to prevent timing-based user enumeration
+            try {
+                $db->prepare('SELECT 1 FROM password_reset_tokens WHERE 1 = 0')->execute();
+            } catch (\Throwable $e) {}
         }
 
         $this->json(['message' => 'Если указанный email зарегистрирован, вы получите письмо со ссылкой для сброса пароля.']);
@@ -501,6 +694,7 @@ class AuthController extends ApiController
     private function handleResetPassword(): void
     {
         $db = $this->db;
+        CsrfMiddleware::requireVerification();
         $data  = json_decode(file_get_contents('php://input'), true) ?: [];
         $token = trim($data['token'] ?? '');
         $pass  = $data['password'] ?? '';
@@ -511,6 +705,10 @@ class AuthController extends ApiController
         if (strlen($pass) < 8) {
             $this->json(['error' => 'Пароль должен содержать минимум 8 символов'], 422);
         }
+        $passError = validatePasswordStrength($pass);
+        if ($passError) {
+            $this->json(['error' => $passError], 422);
+        }
 
         // Clean expired tokens
         try {
@@ -518,7 +716,7 @@ class AuthController extends ApiController
         } catch (\Throwable $e) {
         }
 
-        $stmt = $db->prepare('SELECT * FROM password_reset_tokens WHERE token = ? AND used_at IS NULL');
+        $stmt = $db->prepare('SELECT * FROM password_reset_tokens WHERE token = ? AND used_at IS NULL AND expires_at > NOW()');
         $stmt->execute([$token]);
         $row = $stmt->fetch();
 
@@ -526,16 +724,60 @@ class AuthController extends ApiController
             $this->json(['error' => 'Ссылка недействительна или уже использована'], 400);
         }
 
+        // Проверка истории паролей (запрет повторного использования последних 5)
+        $histStmt = $db->prepare('SELECT password_hash, password_history FROM users WHERE id = ?');
+        $histStmt->execute([$row['user_id']]);
+        $histData = $histStmt->fetch();
+        $history = [];
+        $newHistoryJson = null;
+        if ($histData) {
+            $history = json_decode($histData['password_history'] ?? '[]', true) ?: [];
+            foreach (array_filter(array_merge([$histData['password_hash']], $history)) as $oldHash) {
+                if ($oldHash && password_verify($pass, (string)$oldHash)) {
+                    $this->json(['error' => 'Нельзя использовать один из последних 5 паролей'], 422);
+                }
+            }
+            $newHistory = array_slice(array_filter(array_merge([$histData['password_hash']], $history)), 0, 4);
+            $newHistoryJson = json_encode($newHistory, JSON_ENCODE_FLAGS);
+        }
+
         $hash = password_hash($pass, PASSWORD_DEFAULT);
-        $db->prepare('UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?')
-           ->execute([$hash, $row['user_id']]);
+        $db->prepare('UPDATE users SET password_hash = ?, password_history = ?, updated_at = NOW() WHERE id = ?')
+           ->execute([$hash, $newHistoryJson, $row['user_id']]);
         $db->prepare('UPDATE password_reset_tokens SET used_at = NOW() WHERE id = ?')
            ->execute([$row['id']]);
 
-        // Invalidate all sessions for this user
+        // Terminate all active sessions of the user after a password reset
+        try {
+            $sm = new SessionManager($db);
+            $sm->terminateAllSessions((int)$row['user_id']);
+        } catch (\Throwable $e) {
+            error_log('reset_password terminateAllSessions failed: ' . $e->getMessage());
+        }
+
+        // Delete all reset tokens for this user
         try {
             $db->prepare('DELETE FROM password_reset_tokens WHERE user_id = ?')->execute([$row['user_id']]);
         } catch (\Throwable $e) {
+        }
+
+        // Email-уведомление о смене пароля
+        try {
+            $emailStmt = $db->prepare('SELECT email FROM users WHERE id = ?');
+            $emailStmt->execute([$row['user_id']]);
+            $email = $emailStmt->fetchColumn();
+            if ($email) {
+                $safeIp   = htmlspecialchars($_SERVER['REMOTE_ADDR'] ?? 'неизвестно', ENT_QUOTES, 'UTF-8');
+                $safeTime = htmlspecialchars(date('d.m.Y H:i:s'), ENT_QUOTES, 'UTF-8');
+                EmailService::enqueue($db, $email,
+                    'Пароль изменён — Журнал ОС',
+                    "<p>Пароль вашей учётной записи был изменён.</p>
+                     <p><strong>Время:</strong> {$safeTime}<br><strong>IP:</strong> {$safeIp}</p>
+                     <p>Если это были не вы — немедленно обратитесь к администратору.</p>"
+                );
+            }
+        } catch (\Throwable $e) {
+            error_log('reset_password email notification failed: ' . $e->getMessage());
         }
 
         $this->json(['message' => 'Пароль успешно изменён. Теперь вы можете войти.']);
@@ -548,15 +790,10 @@ class AuthController extends ApiController
             $this->json(['authenticated' => false], 401);
         }
 
-        $lastActivity = (int)($_SESSION['last_activity_at'] ?? 0);
-        if ($lastActivity > 0 && (time() - $lastActivity) > SESSION_IDLE_TIMEOUT_SECONDS) {
-            $_SESSION = [];
-            session_destroy();
-            $this->json([
-                'authenticated' => false,
-                'message' => 'Сессия истекла по неактивности',
-            ], 401);
-        }
+        // Full auth validation (terminated sessions, absolute/idle timeouts,
+        // password change, IP allowlist). checkAuth() itself responds with 401
+        // via denyWithStatus() and exits on failure.
+        checkAuth();
 
         $stmt = $db->prepare('SELECT id, username, full_name, role, region_id, email, totp_enabled FROM users WHERE id = ? AND is_active = TRUE');
         $stmt->execute([$_SESSION['user_id']]);

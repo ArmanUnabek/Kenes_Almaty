@@ -18,7 +18,12 @@ if (!$isCli) {
     header('Content-Type: application/json; charset=utf-8');
 
     $expectedToken = envValue('CRON_TOKEN');
-    $providedToken = $_GET['token'] ?? '';
+    $headerToken = '';
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+        $headerToken = $headers['X-Cron-Token'] ?? $headers['x-cron-token'] ?? '';
+    }
+    $providedToken = $headerToken ?: ($_GET['token'] ?? '');
     if (!is_string($expectedToken) || $expectedToken === ''
         || !is_string($providedToken)
         || !hash_equals($expectedToken, $providedToken)) {

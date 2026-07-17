@@ -16,7 +16,12 @@
   Header set X-Frame-Options "SAMEORIGIN"
   Header set Referrer-Policy "strict-origin-when-cross-origin"
   Header set Permissions-Policy "camera=(), microphone=(), geolocation=()"
-  Header set Content-Security-Policy "default-src 'self' https:; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:;"
+  Header setifempty Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
+
+  # Vendor assets are versioned via ?v= — cache aggressively
+  <If "%{REQUEST_URI} =~ m#^/assets/vendor/#">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </If>
 
   # HTML must always be revalidated so version bumps (?v=) in the page take
   # effect immediately after deploy. Static assets keep their long cache above.
@@ -29,6 +34,10 @@ Options -Indexes
 DirectoryIndex index.php index.html
 
 RewriteEngine On
+
+RewriteRule ^login\.html$ login.php [L]
+RewriteRule ^api/index\.html$ api/index.php [L]
+RewriteRule ^api/docs/index\.html$ api/docs/index.php [L]
 
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
@@ -45,7 +54,7 @@ RewriteRule ^.*$ index.php [L]
 </IfModule>
 
 # Запрет доступа к чувствительным файлам (совместимо с Apache 2.2 и 2.4)
-<FilesMatch "^(config\.php|\.htaccess|\.env.*|composer\.(json|lock))$">
+<FilesMatch "^(config\.php|\.htaccess|\.env.*|composer\.(json|lock)|db\.php|auth_middleware\.php|setup\.php|cron_.*\.php|deploy_database\.sql|database.*\.sql|migration_.*\.sql|phpunit\.xml)$">
   <IfModule mod_authz_core.c>
     Require all denied
   </IfModule>
@@ -65,7 +74,7 @@ RewriteRule ^.*$ index.php [L]
   </IfModule>
 </FilesMatch>
 
-# Запрет служебных каталогов (кэш, rate limit, логи) и их содержимого
-RedirectMatch 404 (?i)/(cache|\.rate_limit|logs)(/.*)?$
+# Запрет служебных каталогов (кэш, rate limit, логи, исходники) и их содержимого
+RedirectMatch 404 (?i)/(cache|\.rate_limit|logs|src|tests|docs|scripts|frontend|cgi-bin)(/.*)?$
 
 AddDefaultCharset UTF-8

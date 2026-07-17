@@ -13,14 +13,8 @@
     return window.AppI18n?.fmt?.(key, vars) ?? t(key);
   }
 
-function monthKey(iso) {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function unique(values) {
-  return Array.from(new Set(values));
-}
+const monthKey = window.AppUtils?.monthKey || ((iso) => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
+const unique = window.AppUtils?.unique || ((values) => Array.from(new Set(values)));
 
 const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
@@ -189,37 +183,69 @@ async function renderKpiExtra() {
   // Сводка ответственных
   const summary = document.getElementById('summaryResponsible');
   if (summary) {
-    const lines = [];
+    const parts = [];
+    const initials = (name) => {
+      const words = String(name || '').trim().split(/\s+/);
+      if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+      return words[0]?.[0]?.toUpperCase() || '?';
+    };
     if (kpi.summary?.chair) {
-      lines.push(`<div><strong>${t('dash.chairman', 'Председатель ОС')}:</strong> ${escapeHtml(kpi.summary.chair.full_name)}${kpi.summary.chair.commission_name ? ' — ' + escapeHtml(kpi.summary.chair.commission_name) : ''}</div>`);
+      const ch = kpi.summary.chair;
+      parts.push(`
+        <div class="mb-3">
+          <div class="dash-insight__label mb-2">${t('dash.chairman', 'Председатель ОС')}</div>
+          <div class="summary-person">
+            <div class="summary-person__icon summary-person__icon--chair">${initials(ch.full_name)}</div>
+            <div>
+              <div class="summary-person__name">${escapeHtml(ch.full_name)}</div>
+              ${ch.commission_name ? `<div class="summary-person__role">${escapeHtml(ch.commission_name)}</div>` : ''}
+            </div>
+          </div>
+        </div>`);
     }
-    (kpi.summary?.chairs_commissions || []).slice(0, 6).forEach((p, idx) => {
-      lines.push(`<div>${idx + 1}. ${escapeHtml(p.full_name)} — ${escapeHtml(p.commission_name || '')}</div>`);
-    });
-    (kpi.summary?.others || []).slice(0, 7).forEach((o) => {
-      lines.push(`<div>• ${escapeHtml(o.full_name)} — ${escapeHtml(o.commission_name || '')}</div>`);
-    });
-    summary.innerHTML = lines.join('');
+    const chairs = kpi.summary?.chairs_commissions || [];
+    const others = kpi.summary?.others || [];
+    if (chairs.length || others.length) {
+      const allPersons = [
+        ...chairs.map(p => ({ ...p, isChair: true })),
+        ...others.slice(0, 8).map(p => ({ ...p, isChair: false }))
+      ];
+      parts.push(`
+        <div class="dash-insight__label mb-2">${t('dash.members_label', 'Члены ОС')}</div>
+        <div class="summary-grid">
+          ${allPersons.map(p => `
+            <div class="summary-person">
+              <div class="summary-person__icon">${initials(p.full_name)}</div>
+              <div>
+                <div class="summary-person__name">${escapeHtml(p.full_name)}</div>
+                ${p.commission_name ? `<div class="summary-person__role">${escapeHtml(p.commission_name)}</div>` : ''}
+              </div>
+            </div>`).join('')}
+        </div>`);
+    }
+    summary.innerHTML = parts.length ? parts.join('') : `<div class="text-muted small py-2">${t('dash.no_data', 'Нет данных')}</div>`;
   }
 
   if (listKpiRecipientsIncoming) {
     const list = (kpi.recipients?.incoming || []).slice(0, 10);
     listKpiRecipientsIncoming.innerHTML = list.length
-      ? list.map(item => `<li class="list-group-item d-flex justify-content-between align-items-center">
-            <span>${escapeHtml(item.recipient || '')}</span>
-            <span class="badge bg-primary rounded-pill">${Number(item.total || 0)}</span>
+      ? list.map((item, i) => `<li class="list-group-item">
+            <span class="kpi-rank">${i + 1}</span>
+            <span class="kpi-org">${escapeHtml(item.recipient || '')}</span>
+            <span class="kpi-count">${Number(item.total || 0)}</span>
         </li>`).join('')
-      : `<li class="list-group-item text-muted">${t('dash.no_data', 'Нет данных')}</li>`;
+      : `<li class="list-group-item text-muted small">${t('dash.no_data', 'Нет данных')}</li>`;
   }
 
   if (listKpiRecipientsOutgoing) {
     const list = (kpi.recipients?.outgoing || []).slice(0, 10);
     listKpiRecipientsOutgoing.innerHTML = list.length
-      ? list.map(item => `<li class="list-group-item d-flex justify-content-between align-items-center">
-            <span>${escapeHtml(item.recipient || '')}</span>
-            <span class="badge bg-success rounded-pill">${Number(item.total || 0)}</span>
+      ? list.map((item, i) => `<li class="list-group-item">
+            <span class="kpi-rank">${i + 1}</span>
+            <span class="kpi-org">${escapeHtml(item.recipient || '')}</span>
+            <span class="kpi-count">${Number(item.total || 0)}</span>
         </li>`).join('')
-      : `<li class="list-group-item text-muted">${t('dash.no_data', 'Нет данных')}</li>`;
+      : `<li class="list-group-item text-muted small">${t('dash.no_data', 'Нет данных')}</li>`;
   }
 
   if (typeof window.refreshDashboardEnhanced !== 'function') {
@@ -235,7 +261,10 @@ function updateNotifyBadge() {
   const badge = document.getElementById('notifyBadge');
   const { overdue, warning, pending } = getPendingLettersSummary();
   const alertCount = overdue + warning;
-  if (badge) {
+  // notify-feed.js (если загружен отдельным скриптом) — единственный писатель
+  // бейджа #notifyBadge; чтобы не конфликтовать с ним, дашборд его не трогает,
+  // но продолжает управлять сводкой dashboardAlerts ниже.
+  if (badge && !window.__notifyFeedActive) {
     if (alertCount > 0) {
       badge.textContent = String(alertCount);
       badge.classList.remove('d-none');
@@ -359,16 +388,61 @@ async function renderCommissionsHighlights(kpi) {
     `;
   }).join('');
 }
+
+function applyAdvancedStats(adv) {
+  if (!adv) return;
+
+  // Trend indicators on hero tiles
+  const renderTrend = (elId, change) => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    const val = Number(change);
+    if (!Number.isFinite(val)) { el.classList.add('d-none'); return; }
+    const isUp = val > 0;
+    const isNeutral = val === 0;
+    const arrow = isNeutral ? '→' : (isUp ? '↑' : '↓');
+    const cls = isNeutral ? 'dash-stat__trend--neutral' : (isUp ? 'dash-stat__trend--up' : 'dash-stat__trend--down');
+    el.className = `dash-stat__trend ${cls}`;
+    el.textContent = `${arrow} ${Math.abs(val)}% к прошлому месяцу`;
+    el.classList.remove('d-none');
+  };
+  renderTrend('kpiIncomingTrend', adv.trend_comparison?.incoming_change);
+  renderTrend('kpiOutgoingTrend', adv.trend_comparison?.outgoing_change);
+
+  // "В срок" insight
+  const onTimePct = adv.on_time_percentage;
+  if (onTimePct !== undefined && onTimePct !== null) {
+    const item = document.getElementById('dashInsightOnTime');
+    const val = document.getElementById('kpiOnTime');
+    if (val) val.textContent = `${onTimePct}%`;
+    if (item) item.classList.remove('d-none');
+  }
+
+  // "Без писем" insight
+  const inactive = adv.inactive_members;
+  if (Array.isArray(inactive)) {
+    const item = document.getElementById('dashInsightInactive');
+    const val = document.getElementById('kpiInactiveMembers');
+    if (val) val.textContent = String(inactive.length);
+    if (item) item.classList.remove('d-none');
+  }
+}
+
 async function renderKPIs() {
   const period = dashboardPeriodSelect?.value || 'month';
 
-  // 1) Server-side KPI values (no hardcoded client duplication).
+  // 1) Server-side KPI values (basic + advanced in parallel).
   let stats = null;
+  let advStats = null;
   try {
-    const resp = await fetch(`${API_BASE}/statistics.php`, { method: 'GET' });
-    if (resp.ok) stats = await resp.json();
+    const [basicResp, advResp] = await Promise.all([
+      fetch(`${API_BASE}/statistics.php`),
+      fetch(`${API_BASE}/advanced_stats.php`)
+    ]);
+    if (basicResp.ok) stats = await basicResp.json();
+    if (advResp.ok) advStats = await advResp.json();
   } catch (e) {
-    console.warn('statistics.php failed', e);
+    console.warn('statistics fetch failed', e);
   }
 
   // 2) Fallbacks from store (keeps UI usable if statistics endpoint fails).
@@ -478,6 +552,7 @@ async function renderKPIs() {
     overdueItem.onclick = () => window.goToIncomingStatus('overdue');
   }
 
+  applyAdvancedStats(advStats);
   updateNotifyBadge();
 
   if (typeof window.refreshDashboardEnhanced === 'function') {

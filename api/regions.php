@@ -1,9 +1,10 @@
 <?php
-require_once '../config.php';
-require_once '../auth_middleware.php';
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../auth_middleware.php';
 
 use App\Middleware\CsrfMiddleware;
 use App\Services\RegionService;
+use App\Services\AuditLogger;
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -119,6 +120,26 @@ switch ($method) {
         }
 
         $data = json_decode(file_get_contents('php://input'), true);
+        $nameRu = trim((string)($data['name_ru'] ?? ''));
+        $nameKz = trim((string)($data['name_kz'] ?? ''));
+        $code   = trim((string)($data['code'] ?? ''));
+        if ($nameRu === '' || $nameKz === '' || $code === '') {
+            http_response_code(422);
+            echo json_encode(['error' => 'name_ru, name_kz и code обязательны'], $JSON_FLAGS);
+            break;
+        }
+        if (!preg_match('/^[a-z0-9_-]+$/', $code)) {
+            http_response_code(422);
+            echo json_encode(['error' => 'code должен содержать только строчные буквы, цифры, дефис и подчёркивание'], $JSON_FLAGS);
+            break;
+        }
+        $dupStmt = $db->prepare("SELECT id FROM regions WHERE code = ?");
+        $dupStmt->execute([$code]);
+        if ($dupStmt->fetchColumn()) {
+            http_response_code(409);
+            echo json_encode(['error' => 'Регион с таким code уже существует'], $JSON_FLAGS);
+            break;
+        }
         $defaultSettings = [
             'seq_baseline_incoming' => (int)($data['settings']['seq_baseline_incoming'] ?? 0),
             'seq_baseline_outgoing' => (int)($data['settings']['seq_baseline_outgoing'] ?? 0),
@@ -127,16 +148,15 @@ switch ($method) {
             INSERT INTO regions (name_kz, name_ru, code, is_active, settings)
             VALUES (?, ?, ?, ?, ?)
         ");
-        
         $stmt->execute([
-            $data['name_kz'] ?? '',
-            $data['name_ru'] ?? '',
-            $data['code'] ?? '',
+            $nameKz,
+            $nameRu,
+            $code,
             $data['is_active'] ?? TRUE,
             json_encode($data['settings'] ?? $defaultSettings)
         ]);
-        
-        $id = $db->lastInsertId();
+        $id = (int)$db->lastInsertId();
+        AuditLogger::log($db, 'regions', $id, 'CREATE', null, ['name_ru' => $nameRu, 'code' => $code], (int)($_SESSION['user_id'] ?? 0));
         echo json_encode(['id' => $id, 'message' => 'Регион успешно создан'], $JSON_FLAGS);
         break;
         
@@ -171,15 +191,37 @@ switch ($method) {
             WHERE id = ?
         ");
 
+        $newNameRu = array_key_exists('name_ru', $data) ? trim((string)$data['name_ru']) : $existingRow['name_ru'];
+        $newNameKz = array_key_exists('name_kz', $data) ? trim((string)$data['name_kz']) : $existingRow['name_kz'];
+        $newCode   = array_key_exists('code', $data) ? trim((string)$data['code']) : $existingRow['code'];
+        if ($newNameRu === '' || $newNameKz === '' || $newCode === '') {
+            http_response_code(422);
+            echo json_encode(['error' => 'name_ru, name_kz и code не могут быть пустыми'], $JSON_FLAGS);
+            break;
+        }
+        if (!preg_match('/^[a-z0-9_-]+$/', $newCode)) {
+            http_response_code(422);
+            echo json_encode(['error' => 'code должен содержать только строчные буквы, цифры, дефис и подчёркивание'], $JSON_FLAGS);
+            break;
+        }
+        if ($newCode !== $existingRow['code']) {
+            $dupStmt = $db->prepare("SELECT id FROM regions WHERE code = ? AND id != ?");
+            $dupStmt->execute([$newCode, $id]);
+            if ($dupStmt->fetchColumn()) {
+                http_response_code(409);
+                echo json_encode(['error' => 'Регион с таким code уже существует'], $JSON_FLAGS);
+                break;
+            }
+        }
         $stmt->execute([
-            array_key_exists('name_kz', $data) ? $data['name_kz'] : $existingRow['name_kz'],
-            array_key_exists('name_ru', $data) ? $data['name_ru'] : $existingRow['name_ru'],
-            array_key_exists('code', $data) ? $data['code'] : $existingRow['code'],
+            $newNameKz,
+            $newNameRu,
+            $newCode,
             array_key_exists('is_active', $data) ? ($data['is_active'] ? 1 : 0) : $existingRow['is_active'],
             json_encode($newSettings, JSON_ENCODE_FLAGS),
             $id
         ]);
-        
+        AuditLogger::log($db, 'regions', (int)$id, 'UPDATE', ['name_ru' => $existingRow['name_ru'], 'code' => $existingRow['code']], ['name_ru' => $newNameRu, 'code' => $newCode], (int)($_SESSION['user_id'] ?? 0));
         echo json_encode(['message' => 'Регион успешно обновлен'], $JSON_FLAGS);
         break;
         
@@ -194,7 +236,7 @@ switch ($method) {
         
         $stmt = $db->prepare("UPDATE regions SET is_active = FALSE WHERE id = ?");
         $stmt->execute([$id]);
-        
+        AuditLogger::log($db, 'regions', (int)$id, 'DEACTIVATE', null, null, (int)($_SESSION['user_id'] ?? 0));
         echo json_encode(['message' => 'Регион успешно деактивирован'], $JSON_FLAGS);
         break;
         

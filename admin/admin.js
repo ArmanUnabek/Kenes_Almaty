@@ -56,6 +56,13 @@ function setLoading(on) {
 }
 
 async function apiFetch(url, options = {}) {
+  if (options.method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method.toUpperCase())) {
+    try {
+      const csrfResp = await fetch(`${API}/auth.php?action=csrf`);
+      const csrfData = await csrfResp.json().catch(() => ({}));
+      options.headers = { ...options.headers, 'X-CSRF-Token': csrfData.csrf_token || '' };
+    } catch (_) {}
+  }
   const resp = await fetch(url, options);
   const contentType = resp.headers.get('content-type') || '';
   if (contentType.includes('application/json')) {
@@ -110,7 +117,7 @@ async function ensureAdmin() {
 
 /* ── Navigation ── */
 
-const TAB_IDS = ['dashboard', 'regions', 'users', 'audit', 'system'];
+const TAB_IDS = ['dashboard', 'regions', 'users', 'audit', 'system', 'approvals'];
 
 function showTab(name) {
   TAB_IDS.forEach((tab) => {
@@ -125,6 +132,7 @@ function showTab(name) {
   if (name === 'audit') loadAuditLogs(1);
   if (name === 'system') loadSystemTab();
   if (name === 'dashboard') loadDashboard();
+  if (name === 'approvals') loadApprovalTemplates();
 }
 
 /* ── Header ── */
@@ -648,7 +656,6 @@ async function loadHealthStatus() {
         ${checkRow(t('system.database'), checks.database)}
         ${checkRow(t('system.uploads'), checks.uploads_writable)}
         ${checks.smtp_reachable !== undefined ? checkRow('SMTP', checks.smtp_reachable) : (checks.smtp_configured === false ? checkRow('SMTP', false, 'не настроен') : '')}
-        ${checkRow('Pusher', checks.pusher_configured)}
         ${metricRow('PHP версия', metrics.php_version)}
         ${metricRow('PHP память', metrics.php_memory_mb !== undefined ? metrics.php_memory_mb + ' МБ / ' + metrics.php_memory_limit : null)}
         ${metricRow('Загрузки', metrics.uploads_size_mb !== undefined ? metrics.uploads_size_mb + ' МБ (' + metrics.uploads_files + ' файлов)' : null)}
@@ -1019,6 +1026,86 @@ document.getElementById('usersNextBtn')?.addEventListener('click', () => {
 document.getElementById('healthCheckBtn')?.addEventListener('click', loadHealthStatus);
 document.getElementById('emailQueueRefreshBtn')?.addEventListener('click', loadEmailQueue);
 
+/* ── Approval Templates ── */
+
+async function loadApprovalTemplates() {
+  const tbody = document.getElementById('approvalTplList');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Загрузка…</td></tr>';
+  try {
+    const data = await apiFetch(`${API}/approvals.php?action=templates`);
+    const list = data.templates || [];
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Нет шаблонов</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map((tpl) => {
+      const steps = (tpl.steps || []).map((s) => escapeHtml(s.approver_role + (s.approver_id ? ':' + s.approver_id : ''))).join(', ');
+      const regionName = regions.find((r) => Number(r.id) === Number(tpl.region_id))
+        ? AdminI18n.regionName(regions.find((r) => Number(r.id) === Number(tpl.region_id)))
+        : (tpl.region_id ? '#' + tpl.region_id : 'Все');
+      return `<tr>
+        <td>${tpl.id}</td>
+        <td>${escapeHtml(tpl.name || '')}</td>
+        <td>${escapeHtml(regionName)}</td>
+        <td class="small text-muted">${steps || '—'}</td>
+        <td>
+          <button class="btn btn-sm btn-outline-danger" data-tpl-id="${tpl.id}" data-tpl-name="${escapeHtml(tpl.name || '')}" data-action="delete-approval-tpl">
+            <i class="bi bi-trash"></i>
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-danger">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+async function deleteApprovalTemplate(id, name) {
+  if (!confirm(`Удалить шаблон «${name}»?`)) return;
+  try {
+    await apiFetch(`${API}/approvals.php?action=delete_template&id=${id}`, { method: 'POST' });
+    showSuccess('Шаблон удалён');
+    loadApprovalTemplates();
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+document.getElementById('formApprovalTemplate')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('approvalTplName').value.trim();
+  const regionId = document.getElementById('approvalTplRegion').value || null;
+  const rawSteps = document.getElementById('approvalTplSteps').value.trim();
+  const steps = rawSteps.split('\n').map((line) => {
+    line = line.trim();
+    if (!line) return null;
+    const [role, uid] = line.split(':');
+    return { approver_role: role.trim(), approver_id: uid ? parseInt(uid, 10) : null, step_order: 0 };
+  }).filter(Boolean).map((s, i) => ({ ...s, step_order: i }));
+
+  if (!name || !steps.length) { showError('Заполните название и хотя бы один шаг'); return; }
+  try {
+    await apiFetch(`${API}/approvals.php?action=create_template`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, region_id: regionId ? parseInt(regionId, 10) : null, steps }),
+    });
+    showSuccess('Шаблон создан');
+    e.target.reset();
+    loadApprovalTemplates();
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+document.getElementById('approvalTplRefreshBtn')?.addEventListener('click', loadApprovalTemplates);
+
+document.getElementById('approvalTplList')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action="delete-approval-tpl"]');
+  if (btn) deleteApprovalTemplate(Number(btn.dataset.tplId), btn.dataset.tplName);
+});
+
 document.getElementById('logoutBtn')?.addEventListener('click', async () => {
   try {
     await fetch(`${API}/auth.php`, { method: 'POST', body: new URLSearchParams({ action: 'logout' }) });
@@ -1044,5 +1131,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await loadRegionsWithStats();
   await loadDashboard();
+
+  // Populate approval template region select
+  const approvalTplRegion = document.getElementById('approvalTplRegion');
+  if (approvalTplRegion) {
+    approvalTplRegion.innerHTML = '<option value="">— Все регионы —</option>'
+      + regions.map((r) => `<option value="${r.id}">${escapeHtml(AdminI18n.regionName(r))}</option>`).join('');
+  }
+
   showTab('dashboard');
 });

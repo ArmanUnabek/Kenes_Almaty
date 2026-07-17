@@ -31,17 +31,20 @@
   function showToast(message, type = 'info') {
     const container = document.querySelector('.toast-container');
     if (!container) return;
-    const bg = type === 'error' ? 'danger' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+    const icons = { success: 'bi-check-circle-fill', error: 'bi-exclamation-circle-fill', warning: 'bi-exclamation-triangle-fill', info: 'bi-info-circle-fill' };
     const toast = document.createElement('div');
-    toast.className = `toast align-items-center text-white bg-${bg} border-0`;
+    toast.className = `toast align-items-center text-white border-0`;
     toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'assertive');
     toast.innerHTML = `
-      <div class="d-flex">
+      <div class="d-flex align-items-center">
+        <i class="bi ${icons[type] || icons.info} me-2" style="font-size:1.1rem"></i>
         <div class="toast-body">${escapeHtml(message)}</div>
         <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Закрыть"></button>
       </div>`;
+    toast.classList.add(`bg-${type === 'error' ? 'danger' : type}`);
     container.appendChild(toast);
-    const bsToast = new bootstrap.Toast(toast, { delay: 3500 });
+    const bsToast = new bootstrap.Toast(toast, { delay: type === 'error' ? 5000 : 3500 });
     bsToast.show();
     toast.addEventListener('hidden.bs.toast', () => toast.remove());
   }
@@ -109,7 +112,7 @@
     try {
       showLoading('Импорт данных...');
       const data = JSON.parse(await file.text());
-      const user = JSON.parse(localStorage.getItem('user') || 'null');
+      const user = JSON.parse(sessionStorage.getItem('user') || 'null');
       const regionId = user?.region?.id || user?.region_id || null;
       let ok = 0;
       let fail = 0;
@@ -185,25 +188,35 @@
     }
   }
 
+  let autocompleteClickBound = false;
   function setupAutocomplete(inputId, dataGetter, filterKey = null) {
     const input = document.getElementById(inputId);
     if (!input) return;
+    if (input.dataset.acBound) return;
+    input.dataset.acBound = '1';
     if (!input.parentElement.classList.contains('search-container')) {
       const wrapper = document.createElement('div');
       wrapper.className = 'search-container position-relative';
       input.parentNode.insertBefore(wrapper, input);
       wrapper.appendChild(input);
     }
+    const listId = inputId + 'autocomplete-list';
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-expanded', 'false');
+    input.setAttribute('aria-controls', listId);
     let currentFocus = -1;
     input.addEventListener('input', function onInput() {
       const val = this.value;
       closeAllLists();
-      if (!val) return;
+      if (!val) { input.setAttribute('aria-expanded', 'false'); return; }
       currentFocus = -1;
       const list = document.createElement('div');
-      list.id = this.id + 'autocomplete-list';
+      list.id = listId;
       list.className = 'autocomplete-suggestions';
+      list.setAttribute('role', 'listbox');
       this.parentNode.appendChild(list);
+      input.setAttribute('aria-expanded', 'true');
       const matches = new Set();
       dataGetter().forEach((item) => {
         const text = filterKey ? item[filterKey] : item;
@@ -212,32 +225,43 @@
       Array.from(matches).slice(0, 10).forEach((match) => {
         const row = document.createElement('div');
         row.className = 'autocomplete-suggestion';
+        row.setAttribute('role', 'option');
+        row.setAttribute('aria-selected', 'false');
         const safeVal = val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         row.innerHTML = `${escapeHtml(match).replace(new RegExp(`(${safeVal})`, 'gi'), '<strong>$1</strong>')}<input type="hidden" value="${escapeHtml(match)}">`;
         row.addEventListener('click', () => {
           input.value = row.querySelector('input').value;
           closeAllLists();
+          input.setAttribute('aria-expanded', 'false');
           input.dispatchEvent(new Event('input'));
         });
         list.appendChild(row);
       });
     });
     input.addEventListener('keydown', (e) => {
-      const list = document.getElementById(input.id + 'autocomplete-list');
+      const list = document.getElementById(listId);
       const rows = list ? list.getElementsByTagName('div') : null;
       if (e.keyCode === 40 && rows) { currentFocus++; highlight(rows); }
       else if (e.keyCode === 38 && rows) { currentFocus--; highlight(rows); }
       else if (e.keyCode === 13 && rows && currentFocus > -1) { e.preventDefault(); rows[currentFocus]?.click(); }
     });
     function highlight(rows) {
-      Array.from(rows).forEach((r, i) => r.classList.toggle('autocomplete-active', i === currentFocus));
+      Array.from(rows).forEach((r, i) => {
+        r.classList.toggle('autocomplete-active', i === currentFocus);
+        r.setAttribute('aria-selected', String(i === currentFocus));
+      });
     }
     function closeAllLists(el) {
       document.querySelectorAll('.autocomplete-suggestions').forEach((node) => {
-        if (el !== node && el !== input) node.remove();
+        if (el !== node && el !== input) { node.remove(); input.setAttribute('aria-expanded', 'false'); }
       });
     }
-    document.addEventListener('click', (e) => closeAllLists(e.target));
+    if (!autocompleteClickBound) {
+      document.addEventListener('click', (e) => {
+        document.querySelectorAll('.autocomplete-suggestions').forEach((node) => node.remove());
+      });
+      autocompleteClickBound = true;
+    }
   }
 
   async function importCsv(ev) {

@@ -13,6 +13,22 @@ checkAuth();
 $user = getCurrentUser();
 $userId = (int)($user['id'] ?? 0);
 $id = (int)($_GET['id'] ?? 0);
+$version = isset($_GET['version']) ? (int)$_GET['version'] : null;
+$letterType = $_GET['letter_type'] ?? null;
+$letterId = isset($_GET['letter_id']) ? (int)$_GET['letter_id'] : 0;
+
+$db = getDBConnection();
+
+if ($id <= 0 && $version !== null && $letterType && $letterId > 0) {
+    $stmt = $db->prepare("
+        SELECT id FROM letter_scans
+        WHERE letter_type = ? AND letter_id = ? AND version = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$letterType, $letterId, $version]);
+    $id = (int)($stmt->fetchColumn() ?: 0);
+}
+
 if ($id <= 0) {
     http_response_code(400);
     echo json_encode(['error' => 'ID не указан'], $JSON_FLAGS);
@@ -25,7 +41,6 @@ RateLimiter::requireCheck(
     SecurityAuditService::SCAN_DOWNLOAD_RATE_WINDOW
 );
 
-$db = getDBConnection();
 $stmt = $db->prepare("
     SELECT ls.*,
            il.region_id AS incoming_region_id,

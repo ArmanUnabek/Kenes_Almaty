@@ -40,6 +40,11 @@ class EventsController extends ApiController
                     $this->requireCsrf();
                     $this->handleUpdate();
                     break;
+                case 'PATCH':
+                    $this->requireWriteAccess();
+                    $this->requireCsrf();
+                    $this->handlePatch();
+                    break;
                 case 'DELETE':
                     $this->requireDeleteAccess();
                     $this->requireCsrf();
@@ -100,18 +105,8 @@ class EventsController extends ApiController
         );
         $createdBy = $this->currentUser['id'] ?? null;
 
-        try {
-            $this->db->beginTransaction();
-            $eventId = $this->repo->create($data, $regionId, $createdBy);
-            $this->db->commit();
-        } catch (\Throwable $e) {
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
-            }
-            throw $e;
-        }
+        $eventId = $this->repo->create($data, $regionId, $createdBy);
 
-        pusherTrigger('council-events', 'events-updated', ['action' => 'create', 'id' => $eventId, 'region_id' => $regionId]);
         AuditLogger::log($this->db, 'events', $eventId, 'CREATE', null, AuditSanitizer::sanitize($data), (int)($createdBy ?? 0));
         (new FileCache())->forgetPrefix('kpi:');
         $this->json(['id' => $eventId, 'message' => 'Мероприятие добавлено'], 201);
@@ -127,21 +122,49 @@ class EventsController extends ApiController
         $this->requireEventAccess($id);
         $this->validateEventPayload($data);
 
-        try {
-            $this->db->beginTransaction();
-            $this->repo->update($id, $data);
-            $this->db->commit();
-        } catch (\Throwable $e) {
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
-            }
-            throw $e;
-        }
+        $this->repo->update($id, $data);
 
-        pusherTrigger('council-events', 'events-updated', ['action' => 'update', 'id' => $id]);
         AuditLogger::log($this->db, 'events', $id, 'UPDATE', null, AuditSanitizer::sanitize($data), (int)($this->currentUser['id'] ?? 0));
         (new FileCache())->forgetPrefix('kpi:');
         $this->json(['message' => 'Мероприятие обновлено']);
+    }
+
+    /**
+     * PATCH: строго ограниченное частичное обновление мероприятия.
+     * Используется, в частности, для drag-to-reschedule в календаре —
+     * позволяет менять только event_date, не затрагивая остальные поля.
+     */
+    private function handlePatch(): void
+    {
+        $data = $this->getJsonInput() ?? [];
+        $id = (int)($data['id'] ?? 0);
+        if ($id <= 0) {
+            $this->error('ID не указан', 400);
+        }
+        $this->requireEventAccess($id);
+
+        $allowed = ['event_date'];
+        $patch = array_intersect_key($data, array_flip($allowed));
+        if (empty($patch)) {
+            $this->error('Нет допустимых полей для обновления', 400);
+        }
+
+        if (array_key_exists('event_date', $patch)) {
+            $date = (string)$patch['event_date'];
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !checkdate(
+                (int)substr($date, 5, 2),
+                (int)substr($date, 8, 2),
+                (int)substr($date, 0, 4)
+            )) {
+                $this->error('Некорректная дата (ожидается YYYY-MM-DD)', 422);
+            }
+        }
+
+        $this->repo->patch($id, $patch);
+
+        AuditLogger::log($this->db, 'events', $id, 'UPDATE', null, AuditSanitizer::sanitize($patch), (int)($this->currentUser['id'] ?? 0));
+        (new FileCache())->forgetPrefix('kpi:');
+        $this->json(['message' => 'Мероприятие перенесено']);
     }
 
     private function handleDelete(): void
@@ -153,7 +176,6 @@ class EventsController extends ApiController
         $this->requireEventAccess($id);
 
         $this->repo->delete($id);
-        pusherTrigger('council-events', 'events-updated', ['action' => 'delete', 'id' => $id]);
         AuditLogger::log($this->db, 'events', $id, 'DELETE', ['id' => $id], null, (int)($this->currentUser['id'] ?? 0));
         (new FileCache())->forgetPrefix('kpi:');
         $this->json(['message' => 'Мероприятие удалено']);

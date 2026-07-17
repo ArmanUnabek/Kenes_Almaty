@@ -6,6 +6,8 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../auth_middleware.php';
 
 use App\Middleware\CsrfMiddleware;
+use App\Middleware\RateLimiter;
+use App\Services\FileCache;
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -14,9 +16,38 @@ checkAuth();
 $db  = getDBConnection();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-// Ensure letter_comments table exists (runtime migration, driver-aware)
-$driver = $db->getAttribute(\PDO::ATTR_DRIVER_NAME);
-if ($driver === 'sqlite') {
+ensureLetterCommentsTable($db);
+
+/**
+ * Гарантирует существование таблицы letter_comments (self-healing).
+ * DDL выполняется не чаще раза в 24 часа: факт существования кэшируется через FileCache.
+ * Основная схема создаётся миграцией migrations/2026_07_10_pending_fixes.sql.
+ */
+function ensureLetterCommentsTable(\PDO $db): void
+{
+    $cache = class_exists(FileCache::class) ? new FileCache() : null;
+    if ($cache !== null && $cache->get('schema_letter_comments_exists') === true) {
+        return;
+    }
+
+    try {
+        createLetterCommentsTable($db);
+    } catch (\PDOException $e) {
+        // Нет права CREATE и т.п. — таблица, скорее всего, уже создана миграцией.
+        // Не роняем API: последующие запросы сами покажут, если таблицы реально нет.
+        error_log('comments.php: ensureLetterCommentsTable DDL failed: ' . $e->getMessage());
+        return;
+    }
+
+    if ($cache !== null) {
+        $cache->set('schema_letter_comments_exists', true, 86400);
+    }
+}
+
+function createLetterCommentsTable(\PDO $db): void
+{
+    $driver = $db->getAttribute(\PDO::ATTR_DRIVER_NAME);
+    if ($driver === 'sqlite') {
     $db->exec("
         CREATE TABLE IF NOT EXISTS letter_comments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,6 +83,7 @@ if ($driver === 'sqlite') {
             INDEX idx_user (user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
+    }
 }
 
 switch ($method) {
@@ -61,9 +93,16 @@ switch ($method) {
     case 'POST':
         requireWriteAccess();
         CsrfMiddleware::requireVerification();
+        RateLimiter::requireCheck('comment_post_' . (int)($_SESSION['user_id'] ?? 0), 60, 3600);
         handlePostComment($db);
         break;
+    case 'PUT':
+        requireWriteAccess();
+        CsrfMiddleware::requireVerification();
+        handlePutComment($db);
+        break;
     case 'DELETE':
+        requireWriteAccess();
         CsrfMiddleware::requireVerification();
         handleDeleteComment($db);
         break;
@@ -107,6 +146,9 @@ function handleGetComments(\PDO $db): void
 
     assertLetterAccess($db, $letterType, $letterId);
 
+    $offset = max(0, (int)($_GET['offset'] ?? 0));
+    $limit  = min(200, max(1, (int)($_GET['limit'] ?? 100)));
+
     $stmt = $db->prepare("
         SELECT c.id, c.letter_type, c.letter_id, c.comment, c.created_at,
                u.id AS user_id, u.full_name AS user_name, u.username AS user_login
@@ -114,8 +156,9 @@ function handleGetComments(\PDO $db): void
         JOIN users u ON c.user_id = u.id
         WHERE c.letter_type = ? AND c.letter_id = ?
         ORDER BY c.created_at ASC
+        LIMIT ? OFFSET ?
     ");
-    $stmt->execute([$letterType, $letterId]);
+    $stmt->execute([$letterType, $letterId, $limit, $offset]);
     echo json_encode($stmt->fetchAll(), JSON_ENCODE_FLAGS);
 }
 
@@ -157,6 +200,57 @@ function handlePostComment(\PDO $db): void
     ");
     $stmtGet->execute([$id]);
     http_response_code(201);
+    echo json_encode($stmtGet->fetch(), JSON_ENCODE_FLAGS);
+}
+
+function handlePutComment(\PDO $db): void
+{
+    $data = json_decode(file_get_contents('php://input'), true) ?: [];
+    $id = (int)($data['id'] ?? $_GET['id'] ?? 0);
+    $comment = trim($data['comment'] ?? '');
+
+    if ($id <= 0 || $comment === '') {
+        http_response_code(400);
+        echo json_encode(['error' => 'Поля id и comment обязательны'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
+    if (mb_strlen($comment) > 2000) {
+        http_response_code(422);
+        echo json_encode(['error' => 'Комментарий слишком длинный (макс. 2000 символов)'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
+    $stmt = $db->prepare('SELECT user_id, letter_type, letter_id FROM letter_comments WHERE id = ?');
+    $stmt->execute([$id]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Комментарий не найден'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
+    assertLetterAccess($db, (string)$row['letter_type'], (int)$row['letter_id']);
+
+    $currentUserId = (int)($_SESSION['user_id'] ?? 0);
+    $isAdmin = isAdmin();
+
+    if ((int)$row['user_id'] !== $currentUserId && !$isAdmin) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Нет прав на редактирование этого комментария'], JSON_ENCODE_FLAGS);
+        return;
+    }
+
+    $db->prepare('UPDATE letter_comments SET comment = ? WHERE id = ?')->execute([$comment, $id]);
+
+    $stmtGet = $db->prepare("
+        SELECT c.id, c.letter_type, c.letter_id, c.comment, c.created_at,
+               u.id AS user_id, u.full_name AS user_name, u.username AS user_login
+        FROM letter_comments c
+        JOIN users u ON c.user_id = u.id
+        WHERE c.id = ?
+    ");
+    $stmtGet->execute([$id]);
     echo json_encode($stmtGet->fetch(), JSON_ENCODE_FLAGS);
 }
 

@@ -8,14 +8,10 @@ class RateLimiter
     private const DEFAULT_LIMIT = 100;
     private const DEFAULT_WINDOW = 3600; // 1 час
 
-    /** @var \Redis|\RedisException|null */
+    /** @var \Redis|null */
     private static mixed $redis = null;
     private static bool $redisChecked = false;
 
-    /**
-     * Returns a Redis connection if REDIS_HOST is configured and the Redis extension is loaded,
-     * otherwise returns null (file-based fallback is used).
-     */
     private static function getRedis(): ?\Redis
     {
         if (self::$redisChecked) {
@@ -31,7 +27,7 @@ class RateLimiter
         try {
             $port = (int)(function_exists('envValue') ? (envValue('REDIS_PORT') ?? '6379') : (getenv('REDIS_PORT') ?: '6379'));
             $r = new \Redis();
-            $r->connect($host, $port, 1.5); // 1.5s timeout
+            $r->connect($host, $port, 1.5);
             $pass = function_exists('envValue') ? (envValue('REDIS_PASSWORD') ?? '') : (getenv('REDIS_PASSWORD') ?: '');
             if ($pass !== '') {
                 $r->auth($pass);
@@ -52,7 +48,10 @@ class RateLimiter
         }
     }
 
-    public static function check(string $identifier, int $limit = self::DEFAULT_LIMIT, int $window = self::DEFAULT_WINDOW): bool
+    /**
+     * Returns ['allowed' => bool, 'remaining' => int, 'limit' => int, 'reset_at' => int].
+     */
+    private static function checkInternal(string $identifier, int $limit, int $window): array
     {
         $redis = self::getRedis();
         if ($redis !== null) {
@@ -61,7 +60,12 @@ class RateLimiter
         return self::checkFile($identifier, $limit, $window);
     }
 
-    private static function checkRedis(\Redis $redis, string $identifier, int $limit, int $window): bool
+    public static function check(string $identifier, int $limit = self::DEFAULT_LIMIT, int $window = self::DEFAULT_WINDOW): bool
+    {
+        return self::checkInternal($identifier, $limit, $window)['allowed'];
+    }
+
+    private static function checkRedis(\Redis $redis, string $identifier, int $limit, int $window): array
     {
         $key = 'rl:' . hash('sha256', $identifier);
         try {
@@ -69,42 +73,65 @@ class RateLimiter
             if ($count === 1) {
                 $redis->expire($key, $window);
             }
-            return $count <= $limit;
+            $ttl = (int)$redis->ttl($key);
+            return [
+                'allowed'   => $count <= $limit,
+                'remaining' => max(0, $limit - $count),
+                'limit'     => $limit,
+                'reset_at'  => time() + max(0, $ttl),
+            ];
         } catch (\Throwable $e) {
             error_log('RateLimiter Redis check failed, falling back to file: ' . $e->getMessage());
             return self::checkFile($identifier, $limit, $window);
         }
     }
 
-    private static function checkFile(string $identifier, int $limit, int $window): bool
+    private static function checkFile(string $identifier, int $limit, int $window): array
     {
         self::init();
 
-        $key = hash('sha256', $identifier);
+        $key  = hash('sha256', $identifier);
         $file = self::CACHE_DIR . '/' . $key . '.json';
-        $now = time();
+        $now  = time();
 
-        $data = [];
-        if (file_exists($file)) {
-            $content = file_get_contents($file);
+        $fp = fopen($file, 'c');
+        if (!$fp) {
+            return ['allowed' => true, 'remaining' => $limit, 'limit' => $limit, 'reset_at' => $now + $window];
+        }
+        flock($fp, LOCK_EX);
+
+        $data    = [];
+        $content = file_get_contents($file);
+        if ($content) {
             $data = json_decode($content, true) ?? [];
         }
 
         // Remove expired entries
-        $data['requests'] = array_filter($data['requests'] ?? [], function ($timestamp) use ($now, $window) {
-            return $timestamp > ($now - $window);
-        });
+        $data['requests'] = array_values(array_filter(
+            $data['requests'] ?? [],
+            fn($ts) => $ts > ($now - $window)
+        ));
 
-        $requestCount = count($data['requests'] ?? []);
+        $count    = count($data['requests']);
+        $allowed  = $count < $limit;
+        $resetAt  = $count > 0 ? ((int)$data['requests'][0] + $window) : ($now + $window);
 
-        if ($requestCount >= $limit) {
-            return false;
+        if ($allowed) {
+            $data['requests'][] = $now;
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($data));
         }
 
-        $data['requests'][] = $now;
-        file_put_contents($file, json_encode($data), LOCK_EX);
+        flock($fp, LOCK_UN);
+        fclose($fp);
 
-        return true;
+        return [
+            'allowed'   => $allowed,
+            'remaining' => max(0, $limit - $count - ($allowed ? 1 : 0)),
+            'limit'     => $limit,
+            'reset_at'  => $resetAt,
+        ];
     }
 
     public static function getIdentifier(): string
@@ -113,14 +140,30 @@ class RateLimiter
         if ($userId) {
             return "user_$userId";
         }
-
         return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
     }
 
-    public static function requireCheck(int $limit = self::DEFAULT_LIMIT, int $window = self::DEFAULT_WINDOW): void
+    public static function requireCheck(string|int $keyOrLimit = self::DEFAULT_LIMIT, int $limitOrWindow = self::DEFAULT_WINDOW, int $window = 0): void
     {
-        $identifier = self::getIdentifier();
-        if (!self::check($identifier, $limit, $window)) {
+        if (is_string($keyOrLimit)) {
+            $identifier = $keyOrLimit;
+            $limit      = $limitOrWindow;
+            $window     = $window > 0 ? $window : self::DEFAULT_WINDOW;
+        } else {
+            $identifier = self::getIdentifier();
+            $limit      = $keyOrLimit;
+            $window     = $limitOrWindow;
+        }
+
+        $info = self::checkInternal($identifier, $limit, $window);
+
+        if (!headers_sent()) {
+            header('X-RateLimit-Limit: ' . $info['limit']);
+            header('X-RateLimit-Remaining: ' . $info['remaining']);
+            header('X-RateLimit-Reset: ' . $info['reset_at']);
+        }
+
+        if (!$info['allowed']) {
             try {
                 if (function_exists('getDBConnection')) {
                     $db = getDBConnection();
@@ -140,7 +183,7 @@ class RateLimiter
             http_response_code(429);
             echo json_encode([
                 'error' => 'Слишком много запросов. Попробуйте позже.'
-            ], JSON_ENCODE_FLAGS);
+            ], JSON_ENCODE_FLAGS ?? (JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             exit;
         }
     }
@@ -148,8 +191,8 @@ class RateLimiter
     public static function cleanup(): void
     {
         self::init();
-        $files = glob(self::CACHE_DIR . '/*.json');
-        $now = time();
+        $files  = glob(self::CACHE_DIR . '/*.json');
+        $now    = time();
         $maxAge = 86400; // 24 часа
 
         foreach ($files as $file) {
