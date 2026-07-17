@@ -22,8 +22,13 @@ class EmailServiceTest extends RepositoryTestCase
             subject TEXT,
             body_html TEXT,
             body_text TEXT,
+            message_id TEXT,
+            in_reply_to TEXT,
+            thread_id TEXT,
             status TEXT DEFAULT 'queued',
             error TEXT,
+            attempts INTEGER DEFAULT 0,
+            processing_at TEXT,
             sent_at TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )");

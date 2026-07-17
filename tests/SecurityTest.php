@@ -110,7 +110,8 @@ class SecurityTest extends TestCase
         $_SERVER['HTTP_X_CSRF_TOKEN'] = $originalToken;
         CsrfMiddleware::verify(); // rotates the token
 
-        // Now try to use the old token again
+        // Now try to use the old token again, but expire the grace window
+        $_SESSION['_csrf_token_prev_at'] = time() - 100;
         $_SERVER['HTTP_X_CSRF_TOKEN'] = $originalToken;
         $this->assertFalse(CsrfMiddleware::verify(), 'Old CSRF token must be invalid after rotation');
     }
