@@ -35,6 +35,13 @@ class AppealsController extends ApiController
                 return;
             }
 
+            // Public appeal-status lookup: citizen enters their appeal number + a
+            // verifier (surname or the email they submitted). No auth; rate-limited.
+            if ($method === 'GET' && ($_GET['action'] ?? '') === 'track') {
+                $this->handleTrack();
+                return;
+            }
+
             // All other methods require auth
             $this->requireAuth();
 
@@ -53,6 +60,33 @@ class AppealsController extends ApiController
         } catch (\Throwable $e) {
             $this->handleException($e, 'AppealsController');
         }
+    }
+
+    private function handleTrack(): void
+    {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+        RateLimiter::requireCheck('appeal_track_' . $ip, 30, 3600);
+
+        $number   = trim((string)($this->getQueryParam('number', '') ?? ''));
+        $verifier = trim((string)($this->getQueryParam('verifier', '') ?? ''));
+        if ($number === '' || $verifier === '') {
+            $this->error('Укажите номер обращения и фамилию или email', 422);
+        }
+
+        $stmt = $this->db->prepare(
+            "SELECT appeal_number, subject, category, status, created_at, responded_at,
+                    response_text, full_name, email
+             FROM citizen_appeals WHERE appeal_number = ? LIMIT 1"
+        );
+        $stmt->execute([$number]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+
+        // Generic not-found on any mismatch → prevents enumerating appeal numbers.
+        if (!\App\Services\AppealTrackingService::verifierMatches($row, $verifier)) {
+            $this->error('Обращение не найдено. Проверьте номер и фамилию или email.', 404);
+        }
+
+        $this->json(\App\Services\AppealTrackingService::trackingView($row));
     }
 
     private function handleCreate(): void

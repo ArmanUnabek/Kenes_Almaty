@@ -28,6 +28,7 @@ PAGES=(
   login.html
   login.php
   appeal.php
+  appeal_status.php
   api/docs/index.php
 )
 

@@ -20,10 +20,10 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Обращение гражданина — Общественный Совет</title>
-    <link href="/assets/vendor/bootstrap.min.css?v=39" rel="stylesheet" />
-    <link href="/styles.css?v=39" rel="stylesheet" />
-    <link href="/assets/vendor/inter.css?v=39" rel="stylesheet">
-    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons.css?v=39">
+    <link href="/assets/vendor/bootstrap.min.css?v=40" rel="stylesheet" />
+    <link href="/styles.css?v=40" rel="stylesheet" />
+    <link href="/assets/vendor/inter.css?v=40" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons.css?v=40">
     <style>
         body.appeal-page {
             background: var(--brand-navy);
@@ -92,6 +92,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
                     <p class="text-muted mb-0">Ваш номер обращения:</p>
                     <div id="appealNumberDisplay" class="fs-4 fw-bold text-primary my-2"></div>
                     <p class="small text-muted">Мы рассмотрим ваше обращение в установленные сроки.<br>Сохраните номер для отслеживания статуса.</p>
+                    <a href="/appeal_status.php" class="btn btn-primary btn-sm mt-2">Отследить статус</a>
                     <a href="/appeal.php" class="btn btn-outline-secondary btn-sm mt-2">Подать ещё одно</a>
                 </div>
 
@@ -166,7 +167,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         </div>
     </main>
 
-    <script src="/assets/vendor/bootstrap.bundle.min.js?v=39" nonce="<?= htmlspecialchars($nonce, ENT_QUOTES) ?>"></script>
+    <script src="/assets/vendor/bootstrap.bundle.min.js?v=40" nonce="<?= htmlspecialchars($nonce, ENT_QUOTES) ?>"></script>
     <script nonce="<?= htmlspecialchars($nonce, ENT_QUOTES) ?>">
     (function () {
         const form    = document.getElementById('appealForm');
