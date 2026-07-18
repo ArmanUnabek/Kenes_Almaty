@@ -65,7 +65,12 @@ class ApiKeyService
             return null;
         }
 
-        $db->prepare("UPDATE api_keys SET last_used_at = NOW() WHERE id = ?")
+        // Driver-aware "now": NOW() on MySQL/Postgres, datetime('now') on SQLite —
+        // consistent with EmailService / SessionManager (portable, and prod is MySQL).
+        $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+        $nowExpr = (stripos($driver, 'mysql') !== false || stripos($driver, 'pgsql') !== false)
+            ? 'NOW()' : "datetime('now')";
+        $db->prepare("UPDATE api_keys SET last_used_at = {$nowExpr} WHERE id = ?")
            ->execute([$row['api_key_id']]);
 
         return [
