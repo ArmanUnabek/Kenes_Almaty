@@ -9,13 +9,10 @@ use App\Middleware\CsrfMiddleware;
 
 class SavedSearchesController extends ApiController
 {
-    private static bool $tableChecked = false;
-
     public function handle(): void
     {
         try {
             $this->requireAuth();
-            $this->ensureTable();
 
             switch ($_SERVER['REQUEST_METHOD']) {
                 case 'GET':
@@ -118,48 +115,8 @@ class SavedSearchesController extends ApiController
         $this->json(['success' => true]);
     }
 
-    private function ensureTable(): void
-    {
-        if (self::$tableChecked) {
-            return;
-        }
-        self::$tableChecked = true;
-
-        try {
-            $driver = $this->db->getAttribute(\PDO::ATTR_DRIVER_NAME);
-            if ($driver === 'sqlite') {
-                $this->db->exec(
-                    "CREATE TABLE IF NOT EXISTS saved_searches (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        name VARCHAR(255) NOT NULL,
-                        params TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )"
-                );
-                return;
-            }
-            // MySQL / PostgreSQL: table already created by deploy_database.sql
-            // Just silently ensure it exists
-            $this->db->query('SELECT 1 FROM saved_searches LIMIT 1');
-        } catch (\Throwable $e) {
-            // Create on the fly if missing (MySQL)
-            try {
-                $this->db->exec(
-                    "CREATE TABLE IF NOT EXISTS saved_searches (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        user_id INT NOT NULL,
-                        name VARCHAR(255) NOT NULL,
-                        params JSON NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        INDEX idx_user (user_id)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
-                );
-            } catch (\Throwable $e2) {
-                // ignore — will fail at query time with a proper error
-            }
-        }
-    }
+    // Schema note: saved_searches is defined in deploy_database.sql and
+    // migrations/2026_07_18_endpoint_tables.sql. Runtime self-healing DDL removed.
 }
 
 $controller = new SavedSearchesController();

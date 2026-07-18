@@ -46,7 +46,12 @@ database_sqlite.sql
 .env.local
 .env*.local
 composer.lock
-vendor/
+# Anchored to the repo root: this ignores Composer's top-level vendor/ ONLY.
+# An unanchored `vendor/` also matched assets/vendor/ (the self-hosted Bootstrap/
+# Chart.js/Inter files served under the no-CDN CSP), silently keeping them out of
+# git and out of the deploy (git ls-files allowlist) — so the browser 404'd them
+# and Bootstrap never loaded (tabs/modals dead). Keep this anchored.
+/vendor/
 .phpunit.cache/
 
 # Node / Vite frontend build

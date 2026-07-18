@@ -1,4 +1,4 @@
-# Frontend build (Vite) — «Журнал ОС»
+# Frontend build (esbuild) — «Журнал ОС»
 
 The SPA was historically a **no-build** vanilla-JS app: classic `<script>` tags
 loaded in a fixed order and cache-busted with `?v=N`. It now ships **bundled**:
@@ -23,7 +23,7 @@ imports — no ESM rewrite; the scripts keep attaching to `window`).
 ## Build
 
 ```bash
-npm install                  # installs vite (dev dependency only)
+npm install                  # installs esbuild (dev dependency only)
 npm run build                # rebuilds dist/{app,login,admin}.js
 ```
 
@@ -37,7 +37,7 @@ You can run `npm run build` and commit `dist/` yourself, but you don't have to:
 **on every push to `main` that touches frontend sources, the
 `Build frontend bundles` workflow (`.github/workflows/build-frontend.yml`)
 rebuilds `dist/` in CI's environment and commits the canonical bundles back.**
-Because CI always builds fresh (`npm ci`, cleared Vite cache) the result is
+Because CI always builds fresh (`npm ci`) the result is
 deterministic there, so it never produces churn on an unchanged source tree.
 
 On pull requests, `scripts/check-frontend-build.sh` only verifies the bundles

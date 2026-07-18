@@ -12,10 +12,10 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Журнал ОС — Статистика обращений</title>
     <link rel="manifest" href="/api/manifest.json" />
-    <link href="/assets/vendor/bootstrap.min.css?v=1" rel="stylesheet" />
-    <link href="/styles.css?v=34" rel="stylesheet" />
-    <link href="/assets/vendor/inter.css?v=1" rel="stylesheet">
-    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons.css?v=1">
+    <link href="/assets/vendor/bootstrap.min.css?v=39" rel="stylesheet" />
+    <link href="/styles.css?v=39" rel="stylesheet" />
+    <link href="/assets/vendor/inter.css?v=39" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons.css?v=39">
 </head>
 <body class="app-body">
     <!-- Skip navigation for keyboard users -->
@@ -235,9 +235,6 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
             </div>
             <div class="page-context-actions" id="pageContextActions"></div>
             <div class="topbar-actions">
-                <button class="btn btn-outline-secondary btn-sm" id="darkModeToggle" title="Тёмная тема" aria-label="Переключить тему">
-                    <i class="bi bi-moon-fill" id="darkModeIcon"></i>
-                </button>
                 <button class="btn btn-outline-secondary btn-sm" id="globalSearchBtn" title="Поиск (Ctrl+K)">
                     <i class="bi bi-search"></i> <span class="btn-label" data-i18n="topbar.search">Поиск</span>
                 </button>
@@ -248,10 +245,15 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
                     </button>
                     <span class="notify-badge d-none" id="notifyBadge" aria-live="polite">0</span>
                 </span>
-                <div class="topbar-secondary export-admin-only d-none d-lg-flex align-items-center gap-2">
-                    <button class="btn btn-outline-primary btn-sm" id="exportCenterBtn" title="Экспорт-центр">
-                        <i class="bi bi-box-arrow-up"></i> <span class="btn-label" data-i18n="exportcenter.open">Экспорт-центр</span>
-                    </button>
+                <button class="btn btn-outline-primary btn-sm export-admin-only" id="exportCenterBtn" title="Экспорт-центр">
+                    <i class="bi bi-box-arrow-up"></i> <span class="btn-label" data-i18n="exportcenter.open">Экспорт-центр</span>
+                </button>
+                <!-- Individual export/import buttons are decluttered off the toolbar: they stay in
+                     the DOM (the ⋯ menu triggers them via data-trigger) but are always hidden.
+                     Plain d-none only — NOT export-admin-only, whose admin toggle in core.js would
+                     otherwise strip d-none and re-show them. Export access = the Export-Center
+                     button above + the ⋯ menu. -->
+                <div class="topbar-secondary d-none">
                     <button class="btn btn-outline-secondary btn-sm" id="exportCsvBtn">
                         <i class="bi bi-file-earmark-spreadsheet"></i> <span class="btn-label" data-i18n="topbar.export_csv">CSV</span>
                     </button>
@@ -273,12 +275,11 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
                         <input type="file" id="importCsvInput" hidden accept=".csv,text/csv,text/plain" />
                     </label>
                 </div>
-                <div class="dropdown d-lg-none">
-                    <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown" aria-label="Ещё действия">
+                <div class="dropdown export-admin-only">
+                    <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown" aria-label="Ещё действия" title="Экспорт / импорт">
                         <i class="bi bi-three-dots-vertical"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end" id="topbarMoreMenu">
-                        <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportCenterBtn"><i class="bi bi-box-arrow-up me-2"></i><span data-i18n="exportcenter.open_item">Экспорт-центр…</span></button></li>
                         <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportCsvBtn"><i class="bi bi-file-earmark-spreadsheet me-2"></i><span data-i18n="topbar.export_csv">CSV</span></button></li>
                         <li class="export-admin-only"><button class="dropdown-item" type="button" data-trigger="exportXlsxBtn"><i class="bi bi-file-earmark-excel me-2"></i>Excel</button></li>
                         <li class="export-admin-only"><a class="dropdown-item" href="/api/export_pdf.php?type=summary" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf me-2"></i><span data-i18n="topbar.export_pdf">PDF</span></a></li>
@@ -1725,33 +1726,46 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         </button>
     </nav>
 
-    <script src="/assets/vendor/bootstrap.bundle.min.js?v=1"></script>
-    <script src="/assets/vendor/chart.umd.min.js?v=1"></script>
-    <script src="config_public.php?v=30"></script>
+    <script src="/assets/vendor/bootstrap.bundle.min.js?v=39"></script>
+    <script src="/assets/vendor/chart.umd.min.js?v=39"></script>
+    <script src="config_public.php?v=39"></script>
     <!-- Bundled app scripts (csrf-handler + js/*.js + app.js), built by `npm run build`.
          Raw sources live in api/js/ and frontend/app.entry.js defines the order. -->
-    <script src="/dist/app.js?v=37"></script>
+    <script src="/dist/app.js?v=39"></script>
     <!-- Календарь v2: подключён отдельно ПОСЛЕ бандла и переопределяет
          window.initCalendar/refreshCalendar из dist/app.js (старый календарь
          в минифицированном бандле становится мёртвым кодом). При пересборке
          бандла исключите calendar.js из frontend/app.entry.js. -->
-    <script src="/api/js/calendar.js?v=2"></script>
-    <script src="/api/js/appeals-ui.js?v=2"></script>
-    <script src="/api/js/sessions-ui.js?v=1"></script>
-    <script src="/api/js/admin-errors-ui.js?v=1"></script>
-    <script src="/api/js/pwa-install.js?v=1"></script>
-    <script src="/api/js/notify-feed.js?v=1"></script>
-    <script src="/api/js/export-center.js?v=1"></script>
-    <script src="/js/site-config.js?v=30"></script>
-    <script src="/js/site-docs.js?v=30"></script>
+    <script src="/api/js/calendar.js?v=39"></script>
+    <script src="/api/js/appeals-ui.js?v=39"></script>
+    <script src="/api/js/sessions-ui.js?v=39"></script>
+    <script src="/api/js/admin-errors-ui.js?v=39"></script>
+    <script src="/api/js/pwa-install.js?v=39"></script>
+    <script src="/api/js/notify-feed.js?v=39"></script>
+    <script src="/api/js/export-center.js?v=39"></script>
+    <script src="/js/site-config.js?v=39"></script>
+    <script src="/js/site-docs.js?v=39"></script>
     <script nonce="<?= $nonce ?>">
         // Проверка сессии и показ пользователя
         document.addEventListener('DOMContentLoaded', async () => {
+            let data;
             try {
                 const resp = await fetch('auth.php');
                 if (!resp.ok) throw new Error('unauth');
-                const data = await resp.json();
+                data = await resp.json();
                 if (!data.authenticated) throw new Error('unauth');
+            } catch (e) {
+                // Только настоящий сбой авторизации ведёт на страницу входа.
+                window.location.href = '../login.html';
+                return;
+            }
+
+            // Сессия подтверждена. Дальше — настройка UI и запуск приложения.
+            // Ошибки на этом этапе НЕ должны трактоваться как «сессия истекла»:
+            // иначе любая JS-ошибка (например, неподгруженный Bootstrap из-за
+            // отсутствующих /assets/vendor/*) выкидывала авторизованного
+            // пользователя на форму входа.
+            try {
                 const user = data.user;
                 window.syncUserSession?.(user);
                 window.allRegions = data.regions || [];
@@ -1808,9 +1822,10 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
                 if (typeof initializeApp === 'function') {
                     await initializeApp();
                 }
-            } catch(e) {
-                // Нет сессии — на страницу входа
-                window.location.href = '../login.html';
+            } catch (e) {
+                // Сессия валидна — это ошибка инициализации UI, а не авторизации.
+                // Логируем, но НЕ уводим на логин.
+                console.error('Ошибка инициализации приложения:', e);
             }
         });
 

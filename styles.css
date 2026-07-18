@@ -4812,3 +4812,36 @@ body.dark-mode ::selection {
         transition: background-color 0.25s ease, color 0.25s ease;
     }
 }
+
+/* =========================================================================
+   Mobile hardening — design audit 2026-07-18. Additive & conservative:
+   only adds scroll/wrap safety on small screens, never overrides existing
+   layout. Verify on a real device.
+   ========================================================================= */
+
+/* Momentum scrolling inside the responsive table wrappers on touch devices. */
+.table-responsive {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Wide non-table panels (the calendar grid) scroll inside their own box on
+   phones instead of pushing the whole page wider. */
+@media (max-width: 767.98px) {
+    #calendarPane {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* On phones, modal action buttons wrap and go full-width instead of
+   overflowing off-screen. */
+@media (max-width: 575.98px) {
+    .modal-footer {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .modal-footer > .btn {
+        flex: 1 1 auto;
+    }
+}
+

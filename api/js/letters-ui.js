@@ -5,6 +5,29 @@
   const API_BASE = window.API_BASE;
   const store = window.store;
   const t = (k, fb) => window.AppI18n?.t(k, fb) ?? fb;
+
+  // Register this module's keys (ru + kz) so Kazakh resolves instead of falling
+  // back to the Russian literal.
+  window.AppI18n && window.AppI18n.register({
+    ru: {
+      'filter.all_recipients': 'Все адресаты',
+      'letters.view': 'Просмотр',
+      'letters.no_permission': 'Недостаточно прав для сохранения',
+      'letters.no_scans': 'Сканы не найдены',
+      'letters.scans_load_error': 'Не удалось загрузить сканы',
+      'tpl.preview_empty': 'Шаблон не содержит текста',
+      'tpl.vars_body': 'Поддерживаются плейсхолдеры: {номер}, {организация}, {дата}, {тема} (или {number}, {organization}, {date}, {subject}). При применении они заменяются значениями из текущей формы письма; незаполненные — маркером ___.',
+    },
+    kz: {
+      'filter.all_recipients': 'Барлық алушылар',
+      'letters.view': 'Қарау',
+      'letters.no_permission': 'Сақтауға құқық жеткіліксіз',
+      'letters.no_scans': 'Сканерленген құжаттар табылмады',
+      'letters.scans_load_error': 'Сканерленген құжаттарды жүктеу мүмкін болмады',
+      'tpl.preview_empty': 'Үлгіде мәтін жоқ',
+      'tpl.vars_body': 'Толтырғыштар қолдау көрсетіледі: {номер}, {организация}, {дата}, {тема} (немесе {number}, {organization}, {date}, {subject}). Қолданғанда олар ағымдағы хат формасының мәндерімен ауыстырылады; толтырылмағандары — ___ белгісімен.',
+    },
+  });
   const canWrite = () => window.canWrite?.() ?? false;
   const canDelete = () => window.canDelete?.() ?? false;
   let _isSubmitting = false;

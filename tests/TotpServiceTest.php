@@ -67,12 +67,19 @@ class TotpServiceTest extends TestCase
         $this->assertCount(4, $remaining);
     }
 
-    public function testQrUrlUsesReachableServiceWithEncodedUri(): void
+    public function testQrUrlIsGeneratedLocallyWithoutLeakingSecret(): void
     {
-        $uri = 'otpauth://totp/Test%3Auser?secret=ABC';
+        // The QR is rendered server-side (chillerlan/php-qrcode) and returned as an
+        // inline data: URI, so the otpauth secret never leaves the server. It must
+        // not be an external image service, and the raw secret must not appear in
+        // the URL (it is encoded inside the rendered image, not the URI string).
+        $uri = 'otpauth://totp/Test%3Auser?secret=ABCSECRET123';
         $url = TotpService::getQrUrl($uri);
-        $this->assertStringStartsWith('https://api.qrserver.com/', $url);
-        $this->assertStringContainsString(rawurlencode($uri), $url);
+
+        $this->assertStringStartsWith('data:image/', $url);
+        $this->assertStringContainsString(';base64,', $url);
+        $this->assertStringNotContainsString('api.qrserver.com', $url);
         $this->assertStringNotContainsString('chart.googleapis.com', $url);
+        $this->assertStringNotContainsString('ABCSECRET123', $url);
     }
 }

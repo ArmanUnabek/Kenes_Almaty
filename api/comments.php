@@ -7,7 +7,6 @@ require_once __DIR__ . '/../auth_middleware.php';
 
 use App\Middleware\CsrfMiddleware;
 use App\Middleware\RateLimiter;
-use App\Services\FileCache;
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -16,75 +15,9 @@ checkAuth();
 $db  = getDBConnection();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-ensureLetterCommentsTable($db);
-
-/**
- * Гарантирует существование таблицы letter_comments (self-healing).
- * DDL выполняется не чаще раза в 24 часа: факт существования кэшируется через FileCache.
- * Основная схема создаётся миграцией migrations/2026_07_10_pending_fixes.sql.
- */
-function ensureLetterCommentsTable(\PDO $db): void
-{
-    $cache = class_exists(FileCache::class) ? new FileCache() : null;
-    if ($cache !== null && $cache->get('schema_letter_comments_exists') === true) {
-        return;
-    }
-
-    try {
-        createLetterCommentsTable($db);
-    } catch (\PDOException $e) {
-        // Нет права CREATE и т.п. — таблица, скорее всего, уже создана миграцией.
-        // Не роняем API: последующие запросы сами покажут, если таблицы реально нет.
-        error_log('comments.php: ensureLetterCommentsTable DDL failed: ' . $e->getMessage());
-        return;
-    }
-
-    if ($cache !== null) {
-        $cache->set('schema_letter_comments_exists', true, 86400);
-    }
-}
-
-function createLetterCommentsTable(\PDO $db): void
-{
-    $driver = $db->getAttribute(\PDO::ATTR_DRIVER_NAME);
-    if ($driver === 'sqlite') {
-    $db->exec("
-        CREATE TABLE IF NOT EXISTS letter_comments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            letter_type TEXT NOT NULL,
-            letter_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            comment TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ");
-} elseif ($driver === 'pgsql') {
-    $db->exec("
-        CREATE TABLE IF NOT EXISTS letter_comments (
-            id SERIAL PRIMARY KEY,
-            letter_type VARCHAR(20) NOT NULL,
-            letter_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            comment TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ");
-} else {
-    $db->exec("
-        CREATE TABLE IF NOT EXISTS letter_comments (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            letter_type ENUM('incoming','outgoing') NOT NULL,
-            letter_id INT NOT NULL,
-            user_id INT NOT NULL,
-            comment TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            INDEX idx_letter (letter_type, letter_id),
-            INDEX idx_user (user_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ");
-    }
-}
+// Schema note: the letter_comments table is defined in deploy_database.sql and
+// migrations/2026_07_18_endpoint_tables.sql (run the migration on databases that
+// predate it). Runtime "self-healing" DDL was removed here.
 
 switch ($method) {
     case 'GET':

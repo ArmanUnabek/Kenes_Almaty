@@ -10,6 +10,52 @@
     return window.AppI18n?.t(key) || fallback;
   }
 
+  // Register this module's keys (ru + kz). Without these, t() above returns the
+  // raw key string for unregistered keys, so the member-stats UI showed
+  // "members.stat_open" instead of "Открытых". Registering fixes that and adds KK.
+  window.AppI18n && window.AppI18n.register({
+    ru: {
+      'common.status': 'Статус',
+      'letters.kk_number': 'Рег. номер',
+      'members.not_assigned': '— не назначена —',
+      'members.stats': 'Статистика',
+      'members.stat_date': 'Дата',
+      'members.stat_org': 'Организация',
+      'members.stat_incoming': 'Входящих',
+      'members.stat_outgoing': 'Исходящих',
+      'members.stat_answered': 'Отвечено',
+      'members.stat_closed': 'Отвечено',
+      'members.stat_open': 'Открытых',
+      'members.stat_pending': 'Открыто',
+      'members.stat_overdue': 'Просроченных',
+      'members.stat_response_rate': 'Процент ответов',
+      'members.stat_lead': 'Ведущий по',
+      'members.stat_lead_badge': 'Ведущий',
+      'members.stat_no_letters': 'Писем не назначено',
+      'members.stat_recent': 'Последние входящие письма',
+    },
+    kz: {
+      'common.status': 'Мәртебе',
+      'letters.kk_number': 'Тіркеу нөмірі',
+      'members.not_assigned': '— тағайындалмаған —',
+      'members.stats': 'Статистика',
+      'members.stat_date': 'Күні',
+      'members.stat_org': 'Ұйым',
+      'members.stat_incoming': 'Кіріс',
+      'members.stat_outgoing': 'Шығыс',
+      'members.stat_answered': 'Жауап берілді',
+      'members.stat_closed': 'Жауап берілді',
+      'members.stat_open': 'Ашық',
+      'members.stat_pending': 'Ашық',
+      'members.stat_overdue': 'Мерзімі өткен',
+      'members.stat_response_rate': 'Жауап беру пайызы',
+      'members.stat_lead': 'Жетекші',
+      'members.stat_lead_badge': 'Жетекші',
+      'members.stat_no_letters': 'Хат тағайындалмаған',
+      'members.stat_recent': 'Соңғы кіріс хаттар',
+    },
+  });
+
   function memberLocalizedField(member, ruKey, kzKey) {
     const isKz = window.AppI18n?.lang === 'kz';
     if (isKz && member[kzKey]) return member[kzKey];
