@@ -9,11 +9,11 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OS API Docs</title>
   <link rel="icon" type="image/png" href="/assets/vendor/swagger/favicon-32x32.png" />
-  <link rel="stylesheet" href="/assets/vendor/swagger/swagger-ui.css?v=38" />
+  <link rel="stylesheet" href="/assets/vendor/swagger/swagger-ui.css?v=39" />
 </head>
 <body>
   <div id="swagger-ui"></div>
-  <script src="/assets/vendor/swagger/swagger-ui-bundle.js?v=38"></script>
+  <script src="/assets/vendor/swagger/swagger-ui-bundle.js?v=39"></script>
   <script nonce="<?= $nonce ?>">
     window.ui = SwaggerUIBundle({
       url: './openapi.json',
