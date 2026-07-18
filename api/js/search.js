@@ -3,6 +3,17 @@
   let debounceTimer = null;
   let searchModal = null;
 
+  window.AppI18n && window.AppI18n.register({
+    ru: {
+      'search.source.archive_incoming': 'Архив · Входящее',
+      'search.source.archive_outgoing': 'Архив · Исходящее',
+    },
+    kz: {
+      'search.source.archive_incoming': 'Мұрағат · Кіріс',
+      'search.source.archive_outgoing': 'Мұрағат · Шығыс',
+    },
+  });
+
   function t(key, fallback) {
     return window.AppI18n?.t(key, fallback) ?? fallback;
   }

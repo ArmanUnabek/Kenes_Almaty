@@ -4,6 +4,55 @@
 (function (window) {
   const t = (k, fb) => window.AppI18n?.t(k, fb) ?? fb;
   const fmt = (k, vars) => window.AppI18n?.fmt(k, vars) ?? k;
+
+  window.AppI18n && window.AppI18n.register({
+    ru: {
+      'shell.preparing_export': 'Подготовка экспорта...',
+      'shell.export_error': 'Ошибка экспорта ({status})',
+      'shell.export_failed': 'Не удалось экспортировать данные',
+      'shell.importing_data': 'Импорт данных...',
+      'shell.importing_csv': 'Импорт CSV...',
+      'shell.csv_type_prompt': 'Тип писем для импорта:\n  incoming — входящие\n  outgoing — исходящие\n\nВведите incoming или outgoing:',
+      'shell.csv_confirm_header': 'Импорт {type} писем из CSV?',
+      'shell.csv_type_incoming_gen': 'входящих',
+      'shell.csv_type_outgoing_gen': 'исходящих',
+      'shell.csv_format_label': 'Формат (разделитель — точка с запятой):',
+      'shell.csv_format_incoming': 'дата;организация;рег.номер;категория;тема;примечание',
+      'shell.csv_format_outgoing': 'дата;исх.номер;организация;тема;примечание;тип',
+      'shell.csv_first_row_hint': 'Первая строка — заголовок (пропускается).',
+      'shell.server_error': 'Ошибка сервера ({status})',
+      'shell.csv_errors_head': 'Ошибки (первые {n}):',
+      'shell.csv_error_row': '  Строка {row}: {message}',
+      'shell.csv_import_done': 'CSV импорт завершён: импортировано {imported}, пропущено {skipped}.',
+      'shell.csv_details_console': 'Подробности в консоли.',
+      'shell.import_csv_failed': 'Не удалось импортировать CSV',
+      'shell.light_theme': 'Светлая тема',
+      'shell.dark_theme': 'Тёмная тема',
+    },
+    kz: {
+      'shell.preparing_export': 'Экспорт дайындалуда...',
+      'shell.export_error': 'Экспорт қатесі ({status})',
+      'shell.export_failed': 'Деректерді экспорттау сәтсіз аяқталды',
+      'shell.importing_data': 'Деректер импортталуда...',
+      'shell.importing_csv': 'CSV импортталуда...',
+      'shell.csv_type_prompt': 'Импорттау үшін хат түрі:\n  incoming — кіріс\n  outgoing — шығыс\n\nincoming немесе outgoing енгізіңіз:',
+      'shell.csv_confirm_header': 'CSV-ден {type} хаттарды импорттау керек пе?',
+      'shell.csv_type_incoming_gen': 'кіріс',
+      'shell.csv_type_outgoing_gen': 'шығыс',
+      'shell.csv_format_label': 'Формат (бөлгіш — нүктелі үтір):',
+      'shell.csv_format_incoming': 'күні;ұйым;тіркеу нөмірі;санат;тақырып;ескертпе',
+      'shell.csv_format_outgoing': 'күні;шығыс нөмірі;ұйым;тақырып;ескертпе;түрі',
+      'shell.csv_first_row_hint': 'Бірінші жол — тақырып (өткізіледі).',
+      'shell.server_error': 'Сервер қатесі ({status})',
+      'shell.csv_errors_head': 'Қателер (алғашқы {n}):',
+      'shell.csv_error_row': '  {row}-жол: {message}',
+      'shell.csv_import_done': 'CSV импорты аяқталды: импортталды {imported}, өткізілді {skipped}.',
+      'shell.csv_details_console': 'Толығырақ консольде.',
+      'shell.import_csv_failed': 'CSV импорттау сәтсіз аяқталды',
+      'shell.light_theme': 'Ашық тақырып',
+      'shell.dark_theme': 'Қараңғы тақырып',
+    },
+  });
   const formatDateISOtoRus = window.AppUtils?.formatDateISOtoRus
     || ((iso) => (iso ? new Date(iso).toLocaleDateString('ru-RU') : ''));
 
@@ -20,7 +69,7 @@
     if (!overlay) return;
     overlay.style.display = 'flex';
     const text = overlay.querySelector('p');
-    if (text) text.textContent = message || 'Загрузка...';
+    if (text) text.textContent = message || t('common.loading', 'Загрузка...');
   }
 
   function hideLoading() {
@@ -40,7 +89,7 @@
       <div class="d-flex align-items-center">
         <i class="bi ${icons[type] || icons.info} me-2" style="font-size:1.1rem"></i>
         <div class="toast-body">${escapeHtml(message)}</div>
-        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Закрыть"></button>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="${t('common.close', 'Закрыть')}"></button>
       </div>`;
     toast.classList.add(`bg-${type === 'error' ? 'danger' : type}`);
     container.appendChild(toast);
@@ -61,11 +110,11 @@
       return;
     }
     try {
-      showLoading('Подготовка экспорта...');
+      showLoading(t('shell.preparing_export', 'Подготовка экспорта...'));
       const resp = await fetch(`/api/export.php?format=${encodeURIComponent(format)}`);
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        throw new Error(err.error || `Ошибка экспорта (${resp.status})`);
+        throw new Error(err.error || fmt('shell.export_error', { status: resp.status }));
       }
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
@@ -83,7 +132,7 @@
       showSuccess(t('export.done', 'Экспорт выполнен. Операция записана в журнал аудита.'));
     } catch (err) {
       console.error(err);
-      showError(err.message || 'Не удалось экспортировать данные');
+      showError(err.message || t('shell.export_failed', 'Не удалось экспортировать данные'));
     } finally {
       hideLoading();
     }
@@ -110,7 +159,7 @@
       return;
     }
     try {
-      showLoading('Импорт данных...');
+      showLoading(t('shell.importing_data', 'Импорт данных...'));
       const data = JSON.parse(await file.text());
       const user = JSON.parse(sessionStorage.getItem('user') || 'null');
       const regionId = user?.region?.id || user?.region_id || null;
@@ -274,7 +323,7 @@
     }
 
     const typeChoice = window.prompt(
-      'Тип писем для импорта:\n  incoming — входящие\n  outgoing — исходящие\n\nВведите incoming или outgoing:',
+      t('shell.csv_type_prompt', 'Тип писем для импорта:\n  incoming — входящие\n  outgoing — исходящие\n\nВведите incoming или outgoing:'),
       'incoming'
     );
     if (!typeChoice || !['incoming', 'outgoing'].includes(typeChoice.trim().toLowerCase())) {
@@ -283,20 +332,24 @@
     }
     const letterType = typeChoice.trim().toLowerCase();
 
+    const genType = letterType === 'incoming'
+      ? t('shell.csv_type_incoming_gen', 'входящих')
+      : t('shell.csv_type_outgoing_gen', 'исходящих');
+    const formatCols = letterType === 'incoming'
+      ? t('shell.csv_format_incoming', 'дата;организация;рег.номер;категория;тема;примечание')
+      : t('shell.csv_format_outgoing', 'дата;исх.номер;организация;тема;примечание;тип');
     if (!window.confirm(
-      `Импорт ${letterType === 'incoming' ? 'входящих' : 'исходящих'} писем из CSV?\n\n` +
-      'Формат (разделитель — точка с запятой):\n' +
-      (letterType === 'incoming'
-        ? 'дата;организация;рег.номер;категория;тема;примечание'
-        : 'дата;исх.номер;организация;тема;примечание;тип') +
-      '\n\nПервая строка — заголовок (пропускается).'
+      fmt('shell.csv_confirm_header', { type: genType }) + '\n\n' +
+      t('shell.csv_format_label', 'Формат (разделитель — точка с запятой):') + '\n' +
+      formatCols +
+      '\n\n' + t('shell.csv_first_row_hint', 'Первая строка — заголовок (пропускается).')
     )) {
       if (ev?.target) ev.target.value = '';
       return;
     }
 
     try {
-      showLoading('Импорт CSV...');
+      showLoading(t('shell.importing_csv', 'Импорт CSV...'));
       const formData = new FormData();
       formData.append('file', file);
       formData.append('type', letterType);
@@ -307,21 +360,22 @@
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        throw new Error(data.error || `Ошибка сервера (${resp.status})`);
+        throw new Error(data.error || fmt('shell.server_error', { status: resp.status }));
       }
       const errSummary = data.errors?.length
-        ? `\nОшибки (первые ${data.errors.length}):\n` +
-          data.errors.slice(0, 5).map((e) => `  Строка ${e.row}: ${e.message}`).join('\n')
+        ? '\n' + fmt('shell.csv_errors_head', { n: data.errors.length }) + '\n' +
+          data.errors.slice(0, 5).map((e) => fmt('shell.csv_error_row', { row: e.row, message: e.message })).join('\n')
         : '';
       showSuccess(
-        `CSV импорт завершён: импортировано ${data.imported}, пропущено ${data.skipped}.${errSummary ? ' Подробности в консоли.' : ''}`
+        fmt('shell.csv_import_done', { imported: data.imported, skipped: data.skipped }) +
+        (errSummary ? ' ' + t('shell.csv_details_console', 'Подробности в консоли.') : '')
       );
       if (errSummary) console.warn('CSV import errors:', data.errors);
       if (typeof window.refreshLetters === 'function') await window.refreshLetters();
       if (typeof window.renderAll === 'function') window.renderAll();
     } catch (err) {
       console.error(err);
-      showError(err.message || 'Не удалось импортировать CSV');
+      showError(err.message || t('shell.import_csv_failed', 'Не удалось импортировать CSV'));
     } finally {
       hideLoading();
       if (ev?.target) ev.target.value = '';
@@ -358,7 +412,7 @@
     const icon = document.getElementById('darkModeIcon');
     if (icon) icon.className = isDark ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
     const btn = document.getElementById('darkModeToggle');
-    if (btn) btn.title = isDark ? 'Светлая тема' : 'Тёмная тема';
+    if (btn) btn.title = isDark ? t('shell.light_theme', 'Светлая тема') : t('shell.dark_theme', 'Тёмная тема');
   }
 
   function toggleDarkMode() {

@@ -13,6 +13,27 @@
     return window.AppI18n?.fmt?.(key, vars) ?? t(key);
   }
 
+  window.AppI18n?.register?.({
+    ru: {
+      'chart.incoming': 'Входящие',
+      'chart.outgoing': 'Исходящие',
+      'dash.members_label': 'Члены ОС',
+      'dash.for_period': 'За период',
+      'dash.vs_prev_month': 'к прошлому месяцу',
+      'dash.unit_mb': 'МБ',
+      'dash.unit_kb': 'КБ',
+    },
+    kz: {
+      'chart.incoming': 'Кіріс',
+      'chart.outgoing': 'Шығыс',
+      'dash.members_label': 'Кеңес мүшелері',
+      'dash.for_period': 'Кезең бойынша',
+      'dash.vs_prev_month': 'өткен айға қарағанда',
+      'dash.unit_mb': 'МБ',
+      'dash.unit_kb': 'КБ',
+    },
+  });
+
 const monthKey = window.AppUtils?.monthKey || ((iso) => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
 const unique = window.AppUtils?.unique || ((values) => Array.from(new Set(values)));
 
@@ -403,7 +424,7 @@ function applyAdvancedStats(adv) {
     const arrow = isNeutral ? '→' : (isUp ? '↑' : '↓');
     const cls = isNeutral ? 'dash-stat__trend--neutral' : (isUp ? 'dash-stat__trend--up' : 'dash-stat__trend--down');
     el.className = `dash-stat__trend ${cls}`;
-    el.textContent = `${arrow} ${Math.abs(val)}% к прошлому месяцу`;
+    el.textContent = `${arrow} ${Math.abs(val)}% ${t('dash.vs_prev_month', 'к прошлому месяцу')}`;
     el.classList.remove('d-none');
   };
   renderTrend('kpiIncomingTrend', adv.trend_comparison?.incoming_change);
@@ -510,8 +531,8 @@ async function renderKPIs() {
   if (commissionsEl) commissionsEl.textContent = String(commissionsCountVal);
 
   if (kpiDbSize) {
-    if (dbSize > 1024 * 1024) kpiDbSize.textContent = `${dbSizeMB} МБ`;
-    else kpiDbSize.textContent = `${dbSizeKB} КБ`;
+    if (dbSize > 1024 * 1024) kpiDbSize.textContent = `${dbSizeMB} ${t('dash.unit_mb', 'МБ')}`;
+    else kpiDbSize.textContent = `${dbSizeKB} ${t('dash.unit_kb', 'КБ')}`;
   }
 
   // Latest period insight (replaces hardcoded "May 2024").

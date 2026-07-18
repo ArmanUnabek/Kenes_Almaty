@@ -5,6 +5,23 @@
   const API = window.AppCore?.API_BASE || '/api';
   let emailPaneBound = false;
 
+  window.AppI18n && window.AppI18n.register({
+    ru: {
+      'notify.browser.overdue_title': 'Журнал ОС — Просроченные письма',
+      'notify.browser.overdue_body': '{n} письм(а) просрочены',
+      'notify.browser.due_soon_title': 'Журнал ОС — Срок истекает',
+      'notify.browser.due_soon_body': '{n} письм(а) требуют ответа в ближайшее время',
+      'notify.queued': 'Поставлено в очередь',
+    },
+    kz: {
+      'notify.browser.overdue_title': 'Кеңес журналы — Мерзімі өткен хаттар',
+      'notify.browser.overdue_body': '{n} хаттың мерзімі өтті',
+      'notify.browser.due_soon_title': 'Кеңес журналы — Мерзім жақындауда',
+      'notify.browser.due_soon_body': '{n} хат жақын арада жауап талап етеді',
+      'notify.queued': 'Кезекке қойылды',
+    },
+  });
+
   function t(key, fallback) {
     return window.AppI18n?.t(key) || fallback;
   }
