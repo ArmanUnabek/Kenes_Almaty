@@ -92,6 +92,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
                     <p class="text-muted mb-0">Ваш номер обращения:</p>
                     <div id="appealNumberDisplay" class="fs-4 fw-bold text-primary my-2"></div>
                     <p class="small text-muted">Мы рассмотрим ваше обращение в установленные сроки.<br>Сохраните номер для отслеживания статуса.</p>
+                    <a href="/appeal_status.php" class="btn btn-primary btn-sm mt-2">Отследить статус</a>
                     <a href="/appeal.php" class="btn btn-outline-secondary btn-sm mt-2">Подать ещё одно</a>
                 </div>
 
