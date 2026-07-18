@@ -12,10 +12,10 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Журнал ОС — Статистика обращений</title>
     <link rel="manifest" href="/api/manifest.json" />
-    <link href="/assets/vendor/bootstrap.min.css?v=39" rel="stylesheet" />
-    <link href="/styles.css?v=39" rel="stylesheet" />
-    <link href="/assets/vendor/inter.css?v=39" rel="stylesheet">
-    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons.css?v=39">
+    <link href="/assets/vendor/bootstrap.min.css?v=40" rel="stylesheet" />
+    <link href="/styles.css?v=40" rel="stylesheet" />
+    <link href="/assets/vendor/inter.css?v=40" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons.css?v=40">
 </head>
 <body class="app-body">
     <!-- Skip navigation for keyboard users -->
@@ -1726,25 +1726,25 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         </button>
     </nav>
 
-    <script src="/assets/vendor/bootstrap.bundle.min.js?v=39"></script>
-    <script src="/assets/vendor/chart.umd.min.js?v=39"></script>
-    <script src="config_public.php?v=39"></script>
+    <script src="/assets/vendor/bootstrap.bundle.min.js?v=40"></script>
+    <script src="/assets/vendor/chart.umd.min.js?v=40"></script>
+    <script src="config_public.php?v=40"></script>
     <!-- Bundled app scripts (csrf-handler + js/*.js + app.js), built by `npm run build`.
          Raw sources live in api/js/ and frontend/app.entry.js defines the order. -->
-    <script src="/dist/app.js?v=39"></script>
+    <script src="/dist/app.js?v=40"></script>
     <!-- Календарь v2: подключён отдельно ПОСЛЕ бандла и переопределяет
          window.initCalendar/refreshCalendar из dist/app.js (старый календарь
          в минифицированном бандле становится мёртвым кодом). При пересборке
          бандла исключите calendar.js из frontend/app.entry.js. -->
-    <script src="/api/js/calendar.js?v=39"></script>
-    <script src="/api/js/appeals-ui.js?v=39"></script>
-    <script src="/api/js/sessions-ui.js?v=39"></script>
-    <script src="/api/js/admin-errors-ui.js?v=39"></script>
-    <script src="/api/js/pwa-install.js?v=39"></script>
-    <script src="/api/js/notify-feed.js?v=39"></script>
-    <script src="/api/js/export-center.js?v=39"></script>
-    <script src="/js/site-config.js?v=39"></script>
-    <script src="/js/site-docs.js?v=39"></script>
+    <script src="/api/js/calendar.js?v=40"></script>
+    <script src="/api/js/appeals-ui.js?v=40"></script>
+    <script src="/api/js/sessions-ui.js?v=40"></script>
+    <script src="/api/js/admin-errors-ui.js?v=40"></script>
+    <script src="/api/js/pwa-install.js?v=40"></script>
+    <script src="/api/js/notify-feed.js?v=40"></script>
+    <script src="/api/js/export-center.js?v=40"></script>
+    <script src="/js/site-config.js?v=40"></script>
+    <script src="/js/site-docs.js?v=40"></script>
     <script nonce="<?= $nonce ?>">
         // Проверка сессии и показ пользователя
         document.addEventListener('DOMContentLoaded', async () => {

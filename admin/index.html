@@ -4,10 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title data-i18n="admin.title">Админ-панель — Журнал ОС</title>
-    <link href="/assets/vendor/bootstrap.min.css?v=39" rel="stylesheet" />
-    <link href="/styles.css?v=39" rel="stylesheet" />
-    <link href="/admin/admin.css?v=39" rel="stylesheet" />
-    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons.css?v=39">
+    <link href="/assets/vendor/bootstrap.min.css?v=40" rel="stylesheet" />
+    <link href="/styles.css?v=40" rel="stylesheet" />
+    <link href="/admin/admin.css?v=40" rel="stylesheet" />
+    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons.css?v=40">
 </head>
 <body class="admin-body">
     <div class="admin-layout">
@@ -137,7 +137,7 @@
                     <div class="admin-card">
                         <div class="admin-card-header">
                             <span data-i18n="user.list">Пользователи системы</span>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="usersRefreshBtn"><i class="bi bi-arrow-clockwise"></i></button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="usersRefreshBtn" title="Обновить список" aria-label="Обновить список"><i class="bi bi-arrow-clockwise"></i></button>
                         </div>
                         <div class="admin-card-body">
                             <div class="admin-filters">
@@ -275,7 +275,7 @@
                                         <p class="small mb-2">2. Отсканируйте QR-код или введите секрет вручную:</p>
                                         <div class="input-group input-group-sm mb-3" style="max-width:340px;">
                                             <input type="text" class="form-control font-monospace" id="totpSecretDisplay" readonly />
-                                            <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('totpSecretDisplay').value)">
+                                            <button class="btn btn-outline-secondary" type="button" title="Скопировать секрет" aria-label="Скопировать секрет" onclick="navigator.clipboard.writeText(document.getElementById('totpSecretDisplay').value)">
                                                 <i class="bi bi-clipboard"></i>
                                             </button>
                                         </div>
@@ -364,7 +364,7 @@
                     <div class="admin-card">
                         <div class="admin-card-header">
                             <span>Существующие шаблоны</span>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="approvalTplRefreshBtn"><i class="bi bi-arrow-clockwise"></i></button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="approvalTplRefreshBtn" title="Обновить список" aria-label="Обновить список"><i class="bi bi-arrow-clockwise"></i></button>
                         </div>
                         <div class="table-responsive">
                             <table class="table table-sm table-hover mb-0">
@@ -546,12 +546,12 @@
         <div>© <span data-site="year">2026</span> <span data-site="operatorName">ТОО «Журнал ОС»</span></div>
     </footer>
 
-    <script src="/assets/vendor/bootstrap.bundle.min.js?v=39"></script>
-    <script src="/assets/vendor/chart.umd.min.js?v=39"></script>
+    <script src="/assets/vendor/bootstrap.bundle.min.js?v=40"></script>
+    <script src="/assets/vendor/chart.umd.min.js?v=40"></script>
     <!-- Bundled admin scripts (csrf-handler + utils + admin-i18n + admin.js),
          built by `npm run build`; order defined in frontend/admin.entry.js. -->
-    <script src="/dist/admin.js?v=39"></script>
-    <script src="/js/site-config.js?v=39"></script>
-    <script src="/js/site-docs.js?v=39"></script>
+    <script src="/dist/admin.js?v=40"></script>
+    <script src="/js/site-config.js?v=40"></script>
+    <script src="/js/site-docs.js?v=40"></script>
 </body>
 </html>

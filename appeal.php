@@ -20,10 +20,10 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Обращение гражданина — Общественный Совет</title>
-    <link href="/assets/vendor/bootstrap.min.css?v=39" rel="stylesheet" />
-    <link href="/styles.css?v=39" rel="stylesheet" />
-    <link href="/assets/vendor/inter.css?v=39" rel="stylesheet">
-    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons.css?v=39">
+    <link href="/assets/vendor/bootstrap.min.css?v=40" rel="stylesheet" />
+    <link href="/styles.css?v=40" rel="stylesheet" />
+    <link href="/assets/vendor/inter.css?v=40" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons.css?v=40">
     <style>
         body.appeal-page {
             background: var(--brand-navy);
@@ -166,7 +166,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         </div>
     </main>
 
-    <script src="/assets/vendor/bootstrap.bundle.min.js?v=39" nonce="<?= htmlspecialchars($nonce, ENT_QUOTES) ?>"></script>
+    <script src="/assets/vendor/bootstrap.bundle.min.js?v=40" nonce="<?= htmlspecialchars($nonce, ENT_QUOTES) ?>"></script>
     <script nonce="<?= htmlspecialchars($nonce, ENT_QUOTES) ?>">
     (function () {
         const form    = document.getElementById('appealForm');
