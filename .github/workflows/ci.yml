@@ -29,6 +29,9 @@ jobs:
         with:
           php-version: '8.3'
           tools: composer
+          # pdo_sqlite/sqlite3 back the in-memory test DB (tests/Support);
+          # mbstring/openssl are used across the app under test.
+          extensions: mbstring, pdo_sqlite, sqlite3, openssl, json, curl
 
       - name: Install PHP dependencies
         run: composer install --no-interaction --no-progress
@@ -84,6 +87,17 @@ jobs:
       # --- Сборка фронтенд-бандла (проверка, что esbuild собирается) ---
       - name: Build frontend bundle
         run: npm run build
+
+      # --- Referenced static assets must exist (no-CDN CSP → всё грузится локально).
+      # Ловит ситуацию, когда HTML ссылается на /assets|/dist|/js файл, которого нет
+      # в репозитории (как пропавший бандл Bootstrap) — php -l/node --check это не видят.
+      - name: Referenced assets exist
+        run: bash scripts/check-referenced-assets.sh
+
+      # --- Unit-тесты (PHPUnit). Гоняем весь набор: он ловит регрессии схемы БД,
+      # CSRF, TOTP и т.д., которые линт/сборка пропускают.
+      - name: Unit tests (PHPUnit)
+        run: vendor/bin/phpunit --no-coverage
 
       # --- Smoke-тест: lint-секция отработает, HTTP-секция скипнется без сервера ---
       - name: Smoke test
