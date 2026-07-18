@@ -94,6 +94,11 @@ jobs:
       - name: Referenced assets exist
         run: bash scripts/check-referenced-assets.sh
 
+      # --- Единая ?v= версия ассетов на всех страницах (html + php-шелл),
+      # чтобы деплой никогда не отдавал смешанный кэш CSS/JS.
+      - name: Single asset version
+        run: bash scripts/check-asset-versions.sh
+
       # --- Unit-тесты (PHPUnit). Гоняем весь набор: он ловит регрессии схемы БД,
       # CSRF, TOTP и т.д., которые линт/сборка пропускают.
       - name: Unit tests (PHPUnit)

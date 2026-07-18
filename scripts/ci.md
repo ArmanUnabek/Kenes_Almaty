@@ -16,13 +16,18 @@
 6. **Build** — `npm run build` (esbuild собирает все три бандла
    `dist/{app,login,admin}.js` через `scripts/build-frontend.mjs`).
 7. **Referenced assets exist** — `scripts/check-referenced-assets.sh`: каждый
-   локальный `/assets|/dist|/js`-ресурс, на который ссылаются HTML-страницы,
-   обязан присутствовать в репозитории (ловит пропавшие файлы вроде бандла
-   Bootstrap, которые `php -l`/`node --check` не видят).
-8. **Unit tests (PHPUnit)** — `vendor/bin/phpunit --no-coverage`, весь набор
+   локальный `/assets|/dist|/js`-ресурс, на который ссылаются страницы
+   (`api/index.php`, `login.php`, `appeal.php`, `api/docs/index.php`,
+   `admin/index.html`, `login.html`), обязан присутствовать в репозитории
+   (ловит пропавшие файлы вроде бандла Bootstrap/Swagger, которые
+   `php -l`/`node --check` не видят).
+8. **Single asset version** — `scripts/check-asset-versions.sh`: единая `?v=N`
+   на всех tracked html/php-страницах (в т.ч. SPA-шелл `api/index.php`), чтобы
+   деплой не отдавал смешанный кэш. Бампить — `scripts/bump-assets.sh <N>`.
+9. **Unit tests (PHPUnit)** — `vendor/bin/phpunit --no-coverage`, весь набор
    (158 тестов): ловит регрессии схемы БД, CSRF, TOTP и пр.
-9. **Smoke test** — `php tests/smoke.php`. Lint-секция отрабатывает,
-   HTTP-секция скипается без запущенного сервера (WARN, exit 0).
+10. **Smoke test** — `php tests/smoke.php`. Lint-секция отрабатывает,
+    HTTP-секция скипается без запущенного сервера (WARN, exit 0).
 
 Никаких внешних CDN/Pusher — только официальные GitHub Actions.
 

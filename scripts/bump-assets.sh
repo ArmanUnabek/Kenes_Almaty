@@ -2,11 +2,16 @@
 #
 # Single source of truth for the static asset cache-busting version (?v=N).
 #
-# All HTML entry points (api/index.html, login.html, admin/index.html,
-# help/*, legal/*) reference CSS/JS with a `?v=N` query string. Historically
-# these drifted out of sync (index at v=25, others at v=22), so a deploy could
-# serve a stale mix. This script rewrites EVERY `?v=N` across all tracked HTML
+# All entry points reference CSS/JS with a `?v=N` query string. This covers
+# both static HTML (api/index.html, login.html, admin/index.html, help/*,
+# legal/*) AND the PHP-rendered pages (api/index.php, login.php, appeal.php,
+# api/docs/index.php) — the main SPA shell is a .php, so HTML-only bumping left
+# it drifting. Historically these drifted out of sync, so a deploy could serve a
+# stale mix. This script rewrites EVERY `?v=N` across all TRACKED html/php pages
 # to a single value — bump it once and every page refreshes consistently.
+#
+# File set = `git ls-files '*.html' '*.php'`: tracked files only, so gitignored
+# vendor/ (Composer libs, some of which carry ?v= in examples) is never touched.
 #
 # Usage:
 #   scripts/bump-assets.sh <integer>     # set all assets to ?v=<integer>
@@ -15,11 +20,16 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Tracked html/php pages that may carry versioned asset refs.
+pages() {
+  git ls-files '*.html' '*.php'
+}
+
 show_current() {
   echo "Asset versions currently in use:"
   # `|| true`: with `set -o pipefail`, grep exiting non-zero on no matches
   # would otherwise abort the script instead of printing an empty summary.
-  { grep -rhoE '\?v=[0-9]+' --include='*.html' . || true; } | sort | uniq -c
+  { pages | xargs grep -hoE '\?v=[0-9]+' 2>/dev/null || true; } | sort | uniq -c
 }
 
 NEW="${1:-}"
@@ -35,7 +45,7 @@ if ! [[ "$NEW" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-mapfile -t files < <(grep -rlE '\?v=[0-9]+' --include='*.html' . || true)
+mapfile -t files < <(pages | while IFS= read -r f; do grep -qE '\?v=[0-9]+' "$f" && printf '%s\n' "$f"; done)
 if [[ ${#files[@]} -eq 0 ]]; then
   echo "No versioned assets found."
   exit 0

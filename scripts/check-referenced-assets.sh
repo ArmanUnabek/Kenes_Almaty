@@ -19,8 +19,17 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# HTML entry points that reference static assets.
-PAGES=(api/index.php admin/index.html login.html)
+# Entry points that reference static assets (every user-facing page under the
+# no-CDN CSP). Keep this list complete — an unlisted page's missing asset would
+# go unnoticed (that's how the API-docs Swagger bundle was overlooked).
+PAGES=(
+  api/index.php
+  admin/index.html
+  login.html
+  login.php
+  appeal.php
+  api/docs/index.php
+)
 
 # Extensions we treat as static files that must exist on disk.
 STATIC_EXT='css|js|mjs|woff2?|ttf|otf|eot|png|jpe?g|gif|svg|ico|webp|json|webmanifest|map'
@@ -39,6 +48,11 @@ for page in "${PAGES[@]}"; do
     esac
     # Strip query string / fragment (the ?v= cache-buster).
     path="${url%%[?#]*}"
+    # Skip directory links (e.g. /admin/, /help/, /api/) — those resolve to an
+    # index handler, not a single static file.
+    case "$path" in
+      */) continue ;;
+    esac
     # Only static-asset extensions (skips /api/index.php, /auth.php, etc.).
     ext="${path##*.}"
     if ! printf '%s' "$ext" | grep -qiE "^(${STATIC_EXT})$"; then

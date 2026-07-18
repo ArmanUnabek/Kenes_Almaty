@@ -8,10 +8,10 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Вход — Журнал ОС</title>
-    <link href="/assets/vendor/bootstrap.min.css?v=1" rel="stylesheet" />
-    <link href="/styles.css?v=34" rel="stylesheet" />
-    <link href="/assets/vendor/inter.css?v=1" rel="stylesheet">
-    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons.css?v=1">
+    <link href="/assets/vendor/bootstrap.min.css?v=38" rel="stylesheet" />
+    <link href="/styles.css?v=38" rel="stylesheet" />
+    <link href="/assets/vendor/inter.css?v=38" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons.css?v=38">
     <style>
         body.login-page {
             background: var(--brand-navy);
@@ -228,12 +228,12 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         <div>© <span data-site="year">2026</span> <span data-site="operatorName">ТОО «Журнал ОС»</span> · БСН <span data-site="bin">—</span></div>
     </div>
 
-    <script src="/assets/vendor/bootstrap.bundle.min.js?v=1"></script>
+    <script src="/assets/vendor/bootstrap.bundle.min.js?v=38"></script>
     <!-- Bundled login scripts (csrf-handler + login-i18n), built by `npm run build`;
          order defined in frontend/login.entry.js. Loads before the inline login call. -->
-    <script src="/dist/login.js?v=30"></script>
-    <script src="/js/site-config.js?v=30"></script>
-    <script src="/js/site-docs.js?v=30"></script>
+    <script src="/dist/login.js?v=38"></script>
+    <script src="/js/site-config.js?v=38"></script>
+    <script src="/js/site-docs.js?v=38"></script>
     <script nonce="<?= $nonce ?>">
         const form = document.getElementById('loginForm');
         const usernameInput = document.getElementById('username');
