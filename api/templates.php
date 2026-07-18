@@ -14,60 +14,9 @@ checkAuth();
 $db     = getDBConnection();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-// Ensure letter_templates table exists (runtime migration, driver-aware)
-$driver = $db->getAttribute(\PDO::ATTR_DRIVER_NAME);
-if ($driver === 'sqlite') {
-    $db->exec("
-        CREATE TABLE IF NOT EXISTS letter_templates (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            region_id INTEGER NOT NULL,
-            name VARCHAR(255) NOT NULL,
-            letter_type TEXT NOT NULL,
-            organization VARCHAR(255),
-            subject TEXT,
-            note TEXT,
-            category TEXT DEFAULT 'KK',
-            created_by INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ");
-} elseif ($driver === 'pgsql') {
-    $db->exec("
-        CREATE TABLE IF NOT EXISTS letter_templates (
-            id SERIAL PRIMARY KEY,
-            region_id INTEGER NOT NULL,
-            name VARCHAR(255) NOT NULL,
-            letter_type VARCHAR(20) NOT NULL,
-            organization VARCHAR(255),
-            subject TEXT,
-            note TEXT,
-            category VARCHAR(5) DEFAULT 'KK',
-            created_by INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ");
-} else {
-    $db->exec("
-        CREATE TABLE IF NOT EXISTS letter_templates (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            region_id INT NOT NULL,
-            name VARCHAR(255) NOT NULL,
-            letter_type ENUM('incoming','outgoing') NOT NULL,
-            organization VARCHAR(255),
-            subject TEXT,
-            note TEXT,
-            category ENUM('KK','N','JT','ZT') DEFAULT 'KK',
-            created_by INT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE CASCADE,
-            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
-            INDEX idx_region_type (region_id, letter_type)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ");
-}
+// Schema note: letter_templates is defined in deploy_database.sql and
+// migrations/2026_07_18_endpoint_tables.sql (run the migration on databases that
+// predate it). Runtime driver-aware DDL was removed here.
 
 switch ($method) {
     case 'GET':
